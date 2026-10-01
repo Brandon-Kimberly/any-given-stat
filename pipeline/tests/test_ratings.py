@@ -81,7 +81,7 @@ def test_calibrate_recovers_exact_linear_map():
     x = np.array([0.0, 0.1, -0.2, 0.05, 0.3])
     home = np.array([1.0, 1.0, 0.0, 1.0, 0.0])
     margin = 200 * x + 1.5 * home
-    b, sigma = ratings.calibrate(x, home, margin)
+    b, sigma = ratings.calibrate(np.column_stack([x, home]), margin)
     assert b == pytest.approx([200, 1.5])
     assert sigma == pytest.approx(0, abs=1e-9)
 

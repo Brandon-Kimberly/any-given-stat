@@ -11,7 +11,7 @@ from pathlib import Path
 
 import duckdb
 
-from . import datasets, ratings
+from . import datasets, market, ratings
 from .config import OUT_DIR
 
 FLOAT_DIGITS = 4
@@ -80,6 +80,11 @@ def build_all(con: duckdb.DuckDBPyConnection, out_dir: Path = OUT_DIR, explorer:
             preds, power = model
             write_json(out_dir / "predictions.json", preds)
             write_json(out_dir / "ratings.json", power)
+            params = preds["params"]
+            half_life = params["half_life_weeks"] or 1e9
+            experiment = market.lab(con, params["lambda"], half_life)
+            if experiment is not None:
+                write_json(out_dir / "lab.json", experiment)
     write_json(out_dir / "teams.json", teams)
     write_json(out_dir / "team_splits.json", datasets.team_splits(con))
     write_json(out_dir / "team_weeks.json", datasets.team_weeks(con))

@@ -81,7 +81,8 @@ from games;
 
 SCHEDULE_COLUMNS = """
     game_id, season, game_type, week, gameday, home_team, away_team, home_score, away_score,
-    result, spread_line, total_line, location
+    result, spread_line, total_line, location, home_qb_id, away_qb_id, home_qb_name,
+    away_qb_name, home_rest, away_rest, div_game
 """
 
 # nflverse schedules keep historical abbreviations; play-by-play uses current ones.

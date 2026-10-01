@@ -1,5 +1,6 @@
 import { base } from '$app/paths';
 import type {
+	Lab,
 	Luck,
 	Meta,
 	Predictions,
@@ -25,6 +26,7 @@ interface Datasets {
 	predictions: Predictions;
 	ratings: Rating[];
 	team_splits: TeamSplit[];
+	lab: Lab;
 }
 
 const cache = new Map<string, Promise<unknown>>();

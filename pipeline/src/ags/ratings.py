@@ -10,8 +10,12 @@ get a ridge penalty, which shrinks thin samples toward league average: a
 penalty of ``lam`` acts like ``lam`` extra plays of exactly-average football.
 
 Predictions are walk-forward: a game in week w is predicted only from games
-played before week w, so the backtest has no look-ahead. Hyperparameters are
-tuned on TRAIN_SEASONS and reported separately on TEST_SEASONS.
+played before week w, so the backtest has no look-ahead. Point margins come from
+the rating gap plus a starting-QB adjustment (qb.py) and home field.
+
+Season splits are shared with market.py: hyperparameters and coefficients are fit
+on FIT_SEASONS, model choices were made on VALIDATE_SEASONS, and TEST_SEASONS are
+reported, never tuned on.
 """
 
 from __future__ import annotations
@@ -24,8 +28,9 @@ import numpy as np
 
 from .db import records
 
-TRAIN_SEASONS = range(2017, 2021)
-TEST_SEASONS = range(2021, 2026)
+FIT_SEASONS = range(2017, 2022)
+VALIDATE_SEASONS = range(2022, 2024)
+TEST_SEASONS = range(2024, 2026)
 LAMBDAS = (300.0, 1000.0, 3000.0, 10000.0, 30000.0)
 HALF_LIVES = (4.0, 8.0, 16.0, 1e9)  # in weeks; 1e9 = no decay
 OFFSEASON_WEEKS = 12  # time gap between a season's last week and the next season's week 1
@@ -134,12 +139,11 @@ def epa_margin(f: Fit, home: int, away: int) -> float:
     return float((f.off[home] - f.deff[home]) - (f.off[away] - f.deff[away]))
 
 
-def calibrate(x_epa: np.ndarray, x_home: np.ndarray, margin: np.ndarray):
-    """OLS of point margin on [EPA margin, home indicator] (no intercept). Returns (b, sigma)."""
-    X = np.column_stack([x_epa, x_home])
+def calibrate(X: np.ndarray, margin: np.ndarray):
+    """OLS of point margin on feature columns (no intercept). Returns (b, sigma)."""
     b, *_ = np.linalg.lstsq(X, margin, rcond=None)
     resid = margin - X @ b
-    sigma = float(np.sqrt(resid @ resid / max(1, len(margin) - 2)))
+    sigma = float(np.sqrt(resid @ resid / max(1, len(margin) - X.shape[1])))
     return b, sigma
 
 
@@ -170,7 +174,9 @@ def _schedule_games(con: duckdb.DuckDBPyConnection) -> list[dict]:
         """
         select game_id, season, week, gameday, home_team as home, away_team as away,
                case when location = 'Neutral' then 0 else 1 end as home_ind,
-               result, spread_line as vegas
+               result, spread_line as vegas,
+               home_qb_id as home_qb, away_qb_id as away_qb,
+               home_qb_name, away_qb_name
         from schedule
         where game_type = 'REG' and season >= 2017
         order by season, week, gameday, game_id
@@ -209,8 +215,10 @@ def predictions(con: duckdb.DuckDBPyConnection) -> tuple[dict, list[dict]] | Non
     """Walk-forward backtest + upcoming-game predictions, and weekly power ratings.
 
     Returns (predictions payload, ratings rows), or None when the loaded seasons don't
-    cover TRAIN_SEASONS (e.g. a single-season dev or CI build).
+    cover FIT_SEASONS (e.g. a single-season dev or CI build).
     """
+    from .qb import qb_adjustments  # qb imports this module
+
     rows = load_rows(con)
     games = _schedule_games(con)
     played_seasons = set(rows.season.tolist())
@@ -219,51 +227,60 @@ def predictions(con: duckdb.DuckDBPyConnection) -> tuple[dict, list[dict]] | Non
     result = np.array([np.nan if g["result"] is None else float(g["result"]) for g in games])
     vegas = np.array([np.nan if g["vegas"] is None else float(g["vegas"]) for g in games])
     home_ind = np.array([float(g["home_ind"]) for g in games])
-    train = np.isin(season, list(TRAIN_SEASONS)) & ~np.isnan(result)
-    if not set(TRAIN_SEASONS) <= played_seasons or train.sum() < 100:
+    fit_m = np.isin(season, list(FIT_SEASONS)) & ~np.isnan(result)
+    if not set(FIT_SEASONS) <= played_seasons or fit_m.sum() < 100:
         return None
 
-    # Tune ridge strength and recency on TRAIN only (by point-margin MAE after calibration).
+    # Tune ridge strength and recency on FIT only (by point-margin MAE after calibration).
     best = None
     for lam in LAMBDAS:
         for hl in HALF_LIVES:
             x = walk_forward(rows, games, lam, hl)
-            m = train & ~np.isnan(x)
-            b, sigma = calibrate(x[m], home_ind[m], result[m])
-            mae = float(np.mean(np.abs(np.column_stack([x[m], home_ind[m]]) @ b - result[m])))
+            m = fit_m & ~np.isnan(x)
+            X = np.column_stack([x, home_ind])
+            b, _ = calibrate(X[m], result[m])
+            mae = float(np.mean(np.abs(X[m] @ b - result[m])))
             if best is None or mae < best[0]:
                 best = (mae, lam, hl, x)
     _, lam, hl, x = best
 
-    # Honest numbers: calibrate on TRAIN, score TEST.
-    m = train & ~np.isnan(x)
-    b_train, sigma_train = calibrate(x[m], home_ind[m], result[m])
-    pred_train_cal = np.column_stack([x, home_ind]) @ b_train
+    home_qb, away_qb = qb_adjustments(con, games)
+    X = np.column_stack([x, home_qb - away_qb, home_ind])
+    usable = ~np.isnan(x)
 
+    # Honest numbers: coefficients from FIT only, scored on every split.
+    m = fit_m & usable
+    b_fit, sigma_fit = calibrate(X[m], result[m])
+    pred_fit = X @ b_fit
     summary = []
-    for name, seasons in (("train", TRAIN_SEASONS), ("test", TEST_SEASONS)):
+    for name, seasons in (
+        ("fit", FIT_SEASONS),
+        ("validate", VALIDATE_SEASONS),
+        ("test", TEST_SEASONS),
+    ):
         sel = np.isin(season, list(seasons))
-        summary.append({"split": name} | evaluate(pred_train_cal[sel], vegas[sel], result[sel]))
+        summary.append({"split": name} | evaluate(pred_fit[sel], vegas[sel], result[sel]))
     by_season = []
     for s in sorted(set(season.tolist())):
         sel = season == s
         if np.any(~np.isnan(result[sel])):
-            by_season.append({"season": s} | evaluate(pred_train_cal[sel], vegas[sel], result[sel]))
+            by_season.append({"season": s} | evaluate(pred_fit[sel], vegas[sel], result[sel]))
 
-    # Production calibration: every completed game, for the in-season predictions.
-    done = ~np.isnan(result) & ~np.isnan(x)
-    b_all, sigma_all = calibrate(x[done], home_ind[done], result[done])
-    pred = np.column_stack([x, home_ind]) @ b_all
+    # Production coefficients: every completed game, for the in-season forecasts.
+    done = ~np.isnan(result) & usable
+    b_all, sigma_all = calibrate(X[done], result[done])
+    pred = X @ b_all
 
     game_rows = []
     upcoming = []
     latest = max(played_seasons)
     for i, g in enumerate(games):
-        if np.isnan(x[i]):
+        if not usable[i]:
             continue
         played = not np.isnan(result[i])
-        # Backtest rows use the train-only calibration so they match the reported test metrics.
-        margin = float(pred_train_cal[i] if played else pred[i])
+        # Backtest rows use FIT-only coefficients so they match the reported metrics.
+        b = b_fit if played else b_all
+        margin = float(pred_fit[i] if played else pred[i])
         row = {
             "season": g["season"],
             "week": g["week"],
@@ -274,7 +291,12 @@ def predictions(con: duckdb.DuckDBPyConnection) -> tuple[dict, list[dict]] | Non
             "neutral": not g["home_ind"],
             "model": margin,
             "vegas": None if np.isnan(vegas[i]) else float(vegas[i]),
-            "home_wp": win_prob(margin, sigma_train if played else sigma_all),
+            "home_wp": win_prob(margin, sigma_fit if played else sigma_all),
+            # Points the starting-QB adjustment adds to each side's expected score.
+            "home_qb_pts": float(home_qb[i] * b[1]),
+            "away_qb_pts": float(away_qb[i] * b[1]),
+            "home_qb": g["home_qb_name"],
+            "away_qb": g["away_qb_name"],
         }
         if not played:
             if g["season"] == latest:
@@ -287,15 +309,18 @@ def predictions(con: duckdb.DuckDBPyConnection) -> tuple[dict, list[dict]] | Non
         next_week = min(u["week"] for u in upcoming)
         upcoming = [u for u in upcoming if u["week"] == next_week]
 
+    span = lambda r: [min(r), max(r)]  # noqa: E731
     payload = {
         "params": {
             "lambda": lam,
             "half_life_weeks": None if hl >= 1e9 else hl,
             "points_per_epa": float(b_all[0]),
-            "home_points": float(b_all[1]),
+            "qb_weight": float(b_all[1]),
+            "home_points": float(b_all[2]),
             "sigma": sigma_all,
-            "train_seasons": [min(TRAIN_SEASONS), max(TRAIN_SEASONS)],
-            "test_seasons": [min(TEST_SEASONS), max(TEST_SEASONS)],
+            "fit_seasons": span(FIT_SEASONS),
+            "validate_seasons": span(VALIDATE_SEASONS),
+            "test_seasons": span(TEST_SEASONS),
         },
         "summary": summary,
         "by_season": by_season,

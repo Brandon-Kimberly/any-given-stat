@@ -183,6 +183,11 @@ export interface GamePrediction {
 	/** Closing Vegas home margin (nflverse spread_line, positive = home favored). */
 	vegas: number | null;
 	home_wp: number;
+	/** Points the starting-QB adjustment adds to each side (starter vs the QBs behind its rating). */
+	home_qb_pts: number;
+	away_qb_pts: number;
+	home_qb: string | null;
+	away_qb: string | null;
 	result?: number;
 }
 
@@ -203,12 +208,14 @@ export interface Predictions {
 		lambda: number;
 		half_life_weeks: number | null;
 		points_per_epa: number;
+		qb_weight: number;
 		home_points: number;
 		sigma: number;
-		train_seasons: [number, number];
+		fit_seasons: [number, number];
+		validate_seasons: [number, number];
 		test_seasons: [number, number];
 	};
-	summary: (BacktestStats & { split: 'train' | 'test' })[];
+	summary: (BacktestStats & { split: 'fit' | 'validate' | 'test' })[];
 	by_season: (BacktestStats & { season: number })[];
 	games: (GamePrediction & { result: number })[];
 	upcoming: GamePrediction[];
@@ -239,4 +246,34 @@ export interface TeamSplit {
 	success: number;
 	rank: number;
 	ord: number;
+}
+
+export interface BetScore {
+	games: number;
+	mae: number;
+	vegas_mae: number;
+	bets: number;
+	wins: number;
+	win_rate: number | null;
+	p_value: number | null;
+}
+
+type Prefixed<P extends string> = { [K in keyof BetScore as `${P}_${K}`]: BetScore[K] };
+
+export type LabRow = { variant: string; threshold: number; beta: number[] } & Prefixed<'fit'> &
+	Prefixed<'val'>;
+
+export interface Lab {
+	protocol: {
+		fit_seasons: [number, number];
+		validate_seasons: [number, number];
+		test_seasons: [number, number];
+		breakeven: number;
+		thresholds: number[];
+		min_validate_bets: number;
+	};
+	variants: Record<string, string[]>;
+	selection: LabRow[];
+	chosen: { variant: string; threshold: number } | null;
+	test: BetScore | null;
 }

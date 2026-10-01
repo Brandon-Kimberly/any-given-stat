@@ -5,16 +5,22 @@
 	import { load } from '$lib/data';
 	import { num, pct, signed, spread } from '$lib/format';
 	import { gridX, gridY, Plot, plotStyle } from '$lib/plot';
-	import type { BacktestStats, GamePrediction, Predictions } from '$lib/types';
+	import type { BacktestStats, GamePrediction, Lab, LabRow, Predictions } from '$lib/types';
 
 	let data = $state<Predictions>();
+	let lab = $state<Lab>();
 	let error = $state<string | null>(null);
 	load('predictions')
 		.then((p) => (data = p))
-		.catch(() => (error = 'Predictions need seasons 2016–2020 in the build (uv run ags build).'));
+		.catch(() => (error = 'Predictions need seasons 2016–2021 in the build (uv run ags build).'));
+	load('lab')
+		.then((l) => (lab = l))
+		.catch(() => {}); // optional: absent in partial builds
 
 	const test = $derived(data?.summary.find((s) => s.split === 'test'));
 	const [t0, t1] = $derived(data?.params.test_seasons ?? [0, 0]);
+	// Everything from the validation seasons on was never used to fit coefficients.
+	const oos0 = $derived(data?.params.validate_seasons[0] ?? 0);
 	const atsPct = (s: BacktestStats) => s.ats_w / (s.ats_w + s.ats_l);
 	// Standard -110 pricing: you must win 110/210 of bets to break even.
 	const BREAKEVEN = 110 / 210;
@@ -25,7 +31,22 @@
 		vegas_line: string;
 		diff: number | null;
 		favorite_wp: string;
+		qb_note: string;
 	};
+
+	/** e.g. "BAL −6.7 (C. Rush)": only sides where the starter moves the line by 1+ point. */
+	function qbNote(g: GamePrediction): string {
+		const parts = [
+			[g.home, g.home_qb_pts, g.home_qb],
+			[g.away, g.away_qb_pts, g.away_qb]
+		] as const;
+		return (
+			parts
+				.filter(([, pts]) => Math.abs(pts) >= 1)
+				.map(([team, pts, name]) => `${team} ${signed(pts)}${name ? ` (${name})` : ''}`)
+				.join(', ') || '–'
+		);
+	}
 	const picks = $derived<Pick[]>(
 		(data?.upcoming ?? []).map((g) => ({
 			...g,
@@ -34,7 +55,8 @@
 			vegas_line: spread(g.vegas, g.home, g.away),
 			diff: g.vegas == null ? null : Math.abs(g.model - g.vegas),
 			favorite_wp:
-				g.home_wp >= 0.5 ? `${g.home} ${pct(g.home_wp, 0)}` : `${g.away} ${pct(1 - g.home_wp, 0)}`
+				g.home_wp >= 0.5 ? `${g.home} ${pct(g.home_wp, 0)}` : `${g.away} ${pct(1 - g.home_wp, 0)}`,
+			qb_note: qbNote(g)
 		}))
 	);
 	const nextWeek = $derived(data?.upcoming[0]);
@@ -50,7 +72,13 @@
 			fmt: (v) => (v == null ? '–' : `${num(v, 1)} pts`),
 			title: 'Absolute gap between the model and the closing line'
 		},
-		{ key: 'favorite_wp', label: 'Model win prob' }
+		{ key: 'favorite_wp', label: 'Model win prob' },
+		{
+			key: 'qb_note',
+			label: 'QB adjustment',
+			title:
+				"Points added for the listed starter vs the QBs behind the team's rating (injury, rest, return)"
+		}
 	];
 
 	function maeChart(width: number) {
@@ -73,12 +101,12 @@
 			},
 			marks: [
 				Plot.rectX([0], {
-					x1: t0 - 0.5,
+					x1: oos0 - 0.5,
 					x2: Math.max(t1, ...seasons) + 0.5,
 					fill: 'var(--surface-2)'
 				}),
 				Plot.text(['Out of sample'], {
-					x: (t0 + Math.max(t1, ...seasons)) / 2,
+					x: (oos0 + Math.max(t1, ...seasons)) / 2,
 					frameAnchor: 'top',
 					dy: 4,
 					fill: 'var(--text-muted)',
@@ -192,6 +220,7 @@
 					vegas_line: spread(g.vegas, g.home, g.away),
 					diff: g.vegas == null ? null : Math.abs(g.model - g.vegas),
 					favorite_wp: '',
+					qb_note: qbNote(g),
 					final:
 						g.result === 0 ? 'Tie' : `${g.result > 0 ? g.home : g.away} by ${Math.abs(g.result)}`,
 					model_err: Math.abs(g.model - g.result),
@@ -204,10 +233,45 @@
 		{ key: 'matchup', label: 'Game', sticky: true },
 		{ key: 'model_line', label: 'Model' },
 		{ key: 'vegas_line', label: 'Vegas' },
+		{ key: 'qb_note', label: 'QB adj' },
 		{ key: 'final', label: 'Final' },
 		{ key: 'model_err', label: 'Model miss', fmt: (v) => num(v, 1), better: 'low' },
 		{ key: 'vegas_err', label: 'Vegas miss', fmt: (v) => num(v, 1), better: 'low' },
 		{ key: 'ats', label: 'Model ATS' }
+	];
+
+	type LabView = LabRow & { label: string; chosen: boolean; mae_gap: number };
+	const labRows = $derived<LabView[]>(
+		(lab?.selection ?? []).map((r) => ({
+			...r,
+			label: r.threshold ? `${r.variant}, ${r.threshold}+ pt gap` : `${r.variant}, every game`,
+			chosen: r.variant === lab?.chosen?.variant && r.threshold === lab?.chosen?.threshold,
+			mae_gap: r.val_mae - r.val_vegas_mae
+		}))
+	);
+	const labColumns: Column<LabView>[] = [
+		{ key: 'label', label: 'Variant', sticky: true },
+		{ key: 'val_bets', label: 'Bets', fmt: num },
+		{
+			key: 'val_win_rate',
+			label: 'Win rate',
+			fmt: (v) => pct(v),
+			title: 'Against the closing spread, pushes excluded'
+		},
+		{
+			key: 'val_p_value',
+			label: 'p-value',
+			fmt: (v) => (v == null ? '–' : num(v, 2)),
+			title: 'Chance of doing at least this well with no edge (one-sided, vs 52.4%)'
+		},
+		{
+			key: 'mae_gap',
+			label: 'Miss vs Vegas',
+			fmt: (v) => `${signed(v, 2)} pts`,
+			better: 'low',
+			title:
+				'Average miss minus the closing line’s average miss (negative = more accurate than Vegas)'
+		}
 	];
 </script>
 
@@ -216,11 +280,13 @@
 <section>
 	<h1>Predictions</h1>
 	<p class="lede">
-		Point spreads from opponent-adjusted EPA <a href="{base}/ratings/">power ratings</a>, next to
-		the Vegas line. The model predicts each game using only games played before it, and it was tuned
-		on {data?.params.train_seasons.join('–')} before ever seeing {t0}–{t1}. The honest result: it
-		doesn't beat the closing line. Nobody's public-data model reliably does. Use it to understand
-		<em>why</em> the line is where it is, and treat the big disagreements as questions, not bets.
+		Point spreads from opponent-adjusted EPA <a href="{base}/ratings/">power ratings</a> plus a
+		starting-quarterback adjustment, next to the Vegas line. Every game is predicted using only
+		games played before it. Coefficients were fit on {data?.params.fit_seasons.join('–')}, choices
+		made on
+		{data?.params.validate_seasons.join('–')}, and {t0}–{t1} was held back as a final test. The honest
+		result so far: it gets closer to the closing line but doesn't beat it. See
+		<a href="#lab">the attempt</a> below.
 	</p>
 </section>
 
@@ -239,7 +305,7 @@
 	{#if test}
 		<div class="tiles">
 			<div class="card tile">
-				<div class="label">Average miss, {t0}–{t1}</div>
+				<div class="label">Average miss, {t0}–{t1} (held out)</div>
 				<div class="value">{num(test.model_mae, 2)} pts</div>
 				<div class="note">Vegas: {num(test.vegas_mae, 2)} pts ({test.games} games)</div>
 			</div>
@@ -287,6 +353,57 @@
 		</div>
 	</div>
 
+	{#if lab}
+		<div class="card" id="lab">
+			<h2>Can anything here beat Vegas?</h2>
+			<p class="sub">
+				An attempt with rules fixed before looking at results. Six model variants, each fit on
+				{lab.protocol.fit_seasons.join('–')} and scored on {lab.protocol.validate_seasons.join(
+					'–'
+				)}, betting every game or only when the model and the closing line disagree by
+				{lab.protocol.thresholds.filter((t) => t).join(', ')}+ points. The best validation win rate
+				(with at least {lab.protocol.min_validate_bets} bets) earned one look at
+				{lab.protocol.test_seasons.join('–')}. Break-even at −110 is {pct(lab.protocol.breakeven)}.
+			</p>
+			{#if lab.chosen && lab.test}
+				<div class="tiles" style="margin-bottom: 1rem">
+					<div class="card tile">
+						<div class="label">Chosen on validation</div>
+						<div class="value" style="font-size: 1.15rem">{lab.chosen.variant}</div>
+						<div class="note">
+							{lab.chosen.threshold
+								? `bet only ${lab.chosen.threshold}+ point disagreements`
+								: 'bet every game'}
+						</div>
+					</div>
+					<div class="card tile">
+						<div class="label">Final test, {lab.protocol.test_seasons.join('–')}</div>
+						<div class="value">{lab.test.wins}–{lab.test.bets - lab.test.wins}</div>
+						<div class="note">
+							{pct(lab.test.win_rate)}, p = {num(lab.test.p_value, 2)}:
+							{(lab.test.win_rate ?? 0) > lab.protocol.breakeven && (lab.test.p_value ?? 1) < 0.05
+								? 'beat the line'
+								: 'no evidence of an edge'}
+						</div>
+					</div>
+				</div>
+			{/if}
+			<DataTable
+				rows={labRows}
+				columns={labColumns}
+				sortKey="val_win_rate"
+				highlight={(r) => r.chosen}
+			/>
+			<p class="muted" style="margin-top: 0.75rem">
+				“Market” variants use the closing line itself as an input and ask whether EPA, the QB
+				change, rest or division games add anything to it. They give the line about 95% of the
+				weight and end up within a few hundredths of a point of it: whatever those factors know, the
+				line already knows. The QB adjustment does make the stats-only model more accurate, but not
+				more accurate than the market.
+			</p>
+		</div>
+	{/if}
+
 	<div class="card">
 		<div class="toolbar" style="margin-bottom: 0.5rem">
 			<h2 style="margin: 0">Every prediction</h2>
@@ -325,9 +442,17 @@
 			{num(data.params.points_per_epa, 0)} points per EPA/play of rating gap, plus
 			{num(data.params.home_points, 1)} points for home field. Garbage time is excluded.
 		</p>
+		<p>
+			<strong>Quarterback adjustment.</strong> Team ratings bake in whoever played QB recently. For
+			each game the model compares the listed starter's EPA per dropback (shrunk toward a
+			below-average prior by 430 dropbacks, where QB EPA becomes half signal) with the
+			dropback-weighted QBs behind the rating, times 35 dropbacks, with a fitted weight of
+			{num(data.params.qb_weight, 2)}. That catches backups starting, stars resting and stars
+			returning. Only adjustments of 1+ point are listed.
+		</p>
 		<p class="muted">
-			What the market knows that this doesn't: injuries (especially at quarterback), weather, rest,
-			motivation, and the collective information of everyone betting. That's why the line wins.
+			What the market still knows that this doesn't: other injuries, weather, motivation, and the
+			collective information of everyone betting. That's why the line still wins.
 		</p>
 	</div>
 {:else}

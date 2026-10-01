@@ -32,9 +32,11 @@ Measured on 2016–2025 regular seasons, garbage time excluded (see *Signal vs n
   rusher EPA/carry carries over year to year at only r = 0.06.
 - **Some favorite talking points are close to random:** red zone TD rate (r = 0.09), offensive turnover
   rate (0.09), QB interception rate (0.05), fumble recovery rate (−0.02).
-- **Public EPA doesn't beat the closing line.** A walk-forward ridge model tuned on 2017–2020 missed
-  final margins by 10.26 points on 2021–2025 (Vegas: 9.75) and went 645–681 against the spread.
-  Even its 3+ point disagreements with Vegas hit just 49.5%.
+- **Public data doesn't beat the closing line, even with QB injuries modeled.** A walk-forward
+  ridge model with a starting-QB adjustment missed final margins by 10.00 points on held-out
+  2024–2025 (Vegas: 9.67). In a pre-registered attempt (6 variants × 4 bet thresholds, chosen on
+  2022–2023), the winning strategy went 87–83 (51.2%) on the sealed test seasons: p = 0.65 against
+  the 52.4% break-even. Models given the line as an input put ~95% weight on it and add nothing.
 - **Luck reverses.** Teams that beat their Pythagorean record by 2+ wins averaged about 3 fewer wins the
   next season.
 
@@ -57,8 +59,9 @@ static site on GitHub Pages, rebuilt by a scheduled GitHub Action
   ad-hoc queries run in the visitor's browser.
 - **One definition of a play.** Every dataset builds on the views in `pipeline/src/ags/db.py`
   (scrimmage plays, the garbage-time filter, drives, games), so numbers agree across pages.
-- **No look-ahead.** Ratings for week *w* are fit only on games before week *w*; hyperparameters are
-  tuned on 2017–2020 and the reported accuracy is on 2021–2025.
+- **No look-ahead, no peeking.** Ratings for week *w* use only games before week *w*. Coefficients
+  are fit on 2017–2021, model choices made on 2022–2023, and 2024–2025 is scored once
+  (`pipeline/src/ags/market.py`).
 - **Tested math.** Metric logic is unit-tested against hand-computed answers on synthetic play-by-play
   (`pipeline/tests`), and every SQL explorer preset is executed against real data in CI.
 
