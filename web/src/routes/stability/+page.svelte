@@ -50,6 +50,7 @@
 				Plot.tip(
 					long.filter((d) => d.r != null),
 					Plot.pointer({
+						lineWidth: 40,
 						y: 'label',
 						x: 'r',
 						title: (d: { label: string; r: number; kind: string }) =>
@@ -94,6 +95,7 @@
 				Plot.tip(
 					pairs,
 					Plot.pointer({
+						lineWidth: 40,
 						x: 'y1',
 						y: 'y2',
 						title: (d: { unit: string; season: number }) =>

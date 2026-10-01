@@ -58,6 +58,7 @@
 				Plot.tip(
 					rows,
 					Plot.pointer({
+						lineWidth: 40,
 						x: 'success_rate',
 						y: 'epa_rush',
 						title: (d: Rusher) =>

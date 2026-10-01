@@ -112,6 +112,7 @@
 				Plot.tip(
 					rows,
 					Plot.pointer({
+						lineWidth: 40,
 						x: 'off_epa_play',
 						y: 'def_epa_play',
 						title: (d: TeamSeason) =>

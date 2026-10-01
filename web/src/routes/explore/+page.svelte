@@ -117,6 +117,7 @@
 					Plot.tip(
 						rows,
 						Plot.pointerY({
+							lineWidth: 40,
 							y: (r) => String(r[labelCol]),
 							x: y,
 							title: (r) => `${r[labelCol]}: ${r[y]}`
@@ -136,7 +137,7 @@
 				gridX(),
 				gridY(),
 				Plot.dot(rows, { x, y, r: 4, fill: 'var(--series-1)', fillOpacity: 0.7 }),
-				Plot.tip(rows, Plot.pointer({ x, y }))
+				Plot.tip(rows, Plot.pointer({ lineWidth: 40, x, y }))
 			]
 		});
 	}

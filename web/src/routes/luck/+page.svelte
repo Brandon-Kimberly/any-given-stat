@@ -117,6 +117,7 @@
 				Plot.tip(
 					rows,
 					Plot.pointer({
+						lineWidth: 40,
 						x: 'pythag_wins',
 						y: 'wins',
 						title: (d: Row) =>
@@ -161,6 +162,7 @@
 				Plot.tip(
 					pairs,
 					Plot.pointer({
+						lineWidth: 40,
 						x: 'over',
 						y: 'change',
 						title: (d: (typeof pairs)[number]) =>

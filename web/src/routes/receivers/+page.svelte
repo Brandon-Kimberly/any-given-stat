@@ -54,6 +54,7 @@
 				Plot.tip(
 					data,
 					Plot.pointer({
+						lineWidth: 40,
 						x: 'target_share',
 						y: 'air_yards_share',
 						title: (d: Receiver) =>

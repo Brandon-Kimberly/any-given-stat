@@ -64,6 +64,7 @@
 				Plot.tip(
 					data,
 					Plot.pointer({
+						lineWidth: 40,
 						x: 'cpoe',
 						y: 'epa_db',
 						title: (d: QB) =>
@@ -109,6 +110,7 @@
 				Plot.tip(
 					data,
 					Plot.pointerY({
+						lineWidth: 40,
 						y: (d: QB) => `${d.name} ${d.team}`,
 						x: 'epa_db',
 						title: (d: QB) =>

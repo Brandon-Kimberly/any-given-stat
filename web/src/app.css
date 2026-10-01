@@ -229,9 +229,15 @@ code {
 .plot text {
 	fill: var(--text-muted);
 }
-.plot [aria-label='tip'] text {
-	fill: var(--text-primary);
+.plot svg {
+	/* Plot sets --plot-background: white inline; tooltips must follow the theme. */
+	--plot-background: var(--surface) !important;
 }
-.plot [aria-label='tip'] {
-	stroke: var(--border);
+.plot [aria-label='tip'] path {
+	fill: var(--surface-2);
+	stroke: var(--axis);
+}
+.plot [aria-label='tip'] text,
+.plot [aria-label='tip'] tspan {
+	fill: var(--text-primary);
 }

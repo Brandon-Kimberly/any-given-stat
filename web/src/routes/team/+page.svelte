@@ -120,6 +120,7 @@
 				Plot.tip(
 					pts,
 					Plot.pointer({
+						lineWidth: 40,
 						x: 'week',
 						y: 'value',
 						title: (d: Series) => `Week ${d.week}\n${d.side}: ${epa(d.value)}`
@@ -169,6 +170,7 @@
 				Plot.tip(
 					data,
 					Plot.pointer({
+						lineWidth: 40,
 						x: 'season',
 						y: 'value',
 						title: (d: { season: number; value: number; side: string }) =>
