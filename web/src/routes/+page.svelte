@@ -40,7 +40,7 @@
 		// Label each iso-line where it leaves the plot through the top edge (best defense), if it does.
 		const tierLabels = tiers
 			.map((t) => ({ c: t.c, x: y0 + t.c, y: y0 }))
-			.filter((t) => t.x > x0 + 0.02 && t.x < x1 - 0.05);
+			.filter((t) => t.x > x0 + (x1 - x0) * 0.04 && t.x < x1 - (x1 - x0) * 0.22);
 		const height = Math.min(640, Math.max(380, width * 0.7));
 		return Plot.plot({
 			width,
