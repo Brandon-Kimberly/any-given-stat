@@ -1,0 +1,237 @@
+/* Tokens: dataviz reference palette (light + dark selected separately). */
+:root {
+	color-scheme: light;
+	--page: #f9f9f7;
+	--surface: #fcfcfb;
+	--surface-2: #f3f2ee;
+	--text-primary: #0b0b0b;
+	--text-secondary: #52514e;
+	--text-muted: #6f6d68;
+	--grid: #e1e0d9;
+	--axis: #c3c2b7;
+	--border: rgba(11, 11, 11, 0.1);
+	--accent: #2a78d6;
+	--accent-ink: #1c5cab;
+	--series-1: #2a78d6;
+	--series-2: #eb6834;
+	--series-3: #1baf7a;
+	--neutral-mark: #898781;
+	--good: #2a78d6;
+	--bad: #e34948;
+	--good-wash: rgba(42, 120, 214, 0.28);
+	--bad-wash: rgba(227, 73, 72, 0.26);
+	--warning: #fab219;
+	--plot-background: var(--surface);
+	--radius: 10px;
+	--font: system-ui, -apple-system, 'Segoe UI', sans-serif;
+	--mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme='light']) {
+		color-scheme: dark;
+		--page: #0d0d0d;
+		--surface: #1a1a19;
+		--surface-2: #242423;
+		--text-primary: #ffffff;
+		--text-secondary: #c3c2b7;
+		--text-muted: #9a9890;
+		--grid: #2c2c2a;
+		--axis: #383835;
+		--border: rgba(255, 255, 255, 0.1);
+		--accent: #3987e5;
+		--accent-ink: #86b6ef;
+		--series-1: #3987e5;
+		--series-2: #d95926;
+		--series-3: #199e70;
+		--neutral-mark: #898781;
+		--good: #3987e5;
+		--bad: #e66767;
+		--good-wash: rgba(57, 135, 229, 0.34);
+		--bad-wash: rgba(230, 103, 103, 0.3);
+	}
+}
+:root[data-theme='dark'] {
+	color-scheme: dark;
+	--page: #0d0d0d;
+	--surface: #1a1a19;
+	--surface-2: #242423;
+	--text-primary: #ffffff;
+	--text-secondary: #c3c2b7;
+	--text-muted: #9a9890;
+	--grid: #2c2c2a;
+	--axis: #383835;
+	--border: rgba(255, 255, 255, 0.1);
+	--accent: #3987e5;
+	--accent-ink: #86b6ef;
+	--series-1: #3987e5;
+	--series-2: #d95926;
+	--series-3: #199e70;
+	--neutral-mark: #898781;
+	--good: #3987e5;
+	--bad: #e66767;
+	--good-wash: rgba(57, 135, 229, 0.34);
+	--bad-wash: rgba(230, 103, 103, 0.3);
+}
+
+* {
+	box-sizing: border-box;
+}
+html {
+	-webkit-text-size-adjust: 100%;
+}
+body {
+	margin: 0;
+	background: var(--page);
+	color: var(--text-primary);
+	font: 15px/1.5 var(--font);
+}
+a {
+	color: var(--accent-ink);
+}
+h1 {
+	font-size: 1.6rem;
+	line-height: 1.2;
+	margin: 0 0 0.25rem;
+	letter-spacing: -0.01em;
+}
+h2 {
+	font-size: 1.1rem;
+	margin: 0 0 0.25rem;
+}
+p {
+	margin: 0 0 0.75rem;
+}
+.lede {
+	color: var(--text-secondary);
+	max-width: 70ch;
+}
+.muted {
+	color: var(--text-muted);
+}
+.card {
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	padding: 1rem;
+	min-width: 0;
+}
+.card > .sub {
+	color: var(--text-secondary);
+	font-size: 0.875rem;
+	margin-bottom: 0.75rem;
+}
+.grid-2 {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+	gap: 1rem;
+}
+.stack {
+	display: grid;
+	gap: 1rem;
+}
+.toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+	align-items: center;
+}
+label.field {
+	display: inline-flex;
+	gap: 0.4rem;
+	align-items: center;
+	font-size: 0.875rem;
+	color: var(--text-secondary);
+}
+select,
+input,
+button,
+textarea {
+	font: inherit;
+	color: inherit;
+}
+select,
+input[type='search'],
+input[type='number'] {
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	padding: 0.3rem 0.5rem;
+}
+input[type='number'] {
+	width: 5.5rem;
+}
+button {
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	padding: 0.3rem 0.7rem;
+	cursor: pointer;
+}
+button:hover {
+	background: var(--surface-2);
+}
+button.primary {
+	background: var(--accent);
+	border-color: var(--accent);
+	color: #fff;
+}
+.seg {
+	display: inline-flex;
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	overflow: hidden;
+}
+.seg button {
+	border: 0;
+	border-radius: 0;
+}
+.seg button[aria-pressed='true'] {
+	background: var(--accent);
+	color: #fff;
+}
+.callout {
+	border-left: 3px solid var(--warning);
+	background: var(--surface);
+	padding: 0.6rem 0.9rem;
+	border-radius: 0 var(--radius) var(--radius) 0;
+	font-size: 0.9rem;
+	color: var(--text-secondary);
+}
+.tiles {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+	gap: 1rem;
+}
+.tile .label {
+	font-size: 0.8rem;
+	color: var(--text-secondary);
+}
+.tile .value {
+	font-size: 1.6rem;
+	font-weight: 600;
+	line-height: 1.2;
+}
+.tile .note {
+	font-size: 0.8rem;
+	color: var(--text-muted);
+}
+code {
+	font-family: var(--mono);
+	font-size: 0.85em;
+}
+/* Observable Plot */
+.plot svg {
+	overflow: visible;
+	max-width: 100%;
+	height: auto;
+}
+.plot text {
+	fill: var(--text-muted);
+}
+.plot [aria-label='tip'] text {
+	fill: var(--text-primary);
+}
+.plot [aria-label='tip'] {
+	stroke: var(--border);
+}

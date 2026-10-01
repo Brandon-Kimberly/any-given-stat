@@ -1,0 +1,39 @@
+const n = (v: number | null | undefined): v is number => v != null && Number.isFinite(v);
+
+export const dash = '–';
+
+/** Signed fixed-point with a real minus sign; values that round to zero get no sign. */
+function signedFixed(v: number, digits: number): string {
+	const s = v.toFixed(digits);
+	if (Number(s) === 0) return (0).toFixed(digits);
+	return v > 0 ? `+${s}` : s.replace('-', '−');
+}
+
+/** EPA-style values: signed, 3 decimals (e.g. +0.142). */
+export function epa(v: number | null | undefined, digits = 3): string {
+	return n(v) ? signedFixed(v, digits) : dash;
+}
+
+/** Rates stored as 0–1 shown as percentages. */
+export function pct(v: number | null | undefined, digits = 1): string {
+	return n(v) ? `${(v * 100).toFixed(digits)}%` : dash;
+}
+
+/** Signed percentage points for "over expected" rates (0.031 -> +3.1). */
+export function pp(v: number | null | undefined, digits = 1): string {
+	return n(v) ? signedFixed(v * 100, digits) : dash;
+}
+
+export function num(v: number | null | undefined, digits = 0): string {
+	return n(v)
+		? v.toLocaleString('en-US', { maximumFractionDigits: digits, minimumFractionDigits: digits })
+		: dash;
+}
+
+export function signed(v: number | null | undefined, digits = 1): string {
+	return n(v) ? signedFixed(v, digits) : dash;
+}
+
+export function corr(v: number | null | undefined): string {
+	return n(v) ? v.toFixed(2).replace('-', '−') : dash;
+}
