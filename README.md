@@ -64,6 +64,17 @@ cd pipeline && uv sync && uv run ags build   # downloads 2016–current (~200 MB
 cd ../web && npm install && npm run dev      # http://localhost:5173
 ```
 
+On Windows PowerShell 5.1 (which doesn't support `&&`), run the steps one per line:
+
+```powershell
+cd pipeline
+uv sync
+uv run ags build
+cd ..\web
+npm install
+npm run dev
+```
+
 `uv run ags build --seasons 2024-2025` builds a subset. Tests: `uv run pytest` (pipeline) and
 `npm test && npm run check` (web).
 
