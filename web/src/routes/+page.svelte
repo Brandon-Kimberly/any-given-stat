@@ -18,12 +18,15 @@
 	load('teams').then((t) => (teams = t));
 
 	let focus = $state('');
+	let adjusted = $state(false);
+	const xKey = $derived(adjusted ? 'adj_off_epa' : 'off_epa_play');
+	const yKey = $derived(adjusted ? 'adj_def_epa' : 'def_epa_play');
 	const rows = $derived(teams.filter((t) => t.season === prefs.season && t.scope === prefs.scope));
 	const status = $derived(meta?.seasons.find((s) => s.season === prefs.season));
 
 	function render(width: number) {
-		const xs = rows.map((r) => r.off_epa_play!);
-		const ys = rows.map((r) => r.def_epa_play!);
+		const xs = rows.map((r) => r[xKey]!);
+		const ys = rows.map((r) => r[yKey]!);
 		const pad = 0.03;
 		const x0 = Math.min(...xs) - pad;
 		const x1 = Math.max(...xs) + pad;
@@ -47,11 +50,15 @@
 			height,
 			style: plotStyle,
 			marginRight: 20,
-			x: { domain: [x0, x1], label: 'Offense EPA/play →', tickFormat: '+.2f' },
+			x: {
+				domain: [x0, x1],
+				label: `${adjusted ? 'Adjusted offense' : 'Offense'} EPA/play →`,
+				tickFormat: '+.2f'
+			},
 			y: {
 				domain: [y0, y1],
 				reverse: true,
-				label: '↑ Defense EPA/play allowed (better up)',
+				label: `↑ ${adjusted ? 'Adjusted defense' : 'Defense'} EPA/play allowed (better up)`,
 				tickFormat: '+.2f'
 			},
 			marks: [
@@ -93,16 +100,16 @@
 					fontSize: 11
 				}),
 				Plot.dot(rows, {
-					x: 'off_epa_play',
-					y: 'def_epa_play',
+					x: xKey,
+					y: yKey,
 					r: 6,
 					fill: (d: TeamSeason) => (d.team === focus ? 'var(--accent)' : 'var(--neutral-mark)'),
 					stroke: 'var(--surface)',
 					strokeWidth: 2
 				}),
 				Plot.text(rows, {
-					x: 'off_epa_play',
-					y: 'def_epa_play',
+					x: xKey,
+					y: yKey,
 					text: 'team',
 					dy: -12,
 					fontSize: 11,
@@ -113,10 +120,10 @@
 					rows,
 					Plot.pointer({
 						lineWidth: 40,
-						x: 'off_epa_play',
-						y: 'def_epa_play',
+						x: xKey,
+						y: yKey,
 						title: (d: TeamSeason) =>
-							`${d.team}\nNet EPA/play  ${epa(d.net_epa_play)}\nOffense  ${epa(d.off_epa_play)}  (pass ${epa(d.off_pass_epa)}, rush ${epa(d.off_rush_epa)})\nDefense  ${epa(d.def_epa_play)}  (pass ${epa(d.def_pass_epa)}, rush ${epa(d.def_rush_epa)})`
+							`${d.team}\nNet EPA/play  ${epa(d.net_epa_play)}\nOffense  ${epa(d.off_epa_play)}  (pass ${epa(d.off_pass_epa)}, rush ${epa(d.off_rush_epa)})\nDefense  ${epa(d.def_epa_play)}  (pass ${epa(d.def_pass_epa)}, rush ${epa(d.def_rush_epa)})\nOpponent-adjusted: off ${epa(d.adj_off_epa)}, def ${epa(d.adj_def_epa)}, net ${epa(d.adj_net_epa)}`
 					})
 				)
 			]
@@ -131,6 +138,13 @@
 			fmt: epa,
 			better: 'high',
 			title: 'Offense EPA/play minus defense EPA/play allowed'
+		},
+		{
+			key: 'adj_net_epa',
+			label: 'Adj net',
+			fmt: epa,
+			better: 'high',
+			title: 'Net EPA/play adjusted for opponents faced and home field'
 		},
 		{ key: 'off_epa_play', label: 'Off EPA', fmt: epa, better: 'high' },
 		{ key: 'off_pass_epa', label: 'Off pass', fmt: epa, better: 'high' },
@@ -156,13 +170,22 @@
 	<p class="lede">
 		Every team's offense against its defense, in expected points added per play. Up and to the right
 		is good. The diagonal lines mark equal net EPA, so teams on the same line are about equally
-		good, just built differently.
+		good, just built differently. <strong>Opponent-adjusted</strong> removes schedule strength and home
+		field, which matters most early in the season when schedules are lopsided.
 	</p>
 </section>
 
 {#if meta}
 	<div class="toolbar">
 		<Controls seasons={meta.seasons} />
+		<div class="seg" role="group" aria-label="Adjustment">
+			<button aria-pressed={!adjusted} onclick={() => (adjusted = false)}>Raw</button>
+			<button
+				aria-pressed={adjusted}
+				title="Adjusted for opponents faced and home field (ridge regression)"
+				onclick={() => (adjusted = true)}>Opponent-adjusted</button
+			>
+		</div>
 		<label class="field">
 			Highlight
 			<select bind:value={focus}>

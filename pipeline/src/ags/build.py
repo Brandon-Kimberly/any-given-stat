@@ -11,7 +11,7 @@ from pathlib import Path
 
 import duckdb
 
-from . import datasets
+from . import datasets, ratings
 from .config import OUT_DIR
 
 FLOAT_DIGITS = 4
@@ -57,7 +57,31 @@ def build_all(con: duckdb.DuckDBPyConnection, out_dir: Path = OUT_DIR, explorer:
     status = season_status(con)
     complete = [s["season"] for s in status if s["complete"]]
 
-    write_json(out_dir / "teams.json", datasets.team_seasons(con))
+    teams = datasets.team_seasons(con)
+    has_schedule = bool(
+        con.execute(
+            "select count(*) from information_schema.tables where table_name = 'schedule'"
+        ).fetchone()[0]
+    )
+    if has_schedule:
+        adjusted = {
+            (r["scope"], r["season"], r["team"]): r for r in ratings.adjusted_team_seasons(con)
+        }
+        for t in teams:
+            adj = adjusted.get((t["scope"], t["season"], t["team"]), {})
+            for k in ("adj_off_epa", "adj_def_epa", "adj_net_epa"):
+                t[k] = adj.get(k)
+        model = ratings.predictions(con)
+        if model is None:
+            print(
+                "skip predictions/ratings: seasons don't cover the training window", file=sys.stderr
+            )
+        else:
+            preds, power = model
+            write_json(out_dir / "predictions.json", preds)
+            write_json(out_dir / "ratings.json", power)
+    write_json(out_dir / "teams.json", teams)
+    write_json(out_dir / "team_splits.json", datasets.team_splits(con))
     write_json(out_dir / "team_weeks.json", datasets.team_weeks(con))
     write_json(out_dir / "luck.json", datasets.luck(con))
     write_json(out_dir / "qbs.json", datasets.quarterbacks(con))

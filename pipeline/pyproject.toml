@@ -3,7 +3,10 @@ name = "ags"
 version = "0.1.0"
 description = "any-given-stat data pipeline: nflverse play-by-play -> static datasets"
 requires-python = ">=3.11"
-dependencies = ["duckdb>=1.1"]
+dependencies = [
+    "duckdb>=1.1",
+    "numpy>=2.4.6",
+]
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.6"]

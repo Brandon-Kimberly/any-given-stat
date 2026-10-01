@@ -23,6 +23,8 @@ PBP_COLUMNS: dict[str, tuple[str, object]] = {
     "down": ("double", 1.0),
     "yardline_100": ("double", 50.0),
     "wp": ("double", 0.5),
+    "qtr": ("double", 1.0),
+    "score_differential": ("double", 0.0),
     "epa": ("double", 0.0),
     "qb_epa": ("double", 0.0),
     "success": ("double", 0.0),

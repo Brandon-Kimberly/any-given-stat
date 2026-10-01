@@ -79,11 +79,35 @@ from games;
 """
 
 
-def connect(pbp_files: Sequence[Path]) -> duckdb.DuckDBPyConnection:
-    """Open an in-memory DuckDB with ``pbp`` over the given parquet files plus derived views."""
+SCHEDULE_COLUMNS = """
+    game_id, season, game_type, week, gameday, home_team, away_team, home_score, away_score,
+    result, spread_line, total_line, location
+"""
+
+# nflverse schedules keep historical abbreviations; play-by-play uses current ones.
+TEAM_ALIASES = {"OAK": "LV", "SD": "LAC", "STL": "LA"}
+
+
+def connect(
+    pbp_files: Sequence[Path], schedule_file: Path | None = None
+) -> duckdb.DuckDBPyConnection:
+    """Open an in-memory DuckDB with ``pbp`` (and ``schedule`` if given) plus derived views."""
     con = duckdb.connect()
     files = ", ".join(f"'{p.as_posix()}'" for p in pbp_files)
     con.execute(f"create view pbp as select * from read_parquet([{files}], union_by_name = true)")
+    if schedule_file is not None:
+        alias = " ".join(f"when '{a}' then '{b}'" for a, b in TEAM_ALIASES.items())
+        con.execute(f"""
+            create view schedule as
+            select * replace (
+                case home_team {alias} else home_team end as home_team,
+                case away_team {alias} else away_team end as away_team
+            )
+            from (
+                select {SCHEDULE_COLUMNS}
+                from read_csv('{schedule_file.as_posix()}', header = true, sample_size = -1)
+            )
+        """)
     install_views(con)
     return con
 

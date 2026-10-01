@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { epa, pct, pp, signed } from './format';
+import { epa, pct, pp, signed, spread } from './format';
 
 describe('format', () => {
 	it('signs EPA with a true minus and no negative zero', () => {
@@ -13,5 +13,14 @@ describe('format', () => {
 		expect(pct(0.4567)).toBe('45.7%');
 		expect(pp(-0.031)).toBe('−3.1');
 		expect(pct(null)).toBe('–');
+	});
+});
+
+describe('spread', () => {
+	it('names the favorite with a negative line', () => {
+		expect(spread(3.46, 'KC', 'BUF')).toBe('KC −3.5');
+		expect(spread(-7, 'KC', 'BUF')).toBe('BUF −7.0');
+		expect(spread(0.01, 'KC', 'BUF')).toBe('PK');
+		expect(spread(null, 'KC', 'BUF')).toBe('–');
 	});
 });

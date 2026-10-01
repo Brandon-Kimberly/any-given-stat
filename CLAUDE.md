@@ -7,7 +7,8 @@ parquet; a static SvelteKit site renders it. No backend.
 
 - `pipeline/` (uv project, package `ags`)
   - `src/ags/db.py`: **canonical views** (`plays`, `scoped_plays`, `drives`, `games`, `team_games`). Every metric builds on these.
-  - `src/ags/datasets.py`: one function per published dataset; `STABILITY_METRICS` list.
+  - `src/ags/datasets.py`: one function per published dataset; `STABILITY_METRICS` list; `SPLITS` for team situational splits.
+  - `src/ags/ratings.py`: ridge-regression team ratings (numpy), walk-forward spread model, backtest vs Vegas. Needs the `schedule` view (nflverse `games.csv`, team codes mapped via `db.TEAM_ALIASES`).
   - `src/ags/build.py`: writes `web/static/data/*.json`, `pbp/pbp_<season>.parquet`, `meta.json`.
   - `tests/`: synthetic-pbp fixture in `conftest.py` (`make_pbp`, `run()` helper); `test_presets.py` runs explorer presets against real data (skipped if not built).
 - `web/` (SvelteKit 2, Svelte 5 runes, adapter-static, `ssr = false`, prerendered shells)
@@ -35,6 +36,7 @@ cd web && BASE_PATH=/any-given-stat npm run build   # what CI deploys; preview n
 - **QB EPA** uses `qb_epa`; CI = mean ± 1.96·sd/√n.
 - **Drive points** approximated as TD = 7, FG = 3. **Red zone trip** = drive reaching `yardline_100 <= 20`.
 - **Pythagorean** exponent 2.37; one-score = margin ≤ 8.
+- **Ratings**: per team-game offense row, `epa/play = mu + off[team] + def[opp] + h*home`, weighted by plays, ridge on team terms. Predictive ratings use only games before the week predicted (current + previous season, 16-week half-life). Tune on `TRAIN_SEASONS`, report `TEST_SEASONS`; never tune on test. Vegas `spread_line` > 0 = home favored.
 - **Stability**: split-half = odd vs even weeks, complete seasons only; reliability = 2r/(1+r); n for 50% signal = n_half·(1−r)/r.
 
 ## Conventions

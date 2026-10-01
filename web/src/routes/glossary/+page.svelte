@@ -47,6 +47,22 @@
 			'Correlation of a stat between odd and even weeks of the same season. Spearman-Brown, 2r / (1 + r), turns it into full-season reliability: the share of the variation between teams that is real skill.'
 		],
 		[
+			'Opponent-adjusted EPA',
+			"Each team-game's EPA/play is modeled as league average + offense rating + opposing defense rating + home field, fit by ridge regression. The team ratings are what's left after accounting for who they played and where."
+		],
+		[
+			'Power rating',
+			'The predictive version of the adjusted rating: recent games weigh more (16-week half-life) and last season fades in, so it is stable early in the year. Expressed in points vs an average team on a neutral field.'
+		],
+		[
+			'Against the spread (ATS)',
+			'Betting the side the model prefers relative to the Vegas line. At standard −110 pricing you need to win 52.4% just to break even.'
+		],
+		[
+			'Calibration',
+			'Whether predicted probabilities mean what they say: of all games given a 70% win probability, about 70% should be won.'
+		],
+		[
 			'95% confidence interval',
 			'Shown for QB EPA/dropback as mean ± 1.96 × SD / √n. EPA is fat-tailed, so treat it as a rough guide, not a guarantee.'
 		]

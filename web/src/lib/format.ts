@@ -37,3 +37,11 @@ export function signed(v: number | null | undefined, digits = 1): string {
 export function corr(v: number | null | undefined): string {
 	return n(v) ? v.toFixed(2).replace('-', '−') : dash;
 }
+
+/** A point spread as "KC −3.5" (favorite, negative number) or "PK" for a pick'em. */
+export function spread(homeMargin: number | null | undefined, home: string, away: string): string {
+	if (!n(homeMargin)) return dash;
+	if (Math.abs(homeMargin) < 0.05) return 'PK';
+	const fav = homeMargin > 0 ? home : away;
+	return `${fav} −${Math.abs(homeMargin).toFixed(1)}`;
+}

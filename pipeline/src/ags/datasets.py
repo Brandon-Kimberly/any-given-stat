@@ -640,3 +640,72 @@ def export_explorer_parquet(con: duckdb.DuckDBPyConnection, season: int, dest: s
         f"and play_type is not null order by game_id, play_id) "
         f"to '{dest}' (format parquet, compression zstd, row_group_size 20000)"
     )
+
+
+# (split, bucket expression, sort-order expression). Score buckets use the side's own margin.
+SPLITS = [
+    (
+        "Down",
+        "cast(down as int)::varchar || case cast(down as int) when 1 then 'st' "
+        "when 2 then 'nd' when 3 then 'rd' else 'th' end || ' down'",
+        "down",
+    ),
+    (
+        "Field position",
+        "case when yardline_100 >= 80 then 'Own 1-20' when yardline_100 >= 50 then 'Own 21-50' "
+        "when yardline_100 > 20 then 'Opp 49-21' else 'Red zone' end",
+        "-yardline_100",
+    ),
+    ("Quarter", "'Q' || cast(qtr as int)", "qtr"),
+    (
+        "Score",
+        "case when margin <= -9 then 'Down 9+' when margin < 0 then 'Down 1-8' "
+        "when margin = 0 then 'Tied' when margin <= 8 then 'Up 1-8' else 'Up 9+' end",
+        "margin",
+    ),
+    (
+        "Play type",
+        "case when down in (1, 2) then 'Early down' else 'Late down' end "
+        "|| case when pass = 1 then ' pass' else ' run' end",
+        "case when down in (1, 2) then 0 else 2 end + case when pass = 1 then 0 else 1 end",
+    ),
+]
+
+
+def team_splits(con: duckdb.DuckDBPyConnection) -> list[dict]:
+    """Team EPA/play and success rate by situation, offense and defense, with league rank.
+
+    All plays (garbage time included) so score-state splits keep the lopsided buckets.
+    Regulation only: overtime samples are a handful of plays.
+    Rank 1 = best: highest EPA on offense, lowest EPA allowed on defense.
+    """
+    parts = []
+    for side, team_col, margin in (
+        ("off", "posteam", "score_differential"),
+        ("def", "defteam", "-score_differential"),
+    ):
+        for split, bucket, order in SPLITS:
+            parts.append(f"""
+                select season, {team_col} as team, '{side}' as side, '{split}' as split,
+                       {bucket} as bucket, min({order}) as ord,
+                       count(*) as plays, avg(epa) as epa, avg(success) as success
+                from (
+                    select *, {margin} as margin from plays where down is not null and qtr <= 4
+                )
+                group by season, {team_col}, {bucket}""")
+    sql = f"""
+    with s as ({" union all ".join(parts)}),
+    bucket_order as (
+        select split, bucket, dense_rank() over (partition by split order by min(ord)) as ord
+        from s group by split, bucket
+    )
+    select season, team, side, split, bucket, plays, epa, success,
+           rank() over (
+               partition by season, side, split, bucket
+               order by case when side = 'off' then -epa else epa end
+           ) as rank,
+           bucket_order.ord
+    from s join bucket_order using (split, bucket)
+    order by season, team, side, split, bucket_order.ord
+    """
+    return records(con, sql)

@@ -12,8 +12,10 @@ stats are signal and which are noise.
 
 | Page | Question it answers |
 |---|---|
-| **Team tiers** | Who is actually good? Offense vs defense EPA/play, with equal-net-EPA tier lines. |
-| **Teams / team detail** | Every efficiency stat by team, weekly trend lines, game logs, multi-season history. |
+| **Team tiers** | Who is actually good? Offense vs defense EPA/play, raw or opponent-adjusted, with equal-net-EPA tier lines. |
+| **Power ratings** | Opponent-adjusted, recency-weighted team ratings in points, week by week. |
+| **Predictions** | Model spreads for the coming week vs the Vegas line, plus a walk-forward backtest and calibration check. |
+| **Teams / team detail** | Every efficiency stat by team, situational splits (down, field position, score, quarter), strength of schedule, weekly trends, game logs. |
 | **Quarterbacks** | EPA per dropback vs CPOE, plus 95% intervals that show when two QBs can't be told apart yet. |
 | **Receivers / Rushers** | Usage (target share, air yards share, WOPR) and efficiency over expectation (xYAC, catch rate). |
 | **Luck** | Record vs Pythagorean expectation, one-score games, fumble recovery, and how much luck reverses next season. |
@@ -30,6 +32,9 @@ Measured on 2016–2025 regular seasons, garbage time excluded (see *Signal vs n
   rusher EPA/carry carries over year to year at only r = 0.06.
 - **Some favorite talking points are close to random:** red zone TD rate (r = 0.09), offensive turnover
   rate (0.09), QB interception rate (0.05), fumble recovery rate (−0.02).
+- **Public EPA doesn't beat the closing line.** A walk-forward ridge model tuned on 2017–2020 missed
+  final margins by 10.26 points on 2021–2025 (Vegas: 9.75) and went 645–681 against the spread.
+  Even its 3+ point disagreements with Vegas hit just 49.5%.
 - **Luck reverses.** Teams that beat their Pythagorean record by 2+ wins averaged about 3 fewer wins the
   next season.
 
@@ -38,7 +43,7 @@ Measured on 2016–2025 regular seasons, garbage time excluded (see *Signal vs n
 ## How it works
 
 ```
-nflverse play-by-play (parquet, ~20 MB/season)
+nflverse play-by-play (parquet, ~20 MB/season) + schedules with closing lines (games.csv)
         │  pipeline/ — Python + DuckDB
         ▼
 canonical filtered views (db.py) ──► datasets.py ──► web/static/data/*.json
@@ -52,6 +57,8 @@ static site on GitHub Pages, rebuilt by a scheduled GitHub Action
   ad-hoc queries run in the visitor's browser.
 - **One definition of a play.** Every dataset builds on the views in `pipeline/src/ags/db.py`
   (scrimmage plays, the garbage-time filter, drives, games), so numbers agree across pages.
+- **No look-ahead.** Ratings for week *w* are fit only on games before week *w*; hyperparameters are
+  tuned on 2017–2020 and the reported accuracy is on 2021–2025.
 - **Tested math.** Metric logic is unit-tested against hand-computed answers on synthetic play-by-play
   (`pipeline/tests`), and every SQL explorer preset is executed against real data in CI.
 

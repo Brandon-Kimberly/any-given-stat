@@ -23,6 +23,8 @@
 
 	const nav = [
 		['/', 'Team tiers'],
+		['/ratings/', 'Power ratings'],
+		['/predictions/', 'Predictions'],
 		['/teams/', 'Teams'],
 		['/qbs/', 'Quarterbacks'],
 		['/receivers/', 'Receivers'],

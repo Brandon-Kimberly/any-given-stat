@@ -1,5 +1,17 @@
 import { base } from '$app/paths';
-import type { Luck, Meta, QB, Receiver, Rusher, Stability, TeamSeason, TeamWeek } from './types';
+import type {
+	Luck,
+	Meta,
+	Predictions,
+	QB,
+	Rating,
+	Receiver,
+	Rusher,
+	Stability,
+	TeamSeason,
+	TeamSplit,
+	TeamWeek
+} from './types';
 
 interface Datasets {
 	meta: Meta;
@@ -10,6 +22,9 @@ interface Datasets {
 	receivers: Receiver[];
 	rushers: Rusher[];
 	stability: Stability;
+	predictions: Predictions;
+	ratings: Rating[];
+	team_splits: TeamSplit[];
 }
 
 const cache = new Map<string, Promise<unknown>>();

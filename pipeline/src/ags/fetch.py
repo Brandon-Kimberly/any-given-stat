@@ -7,7 +7,7 @@ import sys
 import urllib.request
 from pathlib import Path
 
-from .config import PBP_URL, RAW_DIR
+from .config import PBP_URL, RAW_DIR, SCHEDULE_URL
 
 
 def pbp_path(season: int, raw_dir: Path = RAW_DIR) -> Path:
@@ -19,14 +19,25 @@ def fetch_season(season: int, *, force: bool = False, raw_dir: Path = RAW_DIR) -
     dest = pbp_path(season, raw_dir)
     if dest.exists() and not force:
         return dest
-    raw_dir.mkdir(parents=True, exist_ok=True)
+    _download(PBP_URL.format(season=season), dest)
+    return dest
+
+
+def fetch_schedule(*, force: bool = True, raw_dir: Path = RAW_DIR) -> Path:
+    """nflverse schedule with results and closing lines (always refreshed: lines move)."""
+    dest = raw_dir / "games.csv"
+    if force or not dest.exists():
+        _download(SCHEDULE_URL, dest)
+    return dest
+
+
+def _download(url: str, dest: Path) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_suffix(".part")
-    url = PBP_URL.format(season=season)
     print(f"fetch {url}", file=sys.stderr)
     with urllib.request.urlopen(url, timeout=120) as resp, tmp.open("wb") as f:
         shutil.copyfileobj(resp, f)
     tmp.replace(dest)
-    return dest
 
 
 def fetch_seasons(seasons: list[int], *, refresh_latest: bool = True) -> list[Path]:

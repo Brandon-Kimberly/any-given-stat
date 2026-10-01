@@ -47,7 +47,8 @@ export type TeamSeason = {
 	team: string;
 	net_epa_play: number;
 } & SideMetrics<'off'> &
-	SideMetrics<'def'>;
+	SideMetrics<'def'> &
+	Adjusted;
 
 export interface TeamWeek {
 	season: number;
@@ -161,4 +162,81 @@ export interface StabilityMetric {
 export interface Stability {
 	metrics: StabilityMetric[];
 	yoy_pairs: Record<string, { unit: string; season: number; y1: number; y2: number }[]>;
+}
+
+export interface Adjusted {
+	adj_off_epa: number | null;
+	adj_def_epa: number | null;
+	adj_net_epa: number | null;
+}
+
+export interface GamePrediction {
+	season: number;
+	week: number;
+	game_id: string;
+	gameday: string;
+	home: string;
+	away: string;
+	neutral: boolean;
+	/** Predicted home margin in points (positive = home favored). */
+	model: number;
+	/** Closing Vegas home margin (nflverse spread_line, positive = home favored). */
+	vegas: number | null;
+	home_wp: number;
+	result?: number;
+}
+
+export interface BacktestStats {
+	games: number;
+	model_mae: number;
+	vegas_mae: number;
+	model_su: number;
+	vegas_su: number;
+	ats_w: number;
+	ats_l: number;
+	edge3_w: number;
+	edge3_l: number;
+}
+
+export interface Predictions {
+	params: {
+		lambda: number;
+		half_life_weeks: number | null;
+		points_per_epa: number;
+		home_points: number;
+		sigma: number;
+		train_seasons: [number, number];
+		test_seasons: [number, number];
+	};
+	summary: (BacktestStats & { split: 'train' | 'test' })[];
+	by_season: (BacktestStats & { season: number })[];
+	games: (GamePrediction & { result: number })[];
+	upcoming: GamePrediction[];
+}
+
+export interface Rating {
+	season: number;
+	week: number;
+	team: string;
+	off: number;
+	def: number;
+	net: number;
+	/** Net rating in points per game vs an average team on a neutral field. */
+	points: number;
+	off_points: number;
+	def_points: number;
+	rank: number;
+}
+
+export interface TeamSplit {
+	season: number;
+	team: string;
+	side: 'off' | 'def';
+	split: string;
+	bucket: string;
+	plays: number;
+	epa: number;
+	success: number;
+	rank: number;
+	ord: number;
 }
