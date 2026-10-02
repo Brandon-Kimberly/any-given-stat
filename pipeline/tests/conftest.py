@@ -60,6 +60,18 @@ PBP_COLUMNS: dict[str, tuple[str, object]] = {
     "rusher": ("varchar", None),
     "fixed_drive": ("double", 1.0),
     "fixed_drive_result": ("varchar", "Punt"),
+    "order_sequence": ("double", None),
+    "ydstogo": ("double", 10.0),
+    "goal_to_go": ("double", 0.0),
+    "ep": ("double", None),
+    "game_seconds_remaining": ("double", 1800.0),
+    "home_wp": ("double", None),
+    "wpa": ("double", None),
+    "time": ("varchar", None),
+    "desc": ("varchar", None),
+    "field_goal_attempt": ("double", 0.0),
+    "field_goal_result": ("varchar", None),
+    "kick_distance": ("double", None),
 }
 
 

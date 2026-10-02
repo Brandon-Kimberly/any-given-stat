@@ -1,6 +1,7 @@
 <script lang="ts" module>
-	// Sortable table. Columns with `better` get a diverging wash by percentile
-	// within the visible rows (blue = good end, red = bad end, none in the middle).
+	// Sortable table. Columns with `better` get a diverging wash by percentile within the
+	// visible rows (blue = good end, red = bad end, none in the middle). Clicking a column sorts
+	// best-first, so "#" always reads as a rank.
 	export interface Column<R> {
 		key: keyof R & string;
 		label: string;
@@ -8,26 +9,41 @@
 		title?: string;
 		better?: 'high' | 'low';
 		sticky?: boolean;
+		/** Render the value (a team code) as a colored team badge. */
+		team?: boolean;
 	}
 </script>
 
 <script lang="ts" generics="T extends Record<string, any>">
+	import { goto } from '$app/navigation';
+	import TeamBadge from './TeamBadge.svelte';
+
 	let {
 		rows,
 		columns,
 		sortKey: initialSort,
 		sortDesc: initialDesc = true,
 		search,
+		href,
 		onrowclick,
-		highlight
+		highlight,
+		showIndex = true,
+		filename = 'any-given-stat',
+		maxHeight = '70vh'
 	}: {
 		rows: T[];
 		columns: Column<T>[];
 		sortKey: keyof T & string;
 		sortDesc?: boolean;
 		search?: keyof T & string;
+		/** Makes the first (sticky) cell a link; the whole row is clickable with a mouse. */
+		href?: (row: T) => string;
+		/** Row action without a URL (e.g. toggling a highlight); keyboard users get a button. */
 		onrowclick?: (row: T) => void;
 		highlight?: (row: T) => boolean;
+		showIndex?: boolean;
+		filename?: string;
+		maxHeight?: string;
 	} = $props();
 
 	// svelte-ignore state_referenced_locally
@@ -43,6 +59,7 @@
 		return [...filtered].sort((a, b) => {
 			const av = a[sortKey];
 			const bv = b[sortKey];
+			if (av == null && bv == null) return 0;
 			if (av == null) return 1;
 			if (bv == null) return -1;
 			const c = av < bv ? -1 : av > bv ? 1 : 0;
@@ -50,7 +67,7 @@
 		});
 	});
 
-	// Percentile (0..1) per value for each shaded column.
+	// Percentile (0..1) per value for each shaded column; tied values share their average rank.
 	const pctiles = $derived.by(() => {
 		const out = new Map<string, Map<number, number>>();
 		for (const c of columns) {
@@ -59,8 +76,16 @@
 				.map((r) => r[c.key])
 				.filter((v: unknown): v is number => typeof v === 'number') as number[];
 			const sorted = [...vals].sort((a, b) => a - b);
+			const first = new Map<number, number>();
+			const last = new Map<number, number>();
+			sorted.forEach((v, i) => {
+				if (!first.has(v)) first.set(v, i);
+				last.set(v, i);
+			});
 			const m = new Map<number, number>();
-			sorted.forEach((v, i) => m.set(v, sorted.length > 1 ? i / (sorted.length - 1) : 0.5));
+			const denom = Math.max(1, sorted.length - 1);
+			for (const [v, i] of first)
+				m.set(v, sorted.length > 1 ? (i + last.get(v)!) / 2 / denom : 0.5);
 			out.set(c.key, m);
 		}
 		return out;
@@ -78,18 +103,19 @@
 		return `background: color-mix(in srgb, ${color} ${Math.round(alpha * 100)}%, transparent)`;
 	}
 
-	function sortBy(key: keyof T & string) {
-		if (key === sortKey) sortDesc = !sortDesc;
+	function sortBy(c: Column<T>) {
+		if (c.key === sortKey) sortDesc = !sortDesc;
 		else {
-			sortKey = key;
-			sortDesc = true;
+			sortKey = c.key;
+			// Best first: ascending for "lower is better", descending otherwise.
+			sortDesc = c.better !== 'low';
 		}
 	}
 
 	function csv() {
 		const esc = (v: unknown) => {
 			const s = v == null ? '' : String(v);
-			return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+			return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 		};
 		const lines = [columns.map((c) => esc(c.label)).join(',')].concat(
 			visible.map((r) => columns.map((c) => esc(r[c.key])).join(','))
@@ -97,10 +123,18 @@
 		const url = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' }));
 		const a = Object.assign(document.createElement('a'), {
 			href: url,
-			download: 'any-given-stat.csv'
+			download: `${filename}.csv`
 		});
+		document.body.append(a);
 		a.click();
-		URL.revokeObjectURL(url);
+		a.remove();
+		setTimeout(() => URL.revokeObjectURL(url), 1000);
+	}
+
+	function rowClick(e: MouseEvent, row: T) {
+		if ((e.target as HTMLElement).closest('a, button')) return; // the cell control handles it
+		if (href) goto(href(row));
+		else onrowclick?.(row);
 	}
 </script>
 
@@ -109,22 +143,28 @@
 		<input type="search" placeholder="Filter…" bind:value={query} aria-label="Filter rows" />
 	{/if}
 	<span class="muted count">{visible.length} rows</span>
-	<button onclick={csv}>Download CSV</button>
+	<button class="ghost small" onclick={csv} title="Download these rows as CSV">
+		<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14" /></svg>
+		CSV
+	</button>
 </div>
-<div class="scroll">
+<div class="scroll" style="max-height: {maxHeight}">
 	<table>
 		<thead>
 			<tr>
-				<th class="rank">#</th>
+				{#if showIndex}<th class="rank" scope="col">#</th>{/if}
 				{#each columns as c (c.key)}
 					<th
+						scope="col"
 						class:sticky={c.sticky}
-						class:num={!c.sticky}
+						class:num={!c.sticky && !c.team}
 						title={c.title}
 						aria-sort={sortKey === c.key ? (sortDesc ? 'descending' : 'ascending') : 'none'}
 					>
-						<button class="th" onclick={() => sortBy(c.key)}>
-							{c.label}{sortKey === c.key ? (sortDesc ? ' ↓' : ' ↑') : ''}
+						<button class="th" class:sorted={sortKey === c.key} onclick={() => sortBy(c)}>
+							{c.label}<span class="arrow" aria-hidden="true"
+								>{sortKey === c.key ? (sortDesc ? '↓' : '↑') : '↕'}</span
+							>
 						</button>
 					</th>
 				{/each}
@@ -133,17 +173,39 @@
 		<tbody>
 			{#each visible as row, i (i)}
 				<tr
-					class:clickable={!!onrowclick}
+					class:clickable={!!(href || onrowclick)}
 					class:hl={highlight?.(row)}
-					onclick={() => onrowclick?.(row)}
+					onclick={(e) => rowClick(e, row)}
 				>
-					<td class="rank">{i + 1}</td>
-					{#each columns as c (c.key)}
-						<td class:sticky={c.sticky} class:num={!c.sticky} style={shade(c, row[c.key])}>
-							{c.fmt ? c.fmt(row[c.key]) : (row[c.key] ?? '–')}
+					{#if showIndex}<td class="rank">{i + 1}</td>{/if}
+					{#each columns as c, ci (c.key)}
+						{@const text = c.fmt ? c.fmt(row[c.key]) : (row[c.key] ?? '–')}
+						<td
+							class:sticky={c.sticky}
+							class:num={!c.sticky && !c.team}
+							style={shade(c, row[c.key])}
+						>
+							{#if ci === 0 && href}
+								<a class="cell-link" href={href(row)}
+									>{#if c.team}<TeamBadge team={row[c.key]} />{:else}{text}{/if}</a
+								>
+							{:else if ci === 0 && onrowclick}
+								<button
+									class="cell-btn"
+									aria-pressed={highlight ? highlight(row) : undefined}
+									onclick={() => onrowclick(row)}
+									>{#if c.team}<TeamBadge team={row[c.key]} />{:else}{text}{/if}</button
+								>
+							{:else if c.team && row[c.key]}
+								<TeamBadge team={row[c.key]} />
+							{:else}
+								{text}
+							{/if}
 						</td>
 					{/each}
 				</tr>
+			{:else}
+				<tr><td class="empty" colspan={columns.length + 1}>No rows match.</td></tr>
 			{/each}
 		</tbody>
 	</table>
@@ -151,17 +213,32 @@
 
 <style>
 	.table-tools {
-		margin-bottom: 0.5rem;
+		margin-bottom: 0.6rem;
 	}
 	.count {
 		font-size: 0.8rem;
 		margin-left: auto;
 	}
+	.small {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		font-size: 0.82rem;
+		color: var(--text-secondary);
+	}
+	.small svg {
+		width: 15px;
+		height: 15px;
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 2;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+	}
 	.scroll {
 		overflow: auto;
-		max-height: 70vh;
 		border: 1px solid var(--border);
-		border-radius: 8px;
+		border-radius: 10px;
 	}
 	table {
 		border-collapse: separate;
@@ -172,7 +249,7 @@
 	}
 	th,
 	td {
-		padding: 0.3rem 0.6rem;
+		padding: 0.38rem 0.65rem;
 		white-space: nowrap;
 		border-bottom: 1px solid var(--grid);
 	}
@@ -182,17 +259,39 @@
 		background: var(--surface-2);
 		z-index: 2;
 		font-weight: 600;
+		font-size: 0.78rem;
 		color: var(--text-secondary);
+		text-align: left;
 	}
 	.th {
 		all: unset;
 		cursor: pointer;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+	}
+	.th:hover,
+	.th.sorted {
+		color: var(--text-primary);
+	}
+	.arrow {
+		font-size: 0.8em;
+		opacity: 0.35;
+	}
+	.th.sorted .arrow {
+		opacity: 1;
+		color: var(--accent-ink);
 	}
 	.th:focus-visible {
 		outline: 2px solid var(--accent);
+		border-radius: 3px;
 	}
-	.num {
+	th.num,
+	td.num {
 		text-align: right;
+	}
+	th.num .th {
+		flex-direction: row-reverse;
 	}
 	.rank {
 		color: var(--text-muted);
@@ -206,19 +305,46 @@
 		text-align: left;
 		background: var(--surface);
 		z-index: 1;
-		font-weight: 500;
+		font-weight: 600;
 	}
 	thead th.sticky {
 		background: var(--surface-2);
 		z-index: 3;
 	}
+	tbody tr {
+		transition: background-color 0.12s;
+	}
 	tbody tr:hover td {
 		background-color: var(--surface-2);
+	}
+	tbody tr:last-child td {
+		border-bottom: 0;
 	}
 	tr.clickable {
 		cursor: pointer;
 	}
 	tr.hl td {
 		box-shadow: inset 0 -2px 0 var(--accent);
+	}
+	.cell-link {
+		color: inherit;
+		text-decoration: none;
+	}
+	.cell-link:hover {
+		color: var(--accent-ink);
+		text-decoration: underline;
+	}
+	.cell-btn {
+		all: unset;
+		cursor: pointer;
+	}
+	.cell-btn:focus-visible {
+		outline: 2px solid var(--accent);
+		border-radius: 3px;
+	}
+	.empty {
+		text-align: center;
+		color: var(--text-muted);
+		padding: 1.5rem;
 	}
 </style>

@@ -315,8 +315,8 @@
 		font-size: 0.8rem;
 	}
 	.seasons button[aria-pressed='true'] {
-		background: var(--accent);
-		border-color: var(--accent);
+		background: var(--accent-fill);
+		border-color: var(--accent-fill);
 		color: #fff;
 	}
 	textarea {

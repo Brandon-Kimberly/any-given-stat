@@ -12,6 +12,9 @@ SCHEDULE_URL = "https://raw.githubusercontent.com/nflverse/nfldata/master/data/g
 PBP_URL = (
     "https://github.com/nflverse/nflverse-data/releases/download/pbp/play_by_play_{season}.parquet"
 )
+RELEASES = "https://github.com/nflverse/nflverse-data/releases/download"
+TEAMS_URL = f"{RELEASES}/teams/teams_colors_logos.csv"
+PLAYERS_URL = f"{RELEASES}/players/players.parquet"
 
 # CPOE / xYAC / xpass exist from 2006 on; 2016+ keeps downloads (~20MB/season) reasonable.
 DEFAULT_FIRST_SEASON = 2016

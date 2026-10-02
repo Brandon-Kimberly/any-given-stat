@@ -8,7 +8,7 @@ import datetime as dt
 from .build import build_all
 from .config import DEFAULT_FIRST_SEASON
 from .db import connect
-from .fetch import fetch_schedule, fetch_seasons
+from .fetch import fetch_players, fetch_schedule, fetch_seasons, fetch_teams
 
 
 def current_nfl_season(today: dt.date | None = None) -> int:
@@ -43,7 +43,13 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.cmd == "build":
         files = fetch_seasons(parse_seasons(args.seasons), refresh_latest=not args.no_refresh)
-        con = connect(files, fetch_schedule(force=not args.no_refresh))
+        refresh = not args.no_refresh
+        con = connect(
+            files,
+            fetch_schedule(force=refresh),
+            teams_file=fetch_teams(force=refresh),
+            players_file=fetch_players(force=refresh),
+        )
         build_all(con, explorer=not args.no_explorer)
 
 

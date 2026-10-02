@@ -709,3 +709,146 @@ def team_splits(con: duckdb.DuckDBPyConnection) -> list[dict]:
     order by season, team, side, split, bucket_order.ord
     """
     return records(con, sql)
+
+
+def qb_games(con: duckdb.DuckDBPyConnection, min_dropbacks: int = 5) -> list[dict]:
+    """Per QB per regular-season game: dropback efficiency and box-score totals."""
+    sql = """
+    select season, week, game_id, passer_id as player_id,
+           mode(passer) as name,
+           mode(posteam) as team,
+           mode(defteam) as opp,
+           count(*) as dropbacks,
+           avg(qb_epa) as epa_db,
+           avg(cpoe) as cpoe,
+           avg(success) as success_rate,
+           cast(coalesce(sum(passing_yards), 0) as int) as pass_yards,
+           cast(sum(pass_touchdown) as int) as tds,
+           cast(sum(interception) as int) as ints,
+           cast(sum(sack) as int) as sacks
+    from plays
+    where pass = 1 and passer_id is not null
+    group by season, week, game_id, passer_id
+    having count(*) >= ?
+    order by season, week, game_id, dropbacks desc
+    """
+    return records(con, sql, [min_dropbacks])
+
+
+# Distance buckets for the down-and-distance table: (label, ydstogo lower bound, upper bound).
+DISTANCE_BUCKETS = [("1-2", 1, 2), ("3-5", 3, 5), ("6-9", 6, 9), ("10", 10, 10), ("11+", 11, 99)]
+EPA_HIST_LO, EPA_HIST_HI, EPA_HIST_STEP = -4.0, 4.0, 0.25
+
+
+def bucket_case(col: str, buckets: list[tuple[str, int, int]], label: bool) -> str:
+    """SQL CASE mapping ``col`` to a bucket label (or its 1-based order if not ``label``)."""
+    whens = " ".join(
+        f"when {col} between {lo} and {hi} then {repr(name) if label else i}"
+        for i, (name, lo, hi) in enumerate(buckets, start=1)
+    )
+    return f"case {whens} end"
+
+
+def concepts(con: duckdb.DuckDBPyConnection, seasons: list[int]) -> dict:
+    """League-wide reference curves for the "how the models work" page.
+
+    ``seasons`` should be complete seasons (the caller falls back to everything loaded).
+    Expected points and win probability are nflfastR's model outputs at the snap.
+    """
+    season_list = ", ".join(str(s) for s in seasons) or "null"
+    reg = f"season_type = 'REG' and season in ({season_list})"
+    in_seasons = f"season in ({season_list})"
+
+    ep_curve = records(
+        con,
+        f"""
+        select cast(down as int) as down, cast(yardline_100 as int) as yardline_100,
+               avg(ep) as ep, count(*) as n
+        from pbp
+        where {reg} and ep is not null and down between 1 and 4
+          and play_type in ('pass', 'run', 'punt', 'field_goal')
+          and (ydstogo between 8 and 12 or goal_to_go = 1)
+          and yardline_100 between 1 and 99
+        group by all having count(*) >= 20
+        order by down, yardline_100
+        """,
+    )
+    wp_grid = records(
+        con,
+        f"""
+        select cast(floor(greatest(-21, least(21, score_differential)) / 3) * 3 as int)
+                   as score_diff,
+               cast(least(55, floor(game_seconds_remaining / 300) * 5) as int) as minutes_left,
+               avg(wp) as wp, count(*) as n
+        from pbp
+        where {reg} and wp is not null and qtr <= 4 and posteam is not null
+          and score_differential is not null and game_seconds_remaining is not null
+          and play_type in ('pass', 'run', 'punt', 'field_goal')
+        group by all having count(*) >= 30
+        order by score_diff, minutes_left
+        """,
+    )
+    dist = bucket_case("ydstogo", DISTANCE_BUCKETS, label=True)
+    dist_ord = bucket_case("ydstogo", DISTANCE_BUCKETS, label=False)
+    situations = records(
+        con,
+        f"""
+        select cast(down as int) as down, {dist} as distance, {dist_ord} as ord,
+               count(*) as plays,
+               avg(pass) as pass_rate,
+               avg(epa) filter (where pass = 1) as pass_epa,
+               avg(epa) filter (where rush = 1) as run_epa,
+               avg(success) filter (where pass = 1) as pass_success,
+               avg(success) filter (where rush = 1) as run_success
+        from plays
+        where {in_seasons} and no_garbage and down between 1 and 3 and ydstogo >= 1
+        group by all
+        order by down, ord
+        """,
+    )
+    top_bin = EPA_HIST_HI - EPA_HIST_STEP
+    epa_hist = records(
+        con,
+        f"""
+        with b as (
+            select case when pass = 1 then 'Pass' else 'Run' end as kind,
+                   greatest({EPA_HIST_LO}, least({top_bin},
+                       floor(epa / {EPA_HIST_STEP}) * {EPA_HIST_STEP})) as bin
+            from plays
+            where {in_seasons} and (pass = 1 or rush = 1)
+        )
+        select kind, bin, count(*) / sum(count(*)) over (partition by kind) as share
+        from b group by kind, bin
+        order by kind, bin
+        """,
+    )
+    conversion = records(
+        con,
+        f"""
+        select cast(ydstogo as int) as ydstogo, count(*) as attempts,
+               avg(case when first_down = 1 or touchdown = 1 then 1 else 0 end) as rate
+        from plays
+        where {in_seasons} and down = 4 and ydstogo between 1 and 10
+        group by all having count(*) >= 15
+        order by ydstogo
+        """,
+    )
+    field_goals = records(
+        con,
+        f"""
+        select cast(kick_distance as int) as distance, count(*) as attempts,
+               avg(case when field_goal_result = 'made' then 1 else 0 end) as made_rate
+        from pbp
+        where {reg} and field_goal_attempt = 1 and kick_distance between 18 and 65
+        group by all having count(*) >= 15
+        order by distance
+        """,
+    )
+    return {
+        "seasons": [min(seasons), max(seasons)] if seasons else None,
+        "ep_curve": ep_curve,
+        "wp_grid": wp_grid,
+        "situations": situations,
+        "epa_hist": epa_hist,
+        "fourth": {"conversion": conversion, "field_goals": field_goals},
+    }

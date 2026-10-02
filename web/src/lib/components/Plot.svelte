@@ -1,6 +1,10 @@
 <script lang="ts">
-	// Renders an Observable Plot figure at the container's width and re-renders
-	// whenever the width or any reactive state read inside `render` changes.
+	// Renders an Observable Plot figure at the container's width and re-renders whenever the
+	// width or any reactive state read inside `render` changes. Text marks with
+	// className: 'declutter' have overlapping labels hidden, keeping earlier data first (so
+	// callers sort label data by importance).
+	import { declutter } from '$lib/plot';
+
 	let { render, label }: { render: (width: number) => SVGElement | HTMLElement; label: string } =
 		$props();
 
@@ -11,6 +15,7 @@
 		if (!width) return;
 		const node = render(width);
 		el.replaceChildren(node);
+		declutter(el);
 		return () => node.remove();
 	});
 </script>
@@ -21,5 +26,11 @@
 	.plot {
 		width: 100%;
 		min-height: 120px;
+		animation: plot-in 0.4s var(--ease) both;
+	}
+	@keyframes plot-in {
+		from {
+			opacity: 0;
+		}
 	}
 </style>

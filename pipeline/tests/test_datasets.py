@@ -184,3 +184,69 @@ def test_explorer_export_writes_available_columns(make_pbp, tmp_path):
     datasets.export_explorer_parquet(con, 2024, dest.as_posix())
     (n,) = con.execute(f"select count(*) from '{dest}'").fetchone()
     assert n == 2
+
+
+def test_qb_games_min_dropbacks_and_totals(make_pbp):
+    rows = [
+        {"qb_epa": 0.5, "passing_yards": 10.0, "success": 1.0},
+        {"qb_epa": -0.5, "passing_yards": 20.0, "pass_touchdown": 1.0},
+        {"qb_epa": 1.0, "interception": 1.0},
+        {"qb_epa": 0.0, "sack": 1.0, "pass_attempt": 0.0},
+        {"qb_epa": 1.0, "cpoe": 10.0},
+        # QB2 has only 4 dropbacks: dropped.
+        *({"passer_id": "QB2", "passer": "B.Backup"} for _ in range(4)),
+        run(),  # designed runs are not dropbacks
+    ]
+    out = datasets.qb_games(make_pbp(rows))
+    (qb,) = out
+    assert (qb["player_id"], qb["team"], qb["opp"], qb["dropbacks"]) == ("QB1", "AAA", "BBB", 5)
+    assert qb["epa_db"] == pytest.approx(0.4)
+    assert qb["success_rate"] == pytest.approx(0.2)
+    assert qb["cpoe"] == pytest.approx(10.0)
+    assert (qb["pass_yards"], qb["tds"], qb["ints"], qb["sacks"]) == (30, 1, 1, 1)
+
+
+def test_concepts_histogram_buckets_and_fourth_down_rates(make_pbp):
+    rows = [
+        {"epa": 10.0},  # clipped into the top bin
+        {"epa": -9.0},  # clipped into the bottom bin
+        {"epa": 0.3},
+        {"epa": -0.1},
+        run(epa=0.0),
+        run(epa=0.24),
+        run(epa=-0.26),
+        # 15 4th-and-1 runs, 10 converted.
+        *(run(down=4.0, ydstogo=1.0, first_down=1.0 if i < 10 else 0.0) for i in range(15)),
+        # 15 50-yard field goals, 6 made.
+        *(
+            {
+                "play_type": "field_goal",
+                "pass": 0.0,
+                "down": 4.0,
+                "field_goal_attempt": 1.0,
+                "kick_distance": 50.0,
+                "field_goal_result": "made" if i < 6 else "missed",
+            }
+            for i in range(15)
+        ),
+        {"season": 2023, "epa": 3.0},  # outside the requested seasons
+    ]
+    out = datasets.concepts(make_pbp(rows), [2024])
+    assert out["seasons"] == [2024, 2024]
+    hist = out["epa_hist"]
+    for kind in ("Pass", "Run"):
+        assert sum(h["share"] for h in hist if h["kind"] == kind) == pytest.approx(1.0)
+    passes = {h["bin"]: h["share"] for h in hist if h["kind"] == "Pass"}
+    assert passes == {3.75: 0.25, -4.0: 0.25, 0.25: 0.25, -0.25: 0.25}
+    runs = {h["bin"]: h["share"] for h in hist if h["kind"] == "Run"}
+    assert runs[0.0] == pytest.approx(17 / 18)  # 0.0, 0.24 and the fifteen 4th-down runs
+    assert runs[-0.5] == pytest.approx(1 / 18)
+    (conv,) = out["fourth"]["conversion"]
+    assert (conv["ydstogo"], conv["attempts"]) == (1, 15)
+    assert conv["rate"] == pytest.approx(10 / 15)
+    (fg,) = out["fourth"]["field_goals"]
+    assert (fg["distance"], fg["attempts"], fg["made_rate"]) == (50, 15, pytest.approx(0.4))
+    (sit,) = out["situations"]  # 4th downs are not in the down-and-distance table
+    assert (sit["down"], sit["distance"], sit["ord"], sit["plays"]) == (1, "10", 4, 7)
+    assert sit["pass_rate"] == pytest.approx(4 / 7)
+    assert sit["run_epa"] == pytest.approx(-0.02 / 3)

@@ -86,6 +86,7 @@ export interface QB {
 	season: number;
 	player_id: string;
 	name: string;
+	full_name?: string | null;
 	team: string;
 	teams: string;
 	dropbacks: number;
@@ -112,6 +113,8 @@ export interface Receiver {
 	team: string;
 	player_id: string;
 	name: string;
+	full_name?: string | null;
+	position?: string | null;
 	targets: number;
 	receptions: number;
 	yards: number;
@@ -132,6 +135,8 @@ export interface Rusher {
 	season: number;
 	player_id: string;
 	name: string;
+	full_name?: string | null;
+	position?: string | null;
 	team: string;
 	carries: number;
 	yards: number;
@@ -276,4 +281,144 @@ export interface Lab {
 	selection: LabRow[];
 	chosen: { variant: string; threshold: number } | null;
 	test: BetScore | null;
+}
+
+export interface TeamMeta {
+	team: string;
+	name: string;
+	nick: string;
+	conf: string;
+	division: string;
+	color: string;
+	color2: string;
+	color_light: string;
+	color_dark: string;
+	badge_fg: string;
+}
+
+export interface Player {
+	player_id: string;
+	name: string;
+	position: string | null;
+	position_group: string | null;
+	rookie_season: number | null;
+	draft_year: number | null;
+	draft_round: number | null;
+	draft_pick: number | null;
+	college: string | null;
+}
+
+export interface Concepts {
+	seasons: [number, number];
+	ep_curve: { down: number; yardline_100: number; ep: number; n: number }[];
+	wp_grid: { score_diff: number; minutes_left: number; wp: number; n: number }[];
+	situations: {
+		down: number;
+		distance: string;
+		ord: number;
+		plays: number;
+		pass_rate: number;
+		pass_epa: number | null;
+		run_epa: number | null;
+		pass_success: number | null;
+		run_success: number | null;
+	}[];
+	epa_hist: { kind: 'Pass' | 'Run'; bin: number; share: number }[];
+	fourth: {
+		conversion: { ydstogo: number; attempts: number; rate: number }[];
+		field_goals: { distance: number; attempts: number; made_rate: number }[];
+	};
+}
+
+export interface FourthBucket {
+	distance: string;
+	field: string;
+	dist_ord: number;
+	field_ord: number;
+	go_epa: number | null;
+	go_n: number;
+	punt_epa: number | null;
+	punt_n: number;
+	fg_epa: number | null;
+	fg_n: number;
+	best: 'go' | 'punt' | 'fg' | null;
+	margin: number | null;
+}
+
+export interface FourthTeam {
+	season: number;
+	team: string;
+	fourth_downs: number;
+	go_rate: number;
+	clear_go: number;
+	went_when_clear_go: number;
+	epa_lost: number;
+	rank: number;
+}
+
+export interface FourthDowns {
+	buckets: FourthBucket[];
+	teams: FourthTeam[];
+	meta: {
+		reference_seasons: [number, number];
+		clear_margin: number;
+		min_n: number;
+		caveat: string;
+	};
+}
+
+export interface BoxSide {
+	plays: number;
+	epa_play: number | null;
+	success_rate: number | null;
+	pass_epa: number | null;
+	rush_epa: number | null;
+	yards: number;
+	turnovers: number;
+}
+
+export interface GameDetail {
+	game_id: string;
+	season: number;
+	week: number;
+	season_type: string;
+	home: string;
+	away: string;
+	home_score: number | null;
+	away_score: number | null;
+	gameday: string | null;
+	wp: [number, number][];
+	top_plays: {
+		qtr: number;
+		time: string | null;
+		posteam: string;
+		desc: string;
+		home_wpa: number;
+		epa: number | null;
+	}[];
+	box: { home: BoxSide | null; away: BoxSide | null };
+}
+
+export interface GameIndexEntry {
+	season: number;
+	file: string;
+	games: number;
+}
+
+export interface QBGame {
+	season: number;
+	week: number;
+	game_id: string;
+	player_id: string;
+	name: string;
+	team: string;
+	opp: string;
+	dropbacks: number;
+	epa_db: number;
+	cpoe: number | null;
+	success_rate: number;
+	pass_yards: number;
+	tds: number;
+	ints: number;
+	sacks: number;
 }

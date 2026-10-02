@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { base } from '$app/paths';
 	import Controls from '$lib/components/Controls.svelte';
 	import DataTable, { type Column } from '$lib/components/DataTable.svelte';
@@ -25,7 +24,7 @@
 		const lo = p === 'off' ? 'low' : 'high';
 		const k = (s: string) => `${p}_${s}` as keyof TeamSeason & string;
 		return [
-			{ key: 'team', label: 'Team', sticky: true },
+			{ key: 'team', label: 'Team', sticky: true, team: true },
 			{ key: k('epa_play'), label: 'EPA/play', fmt: epa, better: hi },
 			{ key: k('pass_epa'), label: 'Pass EPA', fmt: epa, better: hi },
 			{ key: k('rush_epa'), label: 'Rush EPA', fmt: epa, better: hi },
@@ -107,7 +106,7 @@
 			sortKey={`${view}_epa_play`}
 			sortDesc={view === 'off'}
 			search="team"
-			onrowclick={(r) => goto(`${base}/team/?t=${r.team}`)}
+			href={(r) => `${base}/team/?t=${r.team}`}
 		/>
 	{/key}
 </div>

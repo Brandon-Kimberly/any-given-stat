@@ -4,33 +4,39 @@
 	import DataTable, { type Column } from '$lib/components/DataTable.svelte';
 	import PlotFigure from '$lib/components/Plot.svelte';
 	import SampleWarning from '$lib/components/SampleWarning.svelte';
-	import { load } from '$lib/data';
+	import LoadError from '$lib/components/LoadError.svelte';
+	import Skeleton from '$lib/components/Skeleton.svelte';
+	import TeamBadge from '$lib/components/TeamBadge.svelte';
 	import { signed } from '$lib/format';
-	import { gridY, Plot, plotStyle } from '$lib/plot';
+	import { gridY, isNarrow, Plot, plotStyle, thinTicks } from '$lib/plot';
 	import { prefs } from '$lib/prefs.svelte';
-	import type { Meta, Rating } from '$lib/types';
+	import { resource } from '$lib/resource.svelte';
+	import { teamName } from '$lib/teams.svelte';
+	import type { Rating } from '$lib/types';
 
-	let meta = $state<Meta>();
-	let all = $state<Rating[]>([]);
-	load('meta').then((m) => (meta = m));
-	let error = $state<string | null>(null);
-	load('ratings')
-		.then((r) => (all = r))
-		.catch(() => (error = 'Ratings need seasons 2016–2020 in the build (uv run ags build).'));
+	const metaRes = resource('meta');
+	const ratingsRes = resource('ratings');
+	const meta = $derived(metaRes.value);
+	const all = $derived(ratingsRes.value ?? []);
 
 	const season = $derived(all.filter((r) => r.season === prefs.season));
-	const lastWeek = $derived(Math.max(0, ...season.map((r) => r.week)));
+	const weeks = $derived([...new Set(season.map((r) => r.week))].sort((a, b) => a - b));
+	const lastWeek = $derived(weeks.at(-1) ?? 0);
 	const status = $derived(meta?.seasons.find((s) => s.season === prefs.season));
+	// Scrub the table back through the season; null = latest.
+	let scrub = $state<number | null>(null);
+	const shownWeek = $derived(scrub != null && weeks.includes(scrub) ? scrub : lastWeek);
 
 	type Row = Rating & { change: number | null };
 	const current = $derived<Row[]>(
 		season
-			.filter((r) => r.week === lastWeek)
+			.filter((r) => r.week === shownWeek)
 			.map((r) => {
-				const prev = season.find((p) => p.team === r.team && p.week === lastWeek - 1);
+				const prev = season.find((p) => p.team === r.team && p.week === shownWeek - 1);
 				return { ...r, change: prev ? prev.rank - r.rank : null };
 			})
 	);
+	const allTeams = $derived([...new Set(season.map((r) => r.team))].sort());
 
 	// Up to four highlighted teams get categorical colors; the rest stay neutral context.
 	const SLOTS = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)'];
@@ -47,11 +53,17 @@
 		const base = picked.length ? picked : highlighted;
 		picked = base.includes(team) ? base.filter((t) => t !== team) : [...base, team].slice(-4);
 	}
+	function add(e: Event) {
+		const sel = e.currentTarget as HTMLSelectElement;
+		if (sel.value && !highlighted.includes(sel.value)) toggle(sel.value);
+		sel.value = '';
+	}
 
 	function trajectories(width: number) {
 		const focus = season.filter((r) => highlighted.includes(r.team));
 		const rest = season.filter((r) => !highlighted.includes(r.team));
 		const ends = focus.filter((r) => r.week === lastWeek);
+		const narrow = isNarrow(width);
 		// Direct-label line ends, skipping any that would overprint a label already placed;
 		// the legend still identifies every highlighted team.
 		const span =
@@ -62,15 +74,18 @@
 		}
 		return Plot.plot({
 			width,
-			height: 380,
+			height: narrow ? 300 : 400,
 			style: plotStyle,
-			marginRight: 50,
-			x: { label: 'After week', tickFormat: 'd', ticks: [...new Set(season.map((r) => r.week))] },
+			marginRight: narrow ? 12 : 50,
+			x: { label: 'After week', tickFormat: 'd', ticks: thinTicks(weeks, width, 34) },
 			y: { label: '↑ Net rating (points vs average team, neutral field)', tickFormat: '+.0f' },
 			color: { domain: highlighted, range: SLOTS.slice(0, highlighted.length), legend: true },
 			marks: [
 				gridY(),
 				Plot.ruleY([0], { stroke: 'var(--axis)' }),
+				shownWeek !== lastWeek
+					? Plot.ruleX([shownWeek], { stroke: 'var(--accent)', strokeDasharray: '3,3' })
+					: null,
 				Plot.line(rest, {
 					x: 'week',
 					y: 'points',
@@ -88,7 +103,7 @@
 					stroke: 'var(--surface)',
 					strokeWidth: 2
 				}),
-				Plot.text(labelled, {
+				Plot.text(narrow ? [] : labelled, {
 					x: 'week',
 					y: 'points',
 					text: 'team',
@@ -104,7 +119,7 @@
 						x: 'week',
 						y: 'points',
 						title: (d: Rating) =>
-							`${d.team} after week ${d.week}: #${d.rank}\n${signed(d.points)} pts (offense ${signed(d.off_points)}, defense ${signed(d.def_points)})`
+							`${teamName(d.team)} after week ${d.week}: #${d.rank}\n${signed(d.points)} pts (offense ${signed(d.off_points)}, defense ${signed(d.def_points)})`
 					})
 				)
 			]
@@ -112,8 +127,8 @@
 	}
 
 	const columns: Column<Row>[] = [
+		{ key: 'team', label: 'Team', sticky: true, team: true },
 		{ key: 'rank', label: 'Rank' },
-		{ key: 'team', label: 'Team', sticky: true },
 		{
 			key: 'points',
 			label: 'Net (pts)',
@@ -144,9 +159,10 @@
 	];
 </script>
 
-<svelte:head><title>Power ratings · Any Given Stat</title></svelte:head>
+<svelte:head><title>Power ratings {prefs.season} · Any Given Stat</title></svelte:head>
 
-<section>
+<section class="page-head">
+	<div class="eyebrow">Teams</div>
 	<h1>Power ratings</h1>
 	<p class="lede">
 		Predictive ratings: each team's offense and defense, adjusted for who they played and where,
@@ -161,27 +177,90 @@
 	<SampleWarning {status} />
 {/if}
 
-{#if current.length}
+{#if ratingsRes.error}
+	<LoadError message="Ratings need seasons 2016–2021 in the build." />
+{:else if !ratingsRes.value}
+	<Skeleton height={380} />
+{:else if current.length}
 	<div class="card">
-		<h2>Through week {lastWeek}</h2>
-		<p class="sub">Click teams in the table to compare their paths (up to four).</p>
+		<div class="card-head">
+			<h2>Through week {lastWeek}</h2>
+			<div class="picker">
+				{#each highlighted as t (t)}
+					<button class="pick" onclick={() => toggle(t)} aria-label="Remove {teamName(t)}">
+						<TeamBadge team={t} /> <span aria-hidden="true">×</span>
+					</button>
+				{/each}
+				{#if highlighted.length < 4}
+					<select onchange={add} aria-label="Add a team to compare">
+						<option value="">+ Compare team</option>
+						{#each allTeams.filter((t) => !highlighted.includes(t)) as t (t)}
+							<option value={t}>{teamName(t)}</option>
+						{/each}
+					</select>
+				{/if}
+			</div>
+		</div>
+		<p class="sub">Up to four teams in color; the rest of the league in grey for context.</p>
 		<PlotFigure label="Power rating by week" render={trajectories} />
 	</div>
 	<div class="card">
-		<DataTable
-			rows={current}
-			{columns}
-			sortKey="rank"
-			sortDesc={false}
-			search="team"
-			highlight={(r) => highlighted.includes(r.team)}
-			onrowclick={(r) => toggle(r.team)}
-		/>
+		<div class="card-head">
+			<h2>Standings after week {shownWeek}</h2>
+			{#if weeks.length > 1}
+				<label class="field scrub">
+					Week
+					<input
+						type="range"
+						min={weeks[0]}
+						max={lastWeek}
+						value={shownWeek}
+						oninput={(e) => (scrub = +(e.currentTarget as HTMLInputElement).value)}
+					/>
+					<span class="tnum">{shownWeek}</span>
+				</label>
+			{/if}
+		</div>
+		<p class="sub">
+			Click a team to add or remove it from the chart. Drag the slider to replay the season.
+		</p>
+		{#key shownWeek}
+			<DataTable
+				rows={current}
+				{columns}
+				sortKey="rank"
+				sortDesc={false}
+				search="team"
+				showIndex={false}
+				filename="power-ratings-{prefs.season}-wk{shownWeek}"
+				highlight={(r) => highlighted.includes(r.team)}
+				onrowclick={(r) => toggle(r.team)}
+			/>
+		{/key}
 	</div>
-{:else if error}
-	<p class="muted">{error}</p>
-{:else if all.length}
+{:else}
 	<p class="muted">
 		No ratings for {prefs.season} (the first season in the data has no prior year).
 	</p>
 {/if}
+
+<style>
+	.picker {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+		align-items: center;
+	}
+	.pick {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		padding: 0.15rem 0.45rem;
+		min-height: 30px;
+		border-radius: 999px;
+	}
+	.scrub input {
+		width: min(240px, 40vw);
+		accent-color: var(--accent);
+	}
+</style>

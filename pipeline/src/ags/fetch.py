@@ -7,7 +7,7 @@ import sys
 import urllib.request
 from pathlib import Path
 
-from .config import PBP_URL, RAW_DIR, SCHEDULE_URL
+from .config import PBP_URL, PLAYERS_URL, RAW_DIR, SCHEDULE_URL, TEAMS_URL
 
 
 def pbp_path(season: int, raw_dir: Path = RAW_DIR) -> Path:
@@ -29,6 +29,30 @@ def fetch_schedule(*, force: bool = True, raw_dir: Path = RAW_DIR) -> Path:
     if force or not dest.exists():
         _download(SCHEDULE_URL, dest)
     return dest
+
+
+def fetch_optional(url: str, name: str, *, force: bool, raw_dir: Path = RAW_DIR) -> Path | None:
+    """Download a reference file the build can live without (cached unless ``force``).
+
+    A failed download falls back to the cached copy, or None if there is none.
+    """
+    dest = raw_dir / name
+    if force or not dest.exists():
+        try:
+            _download(url, dest)
+        except OSError as e:
+            print(f"warning: could not fetch {url}: {e}", file=sys.stderr)
+    return dest if dest.exists() else None
+
+
+def fetch_teams(*, force: bool = False, raw_dir: Path = RAW_DIR) -> Path | None:
+    """nflverse team names, divisions and colors."""
+    return fetch_optional(TEAMS_URL, "teams_colors_logos.csv", force=force, raw_dir=raw_dir)
+
+
+def fetch_players(*, force: bool = False, raw_dir: Path = RAW_DIR) -> Path | None:
+    """nflverse player directory (positions, draft, college), keyed by gsis_id."""
+    return fetch_optional(PLAYERS_URL, "players.parquet", force=force, raw_dir=raw_dir)
 
 
 def _download(url: str, dest: Path) -> None:

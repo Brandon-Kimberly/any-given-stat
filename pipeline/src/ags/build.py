@@ -11,8 +11,10 @@ from pathlib import Path
 
 import duckdb
 
-from . import datasets, market, ratings
+from . import datasets, fourth, games, market, players, ratings
 from .config import OUT_DIR
+from .db import has_relation
+from .teams import teams_meta
 
 FLOAT_DIGITS = 4
 
@@ -56,14 +58,12 @@ def season_status(con: duckdb.DuckDBPyConnection) -> list[dict]:
 def build_all(con: duckdb.DuckDBPyConnection, out_dir: Path = OUT_DIR, explorer: bool = True):
     status = season_status(con)
     complete = [s["season"] for s in status if s["complete"]]
+    # Reference seasons for league-wide curves and the 4th-down model: complete seasons,
+    # or everything loaded when none is complete (e.g. a single in-progress season).
+    reference = complete or [s["season"] for s in status]
 
     teams = datasets.team_seasons(con)
-    has_schedule = bool(
-        con.execute(
-            "select count(*) from information_schema.tables where table_name = 'schedule'"
-        ).fetchone()[0]
-    )
-    if has_schedule:
+    if has_relation(con, "schedule"):
         adjusted = {
             (r["scope"], r["season"], r["team"]): r for r in ratings.adjusted_team_seasons(con)
         }
@@ -89,10 +89,37 @@ def build_all(con: duckdb.DuckDBPyConnection, out_dir: Path = OUT_DIR, explorer:
     write_json(out_dir / "team_splits.json", datasets.team_splits(con))
     write_json(out_dir / "team_weeks.json", datasets.team_weeks(con))
     write_json(out_dir / "luck.json", datasets.luck(con))
-    write_json(out_dir / "qbs.json", datasets.quarterbacks(con))
-    write_json(out_dir / "receivers.json", datasets.receivers(con))
-    write_json(out_dir / "rushers.json", datasets.rushers(con))
+    qbs = datasets.quarterbacks(con)
+    receivers = datasets.receivers(con)
+    rushers = datasets.rushers(con)
+    directory = players.players(con, (r["player_id"] for r in [*qbs, *receivers, *rushers]))
+    if not directory:
+        print("players.parquet missing: no positions or full names", file=sys.stderr)
+    players.enrich(qbs, directory, {"full_name": "name"})
+    players.enrich(receivers, directory, {"position": "position", "full_name": "name"})
+    players.enrich(rushers, directory, {"position": "position", "full_name": "name"})
+    write_json(out_dir / "qbs.json", qbs)
+    write_json(out_dir / "receivers.json", receivers)
+    write_json(out_dir / "rushers.json", rushers)
+    write_json(out_dir / "players.json", directory)
+    write_json(out_dir / "qb_games.json", datasets.qb_games(con))
+    team_meta = teams_meta(con)
+    if not team_meta:
+        print("teams_colors_logos.csv missing: teams_meta.json is empty", file=sys.stderr)
+    write_json(out_dir / "teams_meta.json", team_meta)
     write_json(out_dir / "stability.json", datasets.stability(con, complete))
+    write_json(out_dir / "concepts.json", datasets.concepts(con, reference))
+    write_json(out_dir / "fourth_downs.json", fourth.fourth_downs(con, reference))
+
+    games_index = []
+    for s in status:
+        season_games = games.season_games(con, s["season"])
+        dest = out_dir / "games" / f"games_{s['season']}.json"
+        write_json(dest, season_games)
+        games_index.append(
+            {"season": s["season"], "file": f"games/{dest.name}", "games": len(season_games)}
+        )
+    write_json(out_dir / "games" / "index.json", games_index)
 
     explorer_files = []
     if explorer:

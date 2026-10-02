@@ -14,9 +14,10 @@ import duckdb
 from .config import GARBAGE_WP_HIGH, GARBAGE_WP_LOW
 
 VIEWS_SQL = f"""
--- Scrimmage plays: designed runs, dropbacks (incl. sacks and scrambles).
--- Excludes kneels, spikes, special teams and penalty-nullified plays (play_type 'no_play').
-create or replace view plays as
+-- Scrimmage plays, regular season AND postseason: designed runs, dropbacks (incl. sacks and
+-- scrambles). Excludes kneels, spikes, special teams and penalty-nullified plays ('no_play').
+-- Only per-game postseason views (game pages) use this directly; metrics use ``plays``.
+create or replace view scrimmage_plays as
 select
     *,
     (wp between {GARBAGE_WP_LOW} and {GARBAGE_WP_HIGH}) as no_garbage,
@@ -25,10 +26,13 @@ select
         else 0
     end as explosive
 from pbp
-where season_type = 'REG'
-  and play_type in ('pass', 'run')
+where play_type in ('pass', 'run')
   and epa is not null
   and posteam is not null;
+
+-- The canonical play set: regular-season scrimmage plays.
+create or replace view plays as
+select * from scrimmage_plays where season_type = 'REG';
 
 -- Every play twice-filtered: scope 'all' and scope 'no_garbage'. Datasets group by scope.
 create or replace view scoped_plays as
@@ -90,9 +94,17 @@ TEAM_ALIASES = {"OAK": "LV", "SD": "LAC", "STL": "LA"}
 
 
 def connect(
-    pbp_files: Sequence[Path], schedule_file: Path | None = None
+    pbp_files: Sequence[Path],
+    schedule_file: Path | None = None,
+    teams_file: Path | None = None,
+    players_file: Path | None = None,
 ) -> duckdb.DuckDBPyConnection:
-    """Open an in-memory DuckDB with ``pbp`` (and ``schedule`` if given) plus derived views."""
+    """Open an in-memory DuckDB with ``pbp`` plus derived views.
+
+    Optional reference views, created only when their file is given: ``schedule``
+    (nflverse games.csv), ``team_colors`` (teams_colors_logos.csv) and ``players``
+    (players.parquet, keyed by ``gsis_id``).
+    """
     con = duckdb.connect()
     files = ", ".join(f"'{p.as_posix()}'" for p in pbp_files)
     con.execute(f"create view pbp as select * from read_parquet([{files}], union_by_name = true)")
@@ -109,8 +121,26 @@ def connect(
                 from read_csv('{schedule_file.as_posix()}', header = true, sample_size = -1)
             )
         """)
+    if teams_file is not None:
+        con.execute(f"""
+            create view team_colors as
+            select * from read_csv('{teams_file.as_posix()}', header = true, all_varchar = true)
+        """)
+    if players_file is not None:
+        con.execute(
+            f"create view players as select * from read_parquet('{players_file.as_posix()}')"
+        )
     install_views(con)
     return con
+
+
+def has_relation(con: duckdb.DuckDBPyConnection, name: str) -> bool:
+    """Whether a table or view called ``name`` exists (optional reference data)."""
+    return bool(
+        con.execute(
+            "select count(*) from information_schema.tables where table_name = ?", [name]
+        ).fetchone()[0]
+    )
 
 
 def install_views(con: duckdb.DuckDBPyConnection) -> None:
