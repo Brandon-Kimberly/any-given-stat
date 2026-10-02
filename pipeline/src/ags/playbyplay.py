@@ -15,6 +15,8 @@ import duckdb
 from .db import records
 from .games import PLAY_ORDER
 
+# Bump when the per-game file format or logic changes: past seasons are only rewritten then.
+VERSION = 1
 DESC_CHARS = 180
 PLAYS_COLUMNS = [
     "qtr",

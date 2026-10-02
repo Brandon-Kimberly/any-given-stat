@@ -54,9 +54,14 @@ Measured on 2016–2025 regular seasons, garbage time excluded (see *Signal vs n
   −0.5 ± 0.2, and a pre-registered round 2 adding injuries, travel, weather and late-season stakes
   went 68–65 (51.1%) on 2024–2025, below the 52.4% break-even. Its choice was frozen in a commit
   before any result was computed; every game after 2026-10-02 is a sealed, live test on the site.
+- **Two ratings beat one.** Adding a points-based team rating to the EPA rating cut forecast
+  error on held-out 2022–2023 (RMSE 12.68 vs 12.77) and on 2024–2025 (12.63 vs 12.74 for the
+  original model); Vegas is still better (12.44). Blending in a quarter of the model's
+  disagreement ties the closing line (12.43), which is about the ceiling for public data.
 - **Preseason playoff odds are nearly worthless.** Scored against 2017–2025 outcomes, simulated odds
-  before week 1 improve on "every team has the league-average chance" by only 6% (Brier skill); by
-  week 8 it's 45%.
+  before week 1 improve on "every team has the league-average chance" by only 8.5% (Brier skill); by
+  week 8 it's 47%. Modeling uncertainty in each team's true strength, real tiebreakers and the
+  better forecast took the simulator's average Brier from 0.127 to 0.124.
 - **Nobody reliably beats the spread.** 3 of 55 head coaches with 34+ games fall outside a 95%
   coin-flip funnel for cover rate, about what chance alone produces.
 

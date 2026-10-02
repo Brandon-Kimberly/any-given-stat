@@ -14,11 +14,14 @@ parquet; a static SvelteKit site renders it. No backend.
   - `src/ags/qb.py`: walk-forward starting-QB adjustment (listed starter vs the QBs behind the team's rating).
   - `src/ags/market.py`: the pre-registered beat-the-line experiment (`VARIANTS`, `THRESHOLDS`, selection rule) → `lab.json`.
   - `src/ags/lab2.py`: round 2 vs the closing line (`VARIANTS`, `FROZEN` choice committed 2026-10-02; 2024–2025 reported as a *reused* test; games after the freeze are the sealed live test) → `lab2.json`. Features from `context.py` (injuries = role × presence by position group from injury reports + snap counts; rest/bye; time zones; weather as margin compressors; late-season stakes from `sim.py`) and `forecast.py` (Open-Meteo kickoff forecasts for live games; backtests use recorded weather). Never edit `FROZEN` or `VARIANTS` to chase results; a new idea is round 3 with its own freeze.
-  - `src/ags/sim.py`: Monte Carlo playoff odds (10,000 sims per week state, ratings fixed within a sim, random tiebreaks) → `playoff_odds/<season>.json` + `index.json`.
+  - `src/ags/strength.py`: walk-forward margin-of-victory (points) ridge ratings, the second team rating next to EPA.
+  - `src/ags/lab3.py`: round 3 = the site's forecast, chosen for accuracy (validation RMSE), `FROZEN` 2026-10-02: EPA + points ratings + QB + injuries. `apply_to_predictions` writes its margins/WPs into `predictions.json`; `sim_inputs` gives the simulator its game model and next-week overrides (market blend `line + k·(model − line)`, k fit on FIT) → `lab3.json`.
+  - `src/ags/sim.py` (v2): Monte Carlo playoff odds (10,000 sims per week state) with the round-3 rating terms, correlated per-team strength uncertainty (`TAU_PRESEASON`→`TAU_LATE`, tuned on FIT by Brier; per-game noise shrunk so single games stay calibrated), NFL-style tiebreakers, and a per-state cache in `data/cache/odds` keyed by every input (bump `SIM_VERSION` when logic changes) → `playoff_odds/<season>.json` + `index.json`. v1's Brier scores are kept in `src/ags/reference/sim_v1_brier.json`.
   - `src/ags/playbyplay.py`: per-game plays (compact arrays, `PLAYS_COLUMNS`, flag letters) and drives → `games/<season>/<game_id>.json`.
   - `src/ags/records.py` (`records.json`; regular-season OT excluded from WP lists) and `people.py` (`coaches.json`, `referees.json`).
   - `ratings`, `team_splits`, `team_weeks`, `qb_games` are also written per season (`<name>/<season>.json`); pages load those, not the combined files.
-  - `src/ags/build.py`: writes `web/static/data/*.json`, `pbp/pbp_<season>.parquet`, `meta.json`.
+  - `src/ags/build.py`: writes `web/static/data/*.json` (atomically), `pbp/pbp_<season>.parquet`, `meta.json`. Past seasons' per-game files are skipped when `games/<season>/.done` matches `playbyplay.VERSION`.
+  - `src/ags/serve.py` (`ags up`: build if needed, serve `web/build` with `/data` live from `web/static/data`, open the browser) and `sync.py` (Sync button API: HEAD change check against `data/raw/sync_manifest.json`, rebuild in a subprocess, auto-sync off/interval/game days in `data/sync_settings.json`). Repo-root `start.cmd` / `start.sh` wrap `ags up`.
   - `tests/`: synthetic-pbp fixture in `conftest.py` (`make_pbp`, `run()` helper); `test_presets.py` runs explorer presets against real data (skipped if not built).
 - `web/` (SvelteKit 2, Svelte 5 runes, adapter-static, `ssr = false`, prerendered shells)
   - `src/lib/types.ts` mirrors the JSON shapes; keep it in sync with `datasets.py`.
@@ -34,6 +37,7 @@ parquet; a static SvelteKit site renders it. No backend.
 ## Commands
 
 ```bash
+uv run --project pipeline ags up [--port 4173] [--no-open]   # or .\start.cmd / ./start.sh: everything, one command
 cd pipeline && uv run ags build [--seasons 2016-2026] [--no-refresh] [--no-explorer]
 cd pipeline && uv run pytest -q && uv run ruff check . && uv run ruff format --check .
 cd web && npm run dev | npm run serve | npm test | npm run check | npm run lint | npm run format   # serve = production build + preview (much faster than dev)

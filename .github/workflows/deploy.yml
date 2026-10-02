@@ -5,8 +5,12 @@ on:
     branches: [main]
   workflow_dispatch:
   schedule:
-    # Daily at 10:17 UTC, September through February (nflverse updates play-by-play nightly).
+    # In season (September-February): daily after nflverse's nightly play-by-play update,
+    # plus Friday evening for final injury statuses and Monday/Tuesday early morning for
+    # Sunday and Monday night results. Times are UTC.
     - cron: '17 10 * 9-12,1-2 *'
+    - cron: '47 23 * 9-12,1-2 5'
+    - cron: '47 7 * 9-12,1-2 1,2'
 
 permissions:
   contents: read

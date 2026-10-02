@@ -204,7 +204,14 @@ def build_all(con: duckdb.DuckDBPyConnection, out_dir: Path = OUT_DIR, explorer:
 
     # --- per-game play-by-play and drives (playbyplay.py) ---
     with timed("play-by-play files"):
+        latest = max(s["season"] for s in status)
         for s in status:
+            season_dir = out_dir / "games" / str(s["season"])
+            marker = season_dir / ".done"
+            # Past seasons don't change: skip them when this version already wrote them.
+            if s["season"] < latest and marker.exists():
+                if marker.read_text().strip() == f"v{playbyplay.VERSION}":
+                    continue
             n = size = 0
             for game_id, payload in playbyplay.season_games(con, s["season"]):
                 dest = out_dir / "games" / str(s["season"]) / f"{game_id}.json"
@@ -215,6 +222,8 @@ def build_all(con: duckdb.DuckDBPyConnection, out_dir: Path = OUT_DIR, explorer:
                 f"wrote {out_dir / 'games' / str(s['season'])}/ ({n} games, {size / 1e6:.1f} MB)",
                 file=sys.stderr,
             )
+            if s["season"] < latest:
+                marker.write_text(f"v{playbyplay.VERSION}")
 
     # --- all-time records, coaches, referees (records.py, people.py) ---
     with timed("records"):
