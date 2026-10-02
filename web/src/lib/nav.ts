@@ -21,6 +21,11 @@ export const navGroups: NavGroup[] = [
 				blurb: 'Offense vs defense, raw or opponent-adjusted'
 			},
 			{ href: '/ratings/', label: 'Power ratings', blurb: 'Predictive ratings, week by week' },
+			{
+				href: '/odds/',
+				label: 'Playoff odds',
+				blurb: '10,000 simulated seasons, replayable week by week'
+			},
 			{ href: '/teams/', label: 'Team stats', blurb: 'Every efficiency stat, sortable' },
 			{ href: '/luck/', label: 'Luck', blurb: 'Record vs points, and who regresses' },
 			{ href: '/fourth/', label: 'Fourth downs', blurb: 'Who leaves points on the field' }

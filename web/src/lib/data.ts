@@ -5,6 +5,7 @@ import type {
 	GameIndexEntry,
 	Lab,
 	Player,
+	PlayoffIndexEntry,
 	QBGame,
 	TeamMeta,
 	Luck,
@@ -39,6 +40,7 @@ export interface Datasets {
 	fourth_downs: FourthDowns;
 	qb_games: QBGame[];
 	'games/index': GameIndexEntry[];
+	'playoff_odds/index': PlayoffIndexEntry[];
 }
 
 const cache = new Map<string, Promise<unknown>>();

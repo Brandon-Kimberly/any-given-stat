@@ -464,3 +464,38 @@ export interface GamePlays {
 	drives: Drive[];
 	plays: PlayRow[];
 }
+
+export interface PlayoffOddsRow {
+	team: string;
+	/** 0 = preseason; w = after week w. */
+	week: number;
+	mean_wins: number;
+	wins_p10: number;
+	wins_p90: number;
+	p_playoffs: number;
+	p_division: number;
+	p_bye: number;
+	p_conf: number;
+	p_sb: number;
+	mean_seed_if_in: number | null;
+}
+
+export interface PlayoffOdds {
+	season: number;
+	sims: number;
+	seeds: number;
+	byes: number;
+	weeks: number[];
+	rows: PlayoffOddsRow[];
+	/** What actually happened, once the season is over. */
+	actual: Record<
+		string,
+		{ made_playoffs: boolean; won_division: boolean; sb_winner: boolean }
+	> | null;
+}
+
+export interface PlayoffIndexEntry {
+	season: number;
+	file: string;
+	weeks: number[];
+}
