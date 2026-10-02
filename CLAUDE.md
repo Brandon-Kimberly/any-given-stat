@@ -13,12 +13,18 @@ parquet; a static SvelteKit site renders it. No backend.
   - `db.py` also has `scrimmage_plays` (the `plays` filters without the REG-only restriction, for playoff box scores).
   - `src/ags/qb.py`: walk-forward starting-QB adjustment (listed starter vs the QBs behind the team's rating).
   - `src/ags/market.py`: the pre-registered beat-the-line experiment (`VARIANTS`, `THRESHOLDS`, selection rule) → `lab.json`.
+  - `src/ags/sim.py`: Monte Carlo playoff odds (10,000 sims per week state, ratings fixed within a sim, random tiebreaks) → `playoff_odds/<season>.json` + `index.json`.
+  - `src/ags/playbyplay.py`: per-game plays (compact arrays, `PLAYS_COLUMNS`, flag letters) and drives → `games/<season>/<game_id>.json`.
+  - `src/ags/records.py` (`records.json`; regular-season OT excluded from WP lists) and `people.py` (`coaches.json`, `referees.json`).
+  - `ratings`, `team_splits`, `team_weeks`, `qb_games` are also written per season (`<name>/<season>.json`); pages load those, not the combined files.
   - `src/ags/build.py`: writes `web/static/data/*.json`, `pbp/pbp_<season>.parquet`, `meta.json`.
   - `tests/`: synthetic-pbp fixture in `conftest.py` (`make_pbp`, `run()` helper); `test_presets.py` runs explorer presets against real data (skipped if not built).
 - `web/` (SvelteKit 2, Svelte 5 runes, adapter-static, `ssr = false`, prerendered shells)
   - `src/lib/types.ts` mirrors the JSON shapes; keep it in sync with `datasets.py`.
   - `src/lib/components/`: `Plot.svelte` (Observable Plot wrapper: labels any `className: 'declutter'` text mark, exposes the chart as one labeled image), `DataTable.svelte` (sort best-first, percentile shading, `href` row links, `team: true` badge columns, CSV), `Controls.svelte` (season + garbage-time toggle), `TeamBadge`, `CommandPalette` (⌘K), `Skeleton`, `LoadError`.
-  - Data loading: `resource('name')` (`src/lib/resource.svelte.ts`) gives `{value, error}`; each route's `+page.ts` calls `prefetch(...)` so downloads start on hover/navigation. Per-season game files via `loadSeasonGames` (`src/lib/games.ts`).
+  - Data loading: `resource('name')` (`src/lib/resource.svelte.ts`) gives `{value, error}` as `$state.raw` (never deep proxies for datasets); `seasonResource(dir, () => season)` loads `<dir>/<season>.json` reactively. Each route's `+page.ts` calls `prefetch(...)` / `prefetchSeason(url, ...)` so downloads start on hover/navigation. Game files via `loadSeasonGames` / `loadGamePlays` (`src/lib/games.ts`).
+  - More components: `GameFlow` (drive chart + play feed, hover syncs the WP chart), `RecordList`, `Ticker`, `FavoriteCard`, `CountUp` (tile numbers), `Shortcuts` (g+letter, `[ ]`, t, c, ?), `Toast`. `Plot.svelte` renders lazily near the viewport, wipes in on first render only, and has a PNG export (`src/lib/exportChart.ts`).
+  - `favorite` (`src/lib/favorite.svelte.ts`, localStorage): gold `--fav` ring on badges and table rows. `odds.ts`: calibration / Brier skill for playoff odds.
   - Shared state: `prefs` (season/scope, synced to `?season=&scope=`), `theme` (re-renders theme-dependent charts), `teamMeta` with `teamColor`/`teamName` (`src/lib/teams.svelte.ts`). Site map in `src/lib/nav.ts`.
   - `src/lib/presets.ts`: SQL explorer presets (template literals; `test_presets.py` parses them with a regex, so keep the `title: '...'` / `sql: \`...\`` shape).
   - `src/lib/duck.ts`: DuckDB-WASM, self-hosted engine; the parquet extension is fetched from extensions.duckdb.org at runtime.
@@ -29,7 +35,7 @@ parquet; a static SvelteKit site renders it. No backend.
 ```bash
 cd pipeline && uv run ags build [--seasons 2016-2026] [--no-refresh] [--no-explorer]
 cd pipeline && uv run pytest -q && uv run ruff check . && uv run ruff format --check .
-cd web && npm run dev | npm test | npm run check | npm run lint | npm run format
+cd web && npm run dev | npm run serve | npm test | npm run check | npm run lint | npm run format   # serve = production build + preview (much faster than dev)
 cd web && BASE_PATH=/any-given-stat npm run build   # what CI deploys; preview needs the same BASE_PATH
 ```
 
@@ -50,7 +56,9 @@ cd web && BASE_PATH=/any-given-stat npm run build   # what CI deploys; preview n
 - Add a metric: SQL in `datasets.py` → test with hand-computed answer in `tests/` → field in `types.ts` → column/chart in the page. Consider adding it to `STABILITY_METRICS` too.
 - Charts: dataviz conventions. Colors come from CSS tokens in `app.css` (`--series-1/2`, `--neutral-mark`, `--good/--bad` washes), never raw hex in pages; one y-axis; a legend whenever there are 2+ series; text in text tokens, never series colors.
 - Formatters in `src/lib/format.ts` (real minus sign, no negative zero; `wlt` for records with ties). `DataTable` `fmt` takes the value only.
-- Team colors (`teamColor`) are fine for marks with a text label or tooltip (identity is never color-alone); multi-series comparisons use the validated `--series-1..4` palette instead.
+- Team colors (`teamColor`) are fine for marks with a text label or tooltip (identity is never color-alone); multi-series comparisons use the validated `--series-1..4` palette instead. Two-team views use `matchupColors(away, home)`, which falls back to the series pair when the team colors clash.
+- Responsiveness: re-renders on filter changes must stay instant (no entry animations on re-render, no view-transition waits). Large tables render 75 rows until "Show all".
+- Claims of skill get a null model: funnels for rates (`funnelBand`), base-rate Brier for forecasts.
 - Every page: `page-head` with an eyebrow, a `Skeleton` while loading, `LoadError` on failure, `SampleWarning` for in-progress seasons. Check new pages with axe (zero WCAG A/AA violations is the bar) at 1280px light and 390px dark.
 - Small samples are a feature, not a bug: in-progress seasons show `SampleWarning`; don't hide uncertainty.
 - SvelteKit is pinned to 2.x on purpose (3.0 shipped 2026-10-01). Don't bump majors casually.

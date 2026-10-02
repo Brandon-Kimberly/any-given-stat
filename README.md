@@ -14,12 +14,16 @@ and which are noise.
 | Page | Question it answers |
 |---|---|
 | **Home** | What matters this week: model vs Vegas lines, power top 10, risers and fallers, regression candidates, QB leaders. |
-| **Games / game page** | Every game's win probability play by play, the plays that decided it, an efficiency box score, excitement index and comebacks. Upcoming games get a unit-vs-unit matchup preview. |
+| **Games / game page** | Every game's win probability, a drive chart, the full play-by-play (filter by scoring, turnovers, explosives, 4th downs; hover a play to mark it on the WP chart), an efficiency box score and excitement index. Upcoming games get a matchup preview. |
 | **How football works** | Expected points by field position and down, win probability by score and clock, pass vs run, the EPA distribution, and fourth-down math, each with interactive controls and data-driven takeaways. |
 | **Fourth downs** | An empirical decision model (what going, punting and kicking actually produced), league aggressiveness over time, and team grades by EPA left on the field. |
 | **Player pages** | League percentile profile, career arc with intervals, game logs. Search any player with ⌘K / Ctrl+K. |
 | **Team tiers** | Who is actually good? Offense vs defense EPA/play, raw or opponent-adjusted, with equal-net-EPA tier lines. |
 | **Power ratings** | Opponent-adjusted, recency-weighted team ratings in points, week by week. |
+| **Playoff odds** | 10,000 simulated seasons at every week: replay the race, division odds over time, title odds, and a calibration check of past odds. |
+| **Compare** | Any two teams or players from any seasons, on percentiles within their own season, with a neutral-field projection for teams. |
+| **Record book** | Best and worst team, unit and player seasons by efficiency; biggest upsets, most exciting games, comebacks, biggest plays. |
+| **Coaches / Referees** | 4th-down aggressiveness, records and ATS; penalty volume and home lean, each against a 95% chance funnel. |
 | **Predictions** | Model spreads for the coming week vs the Vegas line, plus a walk-forward backtest and calibration check. |
 | **Teams / team page** | Every efficiency stat by team; per team: auto-generated identity (strengths and weaknesses by league rank), division standings, situational splits, strength of schedule, power-rating path, linked game log. |
 | **Quarterbacks** | EPA per dropback vs CPOE, plus 95% intervals that show when two QBs can't be told apart yet. |
@@ -45,6 +49,11 @@ Measured on 2016–2025 regular seasons, garbage time excluded (see *Signal vs n
   the 52.4% break-even. Models given the line as an input put ~95% weight on it and add nothing.
 - **Luck reverses.** Teams that beat their Pythagorean record by 2+ wins averaged about 3 fewer wins the
   next season.
+- **Preseason playoff odds are nearly worthless.** Scored against 2017–2025 outcomes, simulated odds
+  before week 1 improve on "every team has the league-average chance" by only 6% (Brier skill); by
+  week 8 it's 45%.
+- **Nobody reliably beats the spread.** 3 of 55 head coaches with 34+ games fall outside a 95%
+  coin-flip funnel for cover rate, about what chance alone produces.
 
 ![Signal vs noise](docs/stability.png)
 
@@ -60,8 +69,12 @@ Measured on 2016–2025 regular seasons, garbage time excluded (see *Signal vs n
   (single axis, legends for 2+ series, decluttered labels, tooltips everywhere).
 - **Accessible:** keyboard navigation (skip link, table rows as links, search palette), WCAG 2 AA
   verified with axe-core on every page in both themes, motion off under `prefers-reduced-motion`.
-- **Fast and shareable:** fully static; datasets prefetch on link hover; season and filters live in
-  the URL, so any view can be shared as a link.
+- **Fast and shareable:** fully static; datasets prefetch on link hover and load one season at a time;
+  charts render only when scrolled near; season and filters live in the URL, so any view can be shared
+  as a link (press <kbd>c</kbd> to copy it).
+- **Built for power users:** keyboard shortcuts (<kbd>?</kbd> lists them; <kbd>g</kbd> then a letter jumps
+  to a page, <kbd>[</kbd> <kbd>]</kbd> step seasons), a favorite team highlighted everywhere, PNG export
+  on every chart, CSV on every table.
 
 ## How it works
 
@@ -92,8 +105,11 @@ Requires Python 3.11+, [uv](https://docs.astral.sh/uv/) and Node 22.
 
 ```bash
 cd pipeline && uv sync && uv run ags build   # downloads 2016–current (~200 MB, cached in data/raw)
-cd ../web && npm install && npm run dev      # http://localhost:5173
+cd ../web && npm install && npm run serve    # production build + preview: http://localhost:4173
 ```
+
+`npm run dev` (http://localhost:5173) hot-reloads while editing but is noticeably slower to click
+around; use `npm run serve` to see the real thing.
 
 On Windows PowerShell 5.1 (which doesn't support `&&`), run the steps one per line:
 
@@ -103,7 +119,7 @@ uv sync
 uv run ags build
 cd ..\web
 npm install
-npm run dev
+npm run serve
 ```
 
 `uv run ags build --seasons 2024-2025` builds a subset. Tests: `uv run pytest` (pipeline) and
