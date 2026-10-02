@@ -108,6 +108,38 @@ static site on GitHub Pages, rebuilt by a scheduled GitHub Action
 
 Requires Python 3.11+, [uv](https://docs.astral.sh/uv/) and Node 22.
 
+### One command
+
+```powershell
+.\start.cmd          # Windows (or double-click start.cmd)
+```
+
+```bash
+./start.sh           # macOS / Linux
+uv run --project pipeline ags up   # the same thing, from the repo root
+```
+
+`ags up` builds the data if it has never been built (the first run downloads ~200 MB into
+`data/raw`), installs and builds the web app when its sources changed, then serves the site at
+http://localhost:4173 (the next free port if that one is busy) and opens your browser. Flags:
+`--port`, `--no-open`, `--no-build` (skip the web app check), `--seasons 2016-2026`. Ctrl+C stops
+it.
+
+**Sync.** While `ags up` runs, the header has a Sync button showing how old the data is. *Sync now*
+asks nflverse whether the in-season files changed (latest play-by-play, schedule and scores,
+injury reports, snap counts, player directory); if nothing did, it's done in a few seconds,
+otherwise it re-runs the build and the page reloads with the new data. Auto-sync can be *Off*,
+every *N* minutes, or *Game days*: every *N* minutes during NFL game windows (US Eastern:
+Thursday and Monday 7 pm–midnight, Sundays from noon, Saturdays from Dec 10, Thanksgiving and
+Christmas) and every 6 hours otherwise. The setting is kept in `data/sync_settings.json`.
+
+nflverse publishes play-by-play roughly nightly, and the schedule and scores a bit faster, so
+syncing every few minutes during games only picks up new data when the sources publish it; the
+change check makes the syncs in between cheap. The Sync button only exists on the local server:
+the public site is static.
+
+### Step by step
+
 ```bash
 cd pipeline && uv sync && uv run ags build   # downloads 2016–current (~200 MB, cached in data/raw)
 cd ../web && npm install && npm run serve    # production build + preview: http://localhost:4173

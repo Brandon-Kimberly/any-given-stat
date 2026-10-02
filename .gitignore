@@ -12,3 +12,6 @@ node_modules/
 /web/.svelte-kit/
 /web/build/
 .DS_Store
+# Local sync settings (`ags up`)
+/data/sync_settings.json
+/data/cache/

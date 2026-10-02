@@ -6,6 +6,7 @@
 	import CommandPalette from '$lib/components/CommandPalette.svelte';
 	import Shortcuts from '$lib/components/Shortcuts.svelte';
 	import Skeleton from '$lib/components/Skeleton.svelte';
+	import SyncControl from '$lib/components/SyncControl.svelte';
 	import Toast from '$lib/components/Toast.svelte';
 	import { load } from '$lib/data';
 	import { groupFor, navGroups } from '$lib/nav';
@@ -153,6 +154,7 @@
 		</nav>
 
 		<div class="actions">
+			<SyncControl generatedAt={meta?.generated_at} />
 			<button class="search-btn" onclick={() => (search = true)} aria-label="Search">
 				<svg viewBox="0 0 24 24" aria-hidden="true"
 					><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg

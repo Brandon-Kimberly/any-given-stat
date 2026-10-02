@@ -50,7 +50,10 @@ def _clean(value):
 
 def write_json(path: Path, payload, quiet: bool = False) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(_clean(payload), separators=(",", ":")))
+    # Write then rename, so a page served during a sync never reads a half-written file.
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(_clean(payload), separators=(",", ":")))
+    tmp.replace(path)
     if not quiet:
         print(f"wrote {path} ({path.stat().st_size / 1024:.0f} KB)", file=sys.stderr)
 
