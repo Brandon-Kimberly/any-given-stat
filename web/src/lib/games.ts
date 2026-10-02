@@ -1,9 +1,14 @@
 import { loadPath } from './data';
-import type { GameDetail, GameIndexEntry } from './types';
+import type { GameDetail, GameIndexEntry, GamePlays } from './types';
 
 /** All games (REG + POST) of a season, from the per-season file. */
 export function loadSeasonGames(season: number): Promise<GameDetail[]> {
 	return loadPath<GameDetail[]>(`games/games_${season}`);
+}
+
+/** Full play-by-play and drives for one game. */
+export function loadGamePlays(gameId: string): Promise<GamePlays> {
+	return loadPath<GamePlays>(`games/${seasonFromGameId(gameId)}/${gameId}`);
 }
 
 export function seasonFromGameId(id: string): number {

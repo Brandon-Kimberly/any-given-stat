@@ -2,6 +2,7 @@
 	import { base } from '$app/paths';
 	import CountUp from '$lib/components/CountUp.svelte';
 	import { page } from '$app/state';
+	import GameFlow from '$lib/components/GameFlow.svelte';
 	import LoadError from '$lib/components/LoadError.svelte';
 	import PlotFigure from '$lib/components/Plot.svelte';
 	import Skeleton from '$lib/components/Skeleton.svelte';
@@ -11,6 +12,7 @@
 		elapsedAt,
 		excitementPercentile,
 		excitement,
+		loadGamePlays,
 		loadSeasonGames,
 		seasonFromGameId,
 		winnerLow,
@@ -18,8 +20,15 @@
 	} from '$lib/games';
 	import { gridY, isNarrow, Plot, plotStyle } from '$lib/plot';
 	import { resource } from '$lib/resource.svelte';
-	import { teamColor, teamName } from '$lib/teams.svelte';
-	import type { BoxSide, GameDetail, GamePrediction, Rating, TeamSeason } from '$lib/types';
+	import { matchupColors, teamName } from '$lib/teams.svelte';
+	import type {
+		BoxSide,
+		GameDetail,
+		GamePlays,
+		GamePrediction,
+		Rating,
+		TeamSeason
+	} from '$lib/types';
 
 	const id = $derived(page.url.searchParams.get('id') ?? '');
 	const season = $derived(seasonFromGameId(id));
@@ -47,6 +56,24 @@
 			.finally(() => (loading = false));
 	});
 
+	// Full play-by-play (optional: older builds don't have it; the page works without).
+	let plays = $state.raw<GamePlays | null>(null);
+	$effect(() => {
+		const want = id;
+		plays = null;
+		if (!want) return;
+		loadGamePlays(want)
+			.then((p) => {
+				if (want === id) plays = p;
+			})
+			.catch(() => {});
+	});
+
+	// Hovered play → a marker on the WP chart, positioned with the chart's own x scale.
+	let hoverT = $state<number | null>(null);
+	let wpX = null as ((v: number) => number) | null;
+	const markerX = $derived(hoverT != null && wpX ? wpX(hoverT / 60) : null);
+
 	// The model/Vegas line for this game: a backtest row if played, a forecast if upcoming.
 	const line = $derived<GamePrediction | undefined>(
 		preds.value?.games.find((g) => g.game_id === id) ??
@@ -54,6 +81,7 @@
 	);
 	const home = $derived(game?.home ?? line?.home ?? '');
 	const away = $derived(game?.away ?? line?.away ?? '');
+	const sideColors = $derived(matchupColors(away, home));
 	const played = $derived(!!game && game.home_score != null && game.wp.length > 1);
 	const homeWon = $derived((game?.home_score ?? 0) > (game?.away_score ?? 0));
 
@@ -70,10 +98,9 @@
 		const narrow = isNarrow(width);
 		const end = Math.max(3600, g.wp.at(-1)![0]);
 		const pts = g.wp.map(([t, wp]) => ({ t: t / 60, wp }));
-		const hc = teamColor(g.home);
-		const ac = teamColor(g.away);
+		const { home: hc, away: ac } = matchupColors(g.away, g.home);
 		const quarters = [15, 30, 45, ...(end > 3600 ? [60] : [])];
-		return Plot.plot({
+		const chart = Plot.plot({
 			width,
 			height: narrow ? 260 : 360,
 			style: plotStyle,
@@ -151,6 +178,9 @@
 				)
 			]
 		});
+		const x = chart.scale('x');
+		wpX = x?.apply ? (v: number) => x.apply!(v) as number : null;
+		return chart;
 	}
 
 	const boxRows: {
@@ -298,7 +328,12 @@
 				moved it most (listed below). Win probability from the nflfastR model, which includes the
 				pre-game Vegas line.
 			</p>
-			<PlotFigure label="Win probability over the game" render={wpChart} />
+			<div class="wp-wrap">
+				<PlotFigure label="Win probability over the game" render={wpChart} />
+				{#if markerX != null}
+					<div class="wp-marker" style:left="{markerX}px" aria-hidden="true"></div>
+				{/if}
+			</div>
 		</div>
 
 		<div class="grid-2">
@@ -307,7 +342,9 @@
 				<ol class="plays">
 					{#each game.top_plays as p, i (i)}
 						<li>
-							<span class="n" style="border-color: {teamColor(p.home_wpa > 0 ? home : away)}"
+							<span
+								class="n"
+								style="border-color: {p.home_wpa > 0 ? sideColors.home : sideColors.away}"
 								>{i + 1}</span
 							>
 							<div>
@@ -316,7 +353,7 @@
 									<span class="muted small">Q{p.qtr > 4 ? 'OT' : p.qtr} · {p.time}</span>
 									<span
 										class="chip swing"
-										style="border-color: {teamColor(p.home_wpa > 0 ? home : away)}"
+										style="border-color: {p.home_wpa > 0 ? sideColors.home : sideColors.away}"
 										>{p.home_wpa > 0 ? home : away} +{Math.round(Math.abs(p.home_wpa) * 100)}% WP</span
 									>
 								</div>
@@ -345,6 +382,12 @@
 				</table>
 			</div>
 		</div>
+
+		{#if plays}
+			<GameFlow data={plays} {home} {away} onhover={(t) => (hoverT = t)} />
+		{:else}
+			<Skeleton height={200} />
+		{/if}
 	{:else}
 		<div class="callout info">
 			Not played yet. Here's how the two teams match up on the season so far.
@@ -440,6 +483,20 @@
 {/if}
 
 <style>
+	.wp-wrap {
+		position: relative;
+	}
+	.wp-marker {
+		position: absolute;
+		top: 10px;
+		bottom: 28px;
+		width: 2px;
+		margin-left: -1px;
+		background: var(--accent);
+		border-radius: 2px;
+		pointer-events: none;
+		box-shadow: 0 0 0 3px var(--accent-soft);
+	}
 	.scoreboard {
 		display: grid;
 		gap: 0.9rem;

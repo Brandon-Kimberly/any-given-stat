@@ -38,3 +38,33 @@ export function teamName(team: string): string {
 export function teamNick(team: string): string {
 	return teamMeta.byTeam[team]?.nick ?? team;
 }
+
+function rgb(hex: string): [number, number, number] | null {
+	const m = /^#([0-9a-f]{6})$/i.exec(hex.trim());
+	if (!m) return null;
+	const n = parseInt(m[1], 16);
+	return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+/** True when two colors are too close to tell apart side by side (weighted RGB distance). */
+export function colorsClash(a: string, b: string): boolean {
+	const x = rgb(a);
+	const y = rgb(b);
+	if (!x || !y) return true;
+	const r = (x[0] + y[0]) / 2;
+	const d = Math.sqrt(
+		(2 + r / 256) * (x[0] - y[0]) ** 2 +
+			4 * (x[1] - y[1]) ** 2 +
+			(2 + (255 - r) / 256) * (x[2] - y[2]) ** 2
+	);
+	return d < 150;
+}
+
+/** Colors for a two-team view: team colors when distinct, else the validated series pair. */
+export function matchupColors(away: string, home: string): { away: string; home: string } {
+	const a = teamColor(away);
+	const h = teamColor(home);
+	return colorsClash(a, h)
+		? { away: 'var(--series-2)', home: 'var(--series-1)' }
+		: { away: a, home: h };
+}

@@ -422,3 +422,45 @@ export interface QBGame {
 	ints: number;
 	sacks: number;
 }
+
+/** One play in games/<season>/<game_id>.json (column order = GamePlays.plays_columns). */
+export type PlayRow = [
+	qtr: number,
+	time: string | null,
+	posteam: string,
+	down: number | null,
+	ydstogo: number | null,
+	/** Yards from the offense's own goal line. */
+	yl: number | null,
+	play_type: string | null,
+	desc: string,
+	epa: number | null,
+	home_wp_after: number | null,
+	home_score: number | null,
+	away_score: number | null,
+	/** Letters: T touchdown, I interception, F fumble lost, S sack, P penalty, X explosive, 4 fourth-down try. */
+	flags: string,
+	drive: number | null
+];
+
+export interface Drive {
+	n: number;
+	posteam: string;
+	qtr: number | null;
+	start_clock: string | null;
+	start_yl: number | null;
+	end_yl: number | null;
+	plays: number;
+	yards: number | null;
+	result: string | null;
+	top: string | null;
+	points: number | null;
+}
+
+export interface GamePlays {
+	game_id: string;
+	plays_columns: string[];
+	flags: Record<string, string>;
+	drives: Drive[];
+	plays: PlayRow[];
+}
