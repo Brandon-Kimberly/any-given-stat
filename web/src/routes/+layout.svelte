@@ -2,7 +2,7 @@
 	import '../app.css';
 	import { afterNavigate, replaceState } from '$app/navigation';
 	import { base } from '$app/paths';
-	import { page } from '$app/state';
+	import { navigating, page } from '$app/state';
 	import CommandPalette from '$lib/components/CommandPalette.svelte';
 	import Shortcuts from '$lib/components/Shortcuts.svelte';
 	import Skeleton from '$lib/components/Skeleton.svelte';
@@ -90,6 +90,7 @@
 <a class="skip" href="#main">Skip to content</a>
 
 <header>
+	{#if navigating.to}<div class="nav-progress" aria-hidden="true"></div>{/if}
 	<div class="bar">
 		<a class="brand" href="{base}/" aria-label="Any Given Stat home">
 			<svg viewBox="0 0 32 32" aria-hidden="true"
@@ -294,6 +295,23 @@
 	}
 	.skip:focus {
 		top: 10px;
+	}
+	.nav-progress {
+		position: absolute;
+		left: 0;
+		top: 0;
+		height: 3px;
+		width: 100%;
+		background: linear-gradient(90deg, var(--series-1), var(--series-3), var(--series-4));
+		transform-origin: left;
+		animation: nav-load 1.2s var(--ease) forwards;
+		animation-delay: 80ms;
+		transform: scaleX(0);
+	}
+	@keyframes nav-load {
+		to {
+			transform: scaleX(0.85);
+		}
 	}
 	header {
 		position: sticky;

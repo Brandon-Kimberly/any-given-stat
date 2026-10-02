@@ -4,15 +4,19 @@
 	import { base } from '$app/paths';
 	import { load } from '$lib/data';
 	import { allPages } from '$lib/nav';
+	import { favorite } from '$lib/favorite.svelte';
 	import { teamMeta } from '$lib/teams.svelte';
+	import { toggleTheme } from '$lib/theme.svelte';
+	import { copyLink } from '$lib/toast.svelte';
 
 	let { open = $bindable(false) }: { open?: boolean } = $props();
 
 	interface Entry {
-		kind: 'Page' | 'Team' | 'Player';
+		kind: 'Page' | 'Team' | 'Player' | 'Action';
 		label: string;
 		detail: string;
 		href: string;
+		run?: () => void;
 		/** Lowercased text the query matches against. */
 		key: string;
 	}
@@ -30,6 +34,35 @@
 		href: p.href,
 		key: `${p.label} ${p.blurb}`.toLowerCase()
 	}));
+	const actions = $derived<Entry[]>([
+		{
+			kind: 'Action',
+			label: 'Toggle dark mode',
+			detail: 'Shortcut: t',
+			href: '#theme',
+			key: 'toggle dark light mode theme',
+			run: toggleTheme
+		},
+		{
+			kind: 'Action',
+			label: 'Copy link to this view',
+			detail: 'Season, filters and selections included · c',
+			href: '#copy',
+			key: 'copy link share url',
+			run: () => copyLink()
+		},
+		...(favorite.team
+			? [
+					{
+						kind: 'Action' as const,
+						label: 'Go to my team',
+						detail: `${favorite.team} · g then m`,
+						href: `/team/?t=${favorite.team}`,
+						key: 'my team favorite'
+					}
+				]
+			: [])
+	]);
 	const teams = $derived(
 		Object.values(teamMeta.byTeam).map<Entry>((t) => ({
 			kind: 'Team',
@@ -80,7 +113,7 @@
 
 	const results = $derived.by(() => {
 		const q = query.trim().toLowerCase();
-		return [...pages, ...teams, ...players]
+		return [...pages, ...actions, ...teams, ...players]
 			.map((e) => ({ e, s: score(e, q) }))
 			.filter((r) => r.s > 0)
 			.sort((a, b) => b.s - a.s)
@@ -105,7 +138,8 @@
 	function choose(e: Entry | undefined) {
 		if (!e) return;
 		open = false;
-		goto(`${base}${e.href}`);
+		if (e.run) e.run();
+		else goto(`${base}${e.href}`);
 	}
 
 	function onkeydown(ev: KeyboardEvent) {
