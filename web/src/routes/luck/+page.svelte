@@ -3,19 +3,24 @@
 	import DataTable, { type Column } from '$lib/components/DataTable.svelte';
 	import PlotFigure from '$lib/components/Plot.svelte';
 	import SampleWarning from '$lib/components/SampleWarning.svelte';
-	import { load } from '$lib/data';
-	import { corr, num, pct, signed } from '$lib/format';
-	import { gridX, gridY, Plot, plotStyle } from '$lib/plot';
+	import { base } from '$app/paths';
+	import LoadError from '$lib/components/LoadError.svelte';
+	import Skeleton from '$lib/components/Skeleton.svelte';
+	import TeamBadge from '$lib/components/TeamBadge.svelte';
+	import { corr, num, pct, signed, wlt } from '$lib/format';
+	import { gridX, gridY, isNarrow, Plot, plotStyle } from '$lib/plot';
 	import { prefs } from '$lib/prefs.svelte';
+	import { resource } from '$lib/resource.svelte';
 	import { mean, ols } from '$lib/stats';
-	import type { Luck, Meta } from '$lib/types';
+	import { teamColor, teamName } from '$lib/teams.svelte';
+	import type { Luck } from '$lib/types';
 
-	let meta = $state<Meta>();
-	let all = $state<Luck[]>([]);
-	load('meta').then((m) => (meta = m));
-	load('luck').then((l) => (all = l));
+	const metaRes = resource('meta');
+	const res = resource('luck');
+	const meta = $derived(metaRes.value);
+	const all = $derived(res.value ?? []);
 
-	type Row = Luck & { one_score: string; losses: number };
+	type Row = Luck & { one_score: string; losses: number; record: string };
 	const status = $derived(meta?.seasons.find((s) => s.season === prefs.season));
 	const rows = $derived<Row[]>(
 		all
@@ -23,6 +28,7 @@
 			.map((l) => ({
 				...l,
 				losses: l.games - l.wins,
+				record: wlt(l.wins, l.games),
 				one_score: `${l.one_score_wins ?? 0}–${l.one_score_games - (l.one_score_wins ?? 0)}`
 			}))
 	);
@@ -54,6 +60,7 @@
 				];
 			});
 	});
+	const firstPair = $derived(pairs.length ? Math.min(...pairs.map((p) => p.season)) : '');
 	const fit = $derived(
 		pairs.length > 2
 			? ols(
@@ -101,19 +108,24 @@
 				Plot.dot(rows, {
 					x: 'pythag_wins',
 					y: 'wins',
-					r: 5,
-					fill: 'var(--neutral-mark)',
+					r: isNarrow(width) ? 5 : 6.5,
+					fill: (d: Row) => teamColor(d.team),
 					stroke: 'var(--surface)',
 					strokeWidth: 2
 				}),
-				Plot.text(rows, {
-					x: 'pythag_wins',
-					y: 'wins',
-					text: 'team',
-					dy: -11,
-					fontSize: 10.5,
-					fill: 'var(--text-secondary)'
-				}),
+				Plot.text(
+					[...rows].sort((a, b) => Math.abs(b.wins_over_pythag) - Math.abs(a.wins_over_pythag)),
+					{
+						x: 'pythag_wins',
+						y: 'wins',
+						text: 'team',
+						dy: -12,
+						fontSize: 10.5,
+						fontWeight: 600,
+						fill: 'var(--text-secondary)',
+						className: 'declutter'
+					}
+				),
 				Plot.tip(
 					rows,
 					Plot.pointer({
@@ -121,7 +133,7 @@
 						x: 'pythag_wins',
 						y: 'wins',
 						title: (d: Row) =>
-							`${d.team}: ${d.wins}–${d.losses}\nPythagorean ${num(d.pythag_wins, 1)} (${signed(d.wins_over_pythag)})\nOne-score games ${d.one_score}\nPoint diff ${signed(d.points_for - d.points_against, 0)}`
+							`${teamName(d.team)}: ${d.record}\nPythagorean ${num(d.pythag_wins, 1)} (${signed(d.wins_over_pythag)})\nOne-score games ${d.one_score}\nPoint diff ${signed(d.points_for - d.points_against, 0)}`
 					})
 				)
 			]
@@ -174,9 +186,8 @@
 	}
 
 	const columns: Column<Row>[] = [
-		{ key: 'team', label: 'Team', sticky: true },
-		{ key: 'wins', label: 'W', fmt: (v) => num(v, v % 1 ? 1 : 0) },
-		{ key: 'losses', label: 'L', fmt: (v) => num(v, v % 1 ? 1 : 0) },
+		{ key: 'team', label: 'Team', sticky: true, team: true },
+		{ key: 'record', label: 'Record' },
 		{ key: 'pythag_wins', label: 'Pythag W', fmt: (v) => num(v, 1) },
 		{
 			key: 'wins_over_pythag',
@@ -198,9 +209,10 @@
 	];
 </script>
 
-<svelte:head><title>Luck · Any Given Stat</title></svelte:head>
+<svelte:head><title>Luck {prefs.season} · Any Given Stat</title></svelte:head>
 
-<section>
+<section class="page-head">
+	<div class="eyebrow">Teams</div>
 	<h1>Luck</h1>
 	<p class="lede">
 		A team's record is its point differential plus noise. The Pythagorean formula (points scored and
@@ -215,18 +227,26 @@
 	<SampleWarning {status} />
 {/if}
 
-{#if rows.length}
+{#if res.error}
+	<LoadError message={res.error} />
+{:else if !res.value}
+	<Skeleton height={360} />
+{:else if rows.length}
 	<div class="tiles">
 		<div class="card tile">
 			<div class="label">Luckiest {prefs.season}</div>
-			<div class="value">{lucky.map((r) => r.team).join(', ')}</div>
+			<div class="value badges">
+				{#each lucky as r (r.team)}<TeamBadge team={r.team} size="md" link />{/each}
+			</div>
 			<div class="note">
 				{lucky.map((r) => signed(r.wins_over_pythag)).join(' · ')} wins vs Pythag
 			</div>
 		</div>
 		<div class="card tile">
 			<div class="label">Unluckiest {prefs.season}</div>
-			<div class="value">{unlucky.map((r) => r.team).join(', ')}</div>
+			<div class="value badges">
+				{#each unlucky as r (r.team)}<TeamBadge team={r.team} size="md" link />{/each}
+			</div>
 			<div class="note">
 				{unlucky.map((r) => signed(r.wins_over_pythag)).join(' · ')} wins vs Pythag
 			</div>
@@ -236,7 +256,7 @@
 				<div class="label">Beat Pythag by 2+ wins → next year</div>
 				<div class="value">{signed(mean(bigOver.map((p) => p.change)))} wins</div>
 				<div class="note">
-					average change, {bigOver.length} teams since {Math.min(...pairs.map((p) => p.season))}
+					average change, {bigOver.length} teams since {firstPair}
 				</div>
 			</div>
 		{/if}
@@ -258,7 +278,7 @@
 		<div class="card">
 			<h2>Does luck carry over?</h2>
 			<p class="sub">
-				Every team-season since {Math.min(...pairs.map((p) => p.season))}.
+				Every team-season since {firstPair}.
 				{#if fit}
 					Slope {signed(fit.b, 2)}, r = {corr(fit.r)}. A negative slope means luck reverses: each
 					win of luck in season N predicts about {num(Math.abs(fit.b), 2)} fewer wins the next season.
@@ -272,6 +292,22 @@
 	</div>
 
 	<div class="card">
-		<DataTable {rows} {columns} sortKey="wins_over_pythag" search="team" />
+		<DataTable
+			{rows}
+			{columns}
+			sortKey="wins_over_pythag"
+			search="team"
+			href={(r) => `${base}/team/?t=${r.team}`}
+			filename="luck-{prefs.season}"
+		/>
 	</div>
 {/if}
+
+<style>
+	.badges {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+		padding: 0.2rem 0;
+	}
+</style>

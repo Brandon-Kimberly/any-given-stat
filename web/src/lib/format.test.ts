@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { epa, pct, pp, signed, spread } from './format';
+import { epa, pct, pp, signed, spread, wlt } from './format';
 
 describe('format', () => {
 	it('signs EPA with a true minus and no negative zero', () => {
@@ -22,5 +22,13 @@ describe('spread', () => {
 		expect(spread(-7, 'KC', 'BUF')).toBe('BUF −7.0');
 		expect(spread(0.01, 'KC', 'BUF')).toBe('PK');
 		expect(spread(null, 'KC', 'BUF')).toBe('–');
+	});
+});
+
+describe('wlt', () => {
+	it('shows a tie only when there is one', () => {
+		expect(wlt(9, 17)).toBe('9–8');
+		expect(wlt(9.5, 17)).toBe('9–7–1');
+		expect(wlt(null, 17)).toBe('–');
 	});
 });

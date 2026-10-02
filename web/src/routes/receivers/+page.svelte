@@ -4,27 +4,43 @@
 	import DataTable, { type Column } from '$lib/components/DataTable.svelte';
 	import PlotFigure from '$lib/components/Plot.svelte';
 	import SampleWarning from '$lib/components/SampleWarning.svelte';
-	import { load } from '$lib/data';
+	import LoadError from '$lib/components/LoadError.svelte';
+	import Skeleton from '$lib/components/Skeleton.svelte';
 	import { epa, num, pct, signed } from '$lib/format';
-	import { gridX, gridY, Plot, plotStyle } from '$lib/plot';
+	import { gridX, gridY, isNarrow, Plot, plotStyle } from '$lib/plot';
 	import { prefs } from '$lib/prefs.svelte';
-	import type { Meta, Receiver } from '$lib/types';
+	import { resource } from '$lib/resource.svelte';
+	import { teamColor } from '$lib/teams.svelte';
+	import type { Receiver } from '$lib/types';
 
-	let meta = $state<Meta>();
-	let all = $state<Receiver[]>([]);
-	load('meta').then((m) => (meta = m));
-	load('receivers').then((r) => (all = r));
+	const metaRes = resource('meta');
+	const res = resource('receivers');
+	const meta = $derived(metaRes.value);
+	const all = $derived(res.value ?? []);
+	type Row = Receiver & { display: string };
+	const POSITIONS = ['All', 'WR', 'TE', 'RB'] as const;
+	let position = $state<(typeof POSITIONS)[number]>('All');
 
 	const status = $derived(meta?.seasons.find((s) => s.season === prefs.season));
 	let minTargets = $state<number | null>(null);
 	const threshold = $derived(
 		minTargets ?? Math.max(10, Math.round((status?.reg_games ?? 272) / 16) * 3)
 	);
-	const rows = $derived(all.filter((r) => r.season === prefs.season && r.targets >= threshold));
+	const rows = $derived<Row[]>(
+		all
+			.filter(
+				(r) =>
+					r.season === prefs.season &&
+					r.targets >= threshold &&
+					(position === 'All' || r.position === position)
+			)
+			.map((r) => ({ ...r, display: r.full_name ?? r.name }))
+	);
 
 	function usage(width: number) {
 		const data = rows.filter((r) => r.air_yards_share != null);
-		const labelled = [...data].sort((a, b) => (b.wopr ?? 0) - (a.wopr ?? 0)).slice(0, 12);
+		const labelled = [...data].sort((a, b) => (b.wopr ?? 0) - (a.wopr ?? 0));
+		const narrow = isNarrow(width);
 		return Plot.plot({
 			width,
 			height: Math.min(520, Math.max(340, width * 0.6)),
@@ -37,9 +53,9 @@
 				Plot.dot(data, {
 					x: 'target_share',
 					y: 'air_yards_share',
-					r: 4,
-					fill: 'var(--series-1)',
-					fillOpacity: 0.6,
+					r: narrow ? 3.5 : 4.5,
+					fill: (d: Receiver) => teamColor(d.team),
+					fillOpacity: 0.85,
 					stroke: 'var(--surface)',
 					strokeWidth: 1.5
 				}),
@@ -49,7 +65,9 @@
 					text: 'name',
 					dy: -10,
 					fontSize: 10.5,
-					fill: 'var(--text-secondary)'
+					fontWeight: 600,
+					fill: 'var(--text-secondary)',
+					className: 'declutter'
 				}),
 				Plot.tip(
 					data,
@@ -58,16 +76,17 @@
 						x: 'target_share',
 						y: 'air_yards_share',
 						title: (d: Receiver) =>
-							`${d.name} (${d.team})\nTarget share ${pct(d.target_share)}\nAir yards share ${pct(d.air_yards_share)}\nWOPR ${num(d.wopr, 2)}\nEPA/target ${epa(d.epa_target)}`
+							`${d.full_name ?? d.name}, ${d.position ?? ''} (${d.team})\nTarget share ${pct(d.target_share)}\nAir yards share ${pct(d.air_yards_share)}\nWOPR ${num(d.wopr, 2)}\nEPA/target ${epa(d.epa_target)}`
 					})
 				)
 			]
 		});
 	}
 
-	const columns: Column<Receiver>[] = [
-		{ key: 'name', label: 'Player', sticky: true },
-		{ key: 'team', label: 'Team' },
+	const columns: Column<Row>[] = [
+		{ key: 'display', label: 'Player', sticky: true },
+		{ key: 'position', label: 'Pos' },
+		{ key: 'team', label: 'Team', team: true },
 		{ key: 'targets', label: 'Tgt', fmt: num },
 		{ key: 'receptions', label: 'Rec', fmt: num },
 		{ key: 'yards', label: 'Yds', fmt: num },
@@ -102,9 +121,10 @@
 	];
 </script>
 
-<svelte:head><title>Receivers · Any Given Stat</title></svelte:head>
+<svelte:head><title>Receivers {prefs.season} · Any Given Stat</title></svelte:head>
 
-<section>
+<section class="page-head">
+	<div class="eyebrow">Players</div>
 	<h1>Receivers</h1>
 	<p class="lede">
 		Usage is a role: target share and air yards share (combined as WOPR) describe how an offense is
@@ -117,6 +137,11 @@
 {#if meta}
 	<div class="toolbar">
 		<Controls seasons={meta.seasons} showScope={false} />
+		<div class="seg" role="group" aria-label="Position">
+			{#each POSITIONS as p (p)}
+				<button aria-pressed={position === p} onclick={() => (position = p)}>{p}</button>
+			{/each}
+		</div>
 		<label class="field">
 			Min targets
 			<input
@@ -131,13 +156,29 @@
 	<SampleWarning {status} />
 {/if}
 
-{#if rows.length}
+{#if res.error}
+	<LoadError message={res.error} />
+{:else if !res.value}
+	<Skeleton height={400} />
+{:else if rows.length}
 	<div class="card">
 		<h2>Who gets the ball, and how far downfield</h2>
-		<p class="sub">Labels mark the 12 highest WOPR.</p>
+		<p class="sub">
+			Dot color = team. Labels favor the highest WOPR; overlapping ones are hidden (hover any dot).
+			Top right is a true number one: lots of targets, and the valuable deep ones.
+		</p>
 		<PlotFigure label="Target share vs air yards share" render={usage} />
 	</div>
 	<div class="card">
-		<DataTable {rows} {columns} sortKey="wopr" search="name" />
+		<DataTable
+			{rows}
+			{columns}
+			sortKey="wopr"
+			search="display"
+			href={(r) => `${base}/player/?id=${r.player_id}`}
+			filename="receivers-{prefs.season}"
+		/>
 	</div>
+{:else}
+	<p class="muted">No receivers match these filters.</p>
 {/if}

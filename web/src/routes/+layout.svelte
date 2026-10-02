@@ -199,6 +199,9 @@
 	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 	<div class="drawer-backdrop" onclick={() => (drawer = false)}></div>
 	<nav class="drawer" aria-label="Main">
+		<button class="icon-btn drawer-close" onclick={() => (drawer = false)} aria-label="Close menu">
+			<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+		</button>
 		<a class="drawer-home" href="{base}/" aria-current={path === '/' ? 'page' : undefined}>Home</a>
 		{#each navGroups as g (g.label)}
 			<div class="drawer-group">
@@ -496,6 +499,10 @@
 	.drawer a[aria-current='page'] {
 		background: var(--accent-soft);
 		font-weight: 650;
+	}
+	.drawer-close {
+		justify-self: end;
+		margin-bottom: -0.5rem;
 	}
 	.drawer-home {
 		font-family: var(--display);

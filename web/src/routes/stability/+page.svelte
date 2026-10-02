@@ -1,18 +1,26 @@
 <script lang="ts">
 	import DataTable, { type Column } from '$lib/components/DataTable.svelte';
 	import PlotFigure from '$lib/components/Plot.svelte';
-	import { load } from '$lib/data';
-	import { corr, num } from '$lib/format';
+	import LoadError from '$lib/components/LoadError.svelte';
+	import Skeleton from '$lib/components/Skeleton.svelte';
+	import { corr, epa, num, pct } from '$lib/format';
 	import { gridX, gridY, Plot, plotStyle } from '$lib/plot';
+	import { resource } from '$lib/resource.svelte';
 	import { ols } from '$lib/stats';
-	import type { Stability, StabilityMetric } from '$lib/types';
+	import { teamColor, teamName } from '$lib/teams.svelte';
+	import type { StabilityMetric } from '$lib/types';
 
-	let data = $state<Stability>();
-	load('stability').then((s) => (data = s));
+	const res = resource('stability');
+	const playersRes = resource('players');
+	const data = $derived(res.value);
+	const names = $derived(new Map((playersRes.value ?? []).map((p) => [p.player_id, p.name])));
+	// Units are team codes for team metrics and player ids for player metrics.
+	const unitName = (u: string) => names.get(u) ?? teamName(u);
 
 	let selected = $state('off_pass_epa');
 	const metrics = $derived(data?.metrics ?? []);
 	const current = $derived(metrics.find((m) => m.key === selected));
+	const isTeamMetric = $derived(!!current?.group.startsWith('team'));
 	const pairs = $derived(data?.yoy_pairs[selected] ?? []);
 
 	function dotplot(width: number) {
@@ -25,7 +33,7 @@
 			width,
 			height: rows.length * 26 + 70,
 			style: plotStyle,
-			marginLeft: Math.min(200, width * 0.4),
+			marginLeft: Math.min(190, width * 0.42),
 			x: { domain: [-0.1, 1], label: 'Correlation (0 = pure noise, 1 = perfectly repeatable) →' },
 			y: { domain: rows.map((m) => m.label), label: null },
 			color: {
@@ -82,7 +90,13 @@
 			marks: [
 				gridX(),
 				gridY(),
-				Plot.dot(pairs, { x: 'y1', y: 'y2', r: 3.5, fill: 'var(--series-1)', fillOpacity: 0.55 }),
+				Plot.dot(pairs, {
+					x: 'y1',
+					y: 'y2',
+					r: 3.5,
+					fill: (d: { unit: string }) => (isTeamMetric ? teamColor(d.unit) : 'var(--series-1)'),
+					fillOpacity: 0.65
+				}),
 				fit
 					? Plot.line(
 							[
@@ -98,8 +112,10 @@
 						lineWidth: 40,
 						x: 'y1',
 						y: 'y2',
-						title: (d: { unit: string; season: number }) =>
-							`${d.unit} ${d.season} → ${d.season + 1}`
+						title: (d: { unit: string; season: number; y1: number; y2: number }) => {
+							const f = (v: number) => (isRate ? pct(v) : epa(v));
+							return `${unitName(d.unit)}\n${d.season}: ${f(d.y1)} → ${d.season + 1}: ${f(d.y2)}`;
+						}
 					})
 				)
 			]
@@ -133,7 +149,8 @@
 
 <svelte:head><title>Signal vs noise · Any Given Stat</title></svelte:head>
 
-<section>
+<section class="page-head">
+	<div class="eyebrow">Learn</div>
 	<h1>Signal vs noise</h1>
 	<p class="lede">
 		The fastest way to sound smart about football is knowing which numbers mean nothing. For each
@@ -143,7 +160,11 @@
 	</p>
 </section>
 
-{#if data}
+{#if res.error}
+	<LoadError message={res.error} />
+{:else if !data}
+	<Skeleton height={500} />
+{:else}
 	<div class="card">
 		<h2>How repeatable is each stat?</h2>
 		<p class="sub">Sorted by within-season reliability.</p>

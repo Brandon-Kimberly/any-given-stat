@@ -3,15 +3,16 @@
 	import Controls from '$lib/components/Controls.svelte';
 	import DataTable, { type Column } from '$lib/components/DataTable.svelte';
 	import SampleWarning from '$lib/components/SampleWarning.svelte';
-	import { load } from '$lib/data';
+	import { resource } from '$lib/resource.svelte';
+	import Skeleton from '$lib/components/Skeleton.svelte';
 	import { epa, num, pct, pp } from '$lib/format';
 	import { prefs } from '$lib/prefs.svelte';
-	import type { Meta, TeamSeason } from '$lib/types';
+	import type { TeamSeason } from '$lib/types';
 
-	let meta = $state<Meta>();
-	let teams = $state<TeamSeason[]>([]);
-	load('meta').then((m) => (meta = m));
-	load('teams').then((t) => (teams = t));
+	const metaRes = resource('meta');
+	const teamsRes = resource('teams');
+	const meta = $derived(metaRes.value);
+	const teams = $derived(teamsRes.value ?? []);
 
 	type View = 'off' | 'def';
 	let view = $state<View>('off');
@@ -76,10 +77,11 @@
 	const columns = $derived(side(view));
 </script>
 
-<svelte:head><title>Teams · Any Given Stat</title></svelte:head>
+<svelte:head><title>Team stats {prefs.season} · Any Given Stat</title></svelte:head>
 
-<section>
-	<h1>Teams</h1>
+<section class="page-head">
+	<div class="eyebrow">Teams</div>
+	<h1>Team stats</h1>
 	<p class="lede">
 		Every team efficiency stat in one table. Color shows where a team ranks this season (blue = good
 		end, red = bad end). On the defense view, “good” means allowing less. Pass rate and PROE aren't
@@ -99,6 +101,7 @@
 {/if}
 
 <div class="card">
+	{#if !teamsRes.value}<Skeleton height={400} />{/if}
 	{#key view}
 		<DataTable
 			{rows}

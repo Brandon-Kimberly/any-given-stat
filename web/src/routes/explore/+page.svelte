@@ -1,5 +1,6 @@
 <script lang="ts">
 	import PlotFigure from '$lib/components/Plot.svelte';
+	import { epa, num } from '$lib/format';
 	import { load } from '$lib/data';
 	import { run, usePbp, type QueryResult } from '$lib/duck';
 	import { gridX, gridY, Plot, plotStyle } from '$lib/plot';
@@ -30,6 +31,7 @@
 	);
 
 	async function execute() {
+		if (busy) return;
 		if (!files.length) {
 			error = 'Pick at least one season.';
 			return;
@@ -148,14 +150,17 @@
 			? '–'
 			: typeof v === 'number'
 				? Number.isInteger(v)
-					? v.toLocaleString()
-					: v.toFixed(3)
+					? num(v)
+					: signedOrPlain(v)
 				: String(v);
+	// Values that straddle zero (EPA, differences) read better signed; 0..1 rates do not.
+	const signedOrPlain = (v: number) => (v < 0 ? epa(v) : v.toFixed(3));
 </script>
 
 <svelte:head><title>SQL explorer · Any Given Stat</title></svelte:head>
 
-<section>
+<section class="page-head">
+	<div class="eyebrow">Explore</div>
 	<h1>SQL explorer</h1>
 	<p class="lede">
 		Ask anything. Every play since 2016 runs through DuckDB in your browser; nothing touches a
@@ -334,7 +339,7 @@
 		font-size: 0.8rem;
 	}
 	.error {
-		color: var(--bad);
+		color: var(--bad-ink);
 		white-space: pre-wrap;
 		font-size: 0.8rem;
 		margin: 0.6rem 0 0;

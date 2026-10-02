@@ -1,38 +1,42 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { base } from '$app/paths';
 	import { page } from '$app/state';
 	import Controls from '$lib/components/Controls.svelte';
 	import DataTable, { type Column } from '$lib/components/DataTable.svelte';
+	import LoadError from '$lib/components/LoadError.svelte';
 	import PlotFigure from '$lib/components/Plot.svelte';
-	import { load } from '$lib/data';
+	import SampleWarning from '$lib/components/SampleWarning.svelte';
+	import Skeleton from '$lib/components/Skeleton.svelte';
+	import TeamBadge from '$lib/components/TeamBadge.svelte';
 	import { epa, num, pct, signed } from '$lib/format';
-	import { gridY, Plot, plotStyle } from '$lib/plot';
+	import { loadSeasonGames } from '$lib/games';
+	import { gridY, isNarrow, Plot, plotStyle, thinTicks } from '$lib/plot';
 	import { prefs } from '$lib/prefs.svelte';
+	import { resource } from '$lib/resource.svelte';
 	import { ranks, rolling } from '$lib/stats';
-	import type { Luck, Meta, Rating, TeamSeason, TeamSplit, TeamWeek } from '$lib/types';
+	import { teamMeta, teamName } from '$lib/teams.svelte';
+	import type { GameDetail, Rating, TeamSeason, TeamWeek } from '$lib/types';
 
-	let meta = $state<Meta>();
-	let teams = $state<TeamSeason[]>([]);
-	let weeks = $state<TeamWeek[]>([]);
-	let luck = $state<Luck[]>([]);
-	load('meta').then((m) => (meta = m));
-	load('teams').then((t) => (teams = t));
-	load('team_weeks').then((w) => (weeks = w));
-	load('luck').then((l) => (luck = l));
-	let ratings = $state<Rating[]>([]);
-	let splits = $state<TeamSplit[]>([]);
-	load('ratings')
-		.then((r) => (ratings = r))
-		.catch(() => {}); // optional: absent in partial builds
-	load('team_splits').then((s) => (splits = s));
+	const metaRes = resource('meta');
+	const teamsRes = resource('teams');
+	const weeksRes = resource('team_weeks');
+	const luckRes = resource('luck');
+	const ratingsRes = resource('ratings');
+	const splitsRes = resource('team_splits');
 
+	const meta = $derived(metaRes.value);
+	const teams = $derived(teamsRes.value ?? []);
+	const weeks = $derived(weeksRes.value ?? []);
 	const team = $derived(page.url.searchParams.get('t')?.toUpperCase() ?? 'KC');
+	const info = $derived(teamMeta.byTeam[team]);
 	const allTeams = $derived([...new Set(teams.map((t) => t.team))].sort());
+	const status = $derived(meta?.seasons.find((s) => s.season === prefs.season));
 	const season = $derived(
 		teams.filter((t) => t.season === prefs.season && t.scope === prefs.scope)
 	);
 	const me = $derived(season.find((t) => t.team === team));
-	const rec = $derived(luck.find((l) => l.season === prefs.season && l.team === team));
+	const rec = $derived(luckRes.value?.find((l) => l.season === prefs.season && l.team === team));
 	const games = $derived(weeks.filter((w) => w.season === prefs.season && w.team === team));
 	const history = $derived(
 		teams
@@ -40,8 +44,24 @@
 			.sort((a, b) => a.season - b.season)
 	);
 
-	// Latest power ratings for this season (ratings after the last completed week).
-	const seasonRatings = $derived(ratings.filter((r) => r.season === prefs.season));
+	// Season game files give game ids (for links to game pages) and home/away.
+	let seasonGames = $state<GameDetail[]>([]);
+	$effect(() => {
+		const s = prefs.season;
+		if (s == null) return;
+		loadSeasonGames(s)
+			.then((g) => {
+				if (prefs.season === s) seasonGames = g;
+			})
+			.catch(() => (seasonGames = []));
+	});
+	const gameFor = (week: number) =>
+		seasonGames.find(
+			(g) => g.season_type === 'REG' && g.week === week && (g.home === team || g.away === team)
+		);
+
+	// Power ratings after the last completed week.
+	const seasonRatings = $derived((ratingsRes.value ?? []).filter((r) => r.season === prefs.season));
 	const lastWeek = $derived(Math.max(0, ...seasonRatings.map((r) => r.week)));
 	const latest = $derived(
 		new Map(seasonRatings.filter((r) => r.week === lastWeek).map((r) => [r.team, r]))
@@ -49,64 +69,113 @@
 	const myRating = $derived(latest.get(team));
 	const myPath = $derived(seasonRatings.filter((r) => r.team === team));
 
-	// Strength of schedule: average current rating of opponents faced so far.
+	// Strength of schedule: average current rating of opponents faced so far (one pass).
 	const sos = $derived.by(() => {
-		const byTeam = new Map<string, number>();
-		for (const t of new Set(weeks.filter((w) => w.season === prefs.season).map((w) => w.team))) {
-			const opps = weeks.filter((w) => w.season === prefs.season && w.team === t);
-			const vals = opps.map((o) => latest.get(o.opp)?.points).filter((v) => v != null);
-			if (vals.length) byTeam.set(t, vals.reduce((a, b) => a + b, 0) / vals.length);
+		const sums = new Map<string, { s: number; n: number }>();
+		for (const w of weeks) {
+			if (w.season !== prefs.season) continue;
+			const p = latest.get(w.opp)?.points;
+			if (p == null) continue;
+			const cur = sums.get(w.team) ?? { s: 0, n: 0 };
+			cur.s += p;
+			cur.n += 1;
+			sums.set(w.team, cur);
 		}
-		const mine = byTeam.get(team);
-		const rank = mine == null ? null : 1 + [...byTeam.values()].filter((v) => v > mine).length;
-		return { value: mine, rank, of: byTeam.size };
+		const avg = new Map([...sums].map(([t, v]) => [t, v.s / v.n]));
+		const mine = avg.get(team);
+		const rank = mine == null ? null : 1 + [...avg.values()].filter((v) => v > mine).length;
+		return { value: mine, rank, of: avg.size };
 	});
 
 	function rankOf(key: keyof TeamSeason, higher: boolean) {
 		const vals = season.map((t) => t[key] as number | null);
 		return ranks(vals, higher)[season.findIndex((t) => t.team === team)];
 	}
-	const tiles = $derived(
+
+	// Profile: league rank on the metrics that define a team, best and worst called out.
+	const PROFILE: { key: keyof TeamSeason; label: string; higher: boolean }[] = [
+		{ key: 'off_pass_epa', label: 'Passing offense', higher: true },
+		{ key: 'off_rush_epa', label: 'Rushing offense', higher: true },
+		{ key: 'off_explosive_rate', label: 'Explosive plays', higher: true },
+		{ key: 'off_turnover_rate', label: 'Ball security', higher: false },
+		{ key: 'off_sack_rate', label: 'Pass protection (sacks)', higher: false },
+		{ key: 'off_third_down_rate', label: '3rd down offense', higher: true },
+		{ key: 'off_rz_td_rate', label: 'Red zone offense', higher: true },
+		{ key: 'def_pass_epa', label: 'Pass defense', higher: false },
+		{ key: 'def_rush_epa', label: 'Run defense', higher: false },
+		{ key: 'def_sack_rate', label: 'Pass rush (sacks)', higher: true },
+		{ key: 'def_turnover_rate', label: 'Takeaways', higher: true },
+		{ key: 'def_third_down_rate', label: '3rd down defense', higher: false }
+	];
+	const profile = $derived(
 		me
-			? [
-					{
-						label: 'Net EPA/play',
-						value: epa(me.net_epa_play),
-						rank: rankOf('net_epa_play', true)
-					},
-					{
-						label: 'Offense EPA/play',
-						value: epa(me.off_epa_play),
-						rank: rankOf('off_epa_play', true)
-					},
-					{
-						label: 'Defense EPA/play',
-						value: epa(me.def_epa_play),
-						rank: rankOf('def_epa_play', false)
-					},
-					{
-						label: 'Power rating',
-						value: myRating ? `${signed(myRating.points)} pts` : '–',
-						note: myRating ? `#${myRating.rank} after week ${lastWeek}` : ''
-					},
-					{
-						label: 'Schedule so far',
-						value: sos.value == null ? '–' : `${signed(sos.value)} pts`,
-						note: sos.rank ? `Avg opponent rating, #${sos.rank} hardest of ${sos.of}` : ''
-					},
-					{
-						label: 'Record',
-						value: rec ? `${rec.wins}–${rec.games - rec.wins}` : '–',
-						note: rec
-							? `Pythagorean ${num(rec.pythag_wins, 1)} wins (${signed(rec.wins_over_pythag)})`
-							: ''
-					}
-				]
+			? PROFILE.map((p) => ({
+					...p,
+					rank: rankOf(p.key, p.higher),
+					value: me[p.key] as number | null
+				})).filter((p) => p.rank != null)
 			: []
 	);
+	// Only top-third ranks count as strengths and bottom-third as weaknesses.
+	const third = $derived(Math.round(Math.max(3, season.length) / 3));
+	const strengths = $derived(
+		[...profile]
+			.filter((p) => p.rank! <= third)
+			.sort((a, b) => a.rank! - b.rank!)
+			.slice(0, 3)
+	);
+	const weaknesses = $derived(
+		[...profile]
+			.filter((p) => p.rank! > season.length - third)
+			.sort((a, b) => b.rank! - a.rank!)
+			.slice(0, 3)
+	);
+
+	/** W-L(-T) from regular-season game results. */
+	function record(t: string): { w: number; l: number; t: number; text: string } {
+		let w = 0;
+		let l = 0;
+		let ties = 0;
+		for (const g of weeks) {
+			if (g.season !== prefs.season || g.team !== t) continue;
+			if (g.pf > g.pa) w++;
+			else if (g.pf < g.pa) l++;
+			else ties++;
+		}
+		return { w, l, t: ties, text: `${w}–${l}${ties ? `–${ties}` : ''}` };
+	}
+	const fmtProfile = (p: (typeof PROFILE)[number], v: number | null) =>
+		/rate/.test(String(p.key)) ? pct(v) : epa(v);
+	const style = $derived(
+		me
+			? (me.off_proe ?? 0) > 0.03
+				? 'pass-heavy'
+				: (me.off_proe ?? 0) < -0.03
+					? 'run-heavy'
+					: 'balanced'
+			: ''
+	);
+
+	// Division standings.
+	const division = $derived.by(() => {
+		if (!info) return [];
+		const mates = Object.values(teamMeta.byTeam).filter((t) => t.division === info.division);
+		return mates
+			.map((t) => {
+				const l = luckRes.value?.find((x) => x.season === prefs.season && x.team === t.team);
+				return {
+					team: t.team,
+					rec: record(t.team),
+					diff: l ? l.points_for - l.points_against : 0,
+					power: latest.get(t.team)?.points ?? null
+				};
+			})
+			.sort((a, b) => b.rec.w + b.rec.t / 2 - (a.rec.w + a.rec.t / 2) || b.diff - a.diff);
+	});
 
 	type Series = { week: number; value: number; side: string };
 	function weekly(width: number) {
+		const narrow = isNarrow(width);
 		const off = rolling(
 			games.map((g) => g.off_epa),
 			4
@@ -123,13 +192,20 @@
 			{ week: g.week, value: g.off_epa, side: 'Offense' },
 			{ week: g.week, value: g.def_epa, side: 'Defense allowed' }
 		]);
-		const last = line.slice(-2);
 		return Plot.plot({
 			width,
 			height: 300,
 			style: plotStyle,
-			marginRight: 110,
-			x: { label: 'Week', tickFormat: 'd', ticks: games.map((g) => g.week) },
+			marginRight: narrow ? 10 : 110,
+			x: {
+				label: 'Week',
+				tickFormat: 'd',
+				ticks: thinTicks(
+					games.map((g) => g.week),
+					width,
+					30
+				)
+			},
 			y: { label: 'EPA/play', tickFormat: '+.2f' },
 			color: {
 				domain: ['Offense', 'Defense allowed'],
@@ -147,13 +223,14 @@
 					strokeWidth: 2,
 					curve: 'monotone-x'
 				}),
-				Plot.text(last, {
+				Plot.text(narrow ? [] : line.slice(-2), {
 					x: 'week',
 					y: 'value',
 					text: 'side',
 					dx: 8,
 					textAnchor: 'start',
-					fill: 'var(--text-secondary)'
+					fill: 'var(--text-secondary)',
+					className: 'declutter'
 				}),
 				Plot.tip(
 					pts,
@@ -169,16 +246,25 @@
 	}
 
 	function seasons(width: number) {
+		const narrow = isNarrow(width);
 		const data = history.flatMap((h) => [
 			{ season: h.season, value: h.off_epa_play!, side: 'Offense' },
 			{ season: h.season, value: h.def_epa_play!, side: 'Defense allowed' }
 		]);
 		return Plot.plot({
 			width,
-			height: 260,
+			height: 300,
 			style: plotStyle,
-			marginRight: 110,
-			x: { label: null, tickFormat: 'd', ticks: history.map((h) => h.season) },
+			marginRight: narrow ? 10 : 110,
+			x: {
+				label: null,
+				tickFormat: 'd',
+				ticks: thinTicks(
+					history.map((h) => h.season),
+					width,
+					40
+				)
+			},
 			y: { label: 'EPA/play', tickFormat: '+.2f' },
 			color: {
 				domain: ['Offense', 'Defense allowed'],
@@ -188,6 +274,7 @@
 			marks: [
 				gridY(),
 				Plot.ruleY([0], { stroke: 'var(--axis)' }),
+				Plot.ruleX([prefs.season], { stroke: 'var(--accent)', strokeDasharray: '3,3' }),
 				Plot.line(data, { x: 'season', y: 'value', stroke: 'side', strokeWidth: 2 }),
 				Plot.dot(data, {
 					x: 'season',
@@ -197,13 +284,14 @@
 					stroke: 'var(--surface)',
 					strokeWidth: 2
 				}),
-				Plot.text(data.slice(-2), {
+				Plot.text(narrow ? [] : data.slice(-2), {
 					x: 'season',
 					y: 'value',
 					text: 'side',
 					dx: 8,
 					textAnchor: 'start',
-					fill: 'var(--text-secondary)'
+					fill: 'var(--text-secondary)',
+					className: 'declutter'
 				}),
 				Plot.tip(
 					data,
@@ -222,10 +310,18 @@
 	function ratingPath(width: number) {
 		return Plot.plot({
 			width,
-			height: 260,
+			height: 240,
 			style: plotStyle,
 			marginRight: 30,
-			x: { label: 'After week', tickFormat: 'd', ticks: myPath.map((r) => r.week) },
+			x: {
+				label: 'After week',
+				tickFormat: 'd',
+				ticks: thinTicks(
+					myPath.map((r) => r.week),
+					width,
+					30
+				)
+			},
 			y: { label: '↑ Net rating (points)', tickFormat: '+.0f' },
 			marks: [
 				gridY(),
@@ -254,7 +350,9 @@
 
 	let splitSide = $state<'off' | 'def'>('off');
 	const mySplits = $derived(
-		splits.filter((s) => s.season === prefs.season && s.team === team && s.side === splitSide)
+		(splitsRes.value ?? []).filter(
+			(s) => s.season === prefs.season && s.team === team && s.side === splitSide
+		)
 	);
 	const splitGroups = $derived(
 		[...new Set(mySplits.map((s) => s.split))].map((name) => ({
@@ -262,9 +360,7 @@
 			rows: mySplits.filter((s) => s.split === name).sort((a, b) => a.ord - b.ord)
 		}))
 	);
-	const nTeams = $derived(
-		new Set(splits.filter((s) => s.season === prefs.season).map((s) => s.team)).size
-	);
+	const nTeams = $derived(Math.max(2, allTeams.length));
 	function rankWash(rank: number): string {
 		const d = 1 - (2 * (rank - 1)) / Math.max(1, nTeams - 1); // +1 best .. -1 worst
 		if (Math.abs(d) < 0.2) return '';
@@ -272,17 +368,28 @@
 		return `background: color-mix(in srgb, var(${d > 0 ? '--good-wash' : '--bad-wash'}) ${alpha}%, transparent)`;
 	}
 
-	type Game = TeamWeek & { result: string; opp_rating: number | null };
+	type Game = TeamWeek & {
+		result: string;
+		opp_rating: number | null;
+		where: string;
+		game_id: string | null;
+	};
 	const log = $derived<Game[]>(
-		games.map((g) => ({
-			...g,
-			result: `${g.pf > g.pa ? 'W' : g.pf < g.pa ? 'L' : 'T'} ${g.pf}–${g.pa}`,
-			opp_rating: latest.get(g.opp)?.points ?? null
-		}))
+		games.map((g) => {
+			const gd = gameFor(g.week);
+			return {
+				...g,
+				result: `${g.pf > g.pa ? 'W' : g.pf < g.pa ? 'L' : 'T'} ${g.pf}–${g.pa}`,
+				opp_rating: latest.get(g.opp)?.points ?? null,
+				where: gd ? (gd.home === team ? 'vs' : '@') : '',
+				game_id: gd?.game_id ?? null
+			};
+		})
 	);
 	const columns: Column<Game>[] = [
 		{ key: 'week', label: 'Week', sticky: true },
-		{ key: 'opp', label: 'Opp' },
+		{ key: 'where', label: 'H/A', title: 'vs = home, @ = away' },
+		{ key: 'opp', label: 'Opp', team: true },
 		{ key: 'result', label: 'Result' },
 		{
 			key: 'opp_rating',
@@ -295,13 +402,33 @@
 		{ key: 'off_plays', label: 'Off plays', fmt: num },
 		{ key: 'def_plays', label: 'Def plays', fmt: num }
 	];
+
+	function switchTeam(t: string) {
+		const url = new URL(page.url);
+		url.searchParams.set('t', t);
+		goto(url, { keepFocus: true, noScroll: true });
+	}
 </script>
 
-<svelte:head><title>{team} · Any Given Stat</title></svelte:head>
+<svelte:head><title>{teamName(team)} {prefs.season} · Any Given Stat</title></svelte:head>
 
-<section>
-	<p class="muted"><a href="{base}/teams/">Teams</a> / {team}</p>
-	<h1>{team} {prefs.season}</h1>
+<section
+	class="team-hero"
+	style="--team: {info?.color ?? 'var(--hero-to)'}; --team2: {info?.color2 ?? 'var(--hero-from)'}"
+>
+	<div class="crumbs"><a href="{base}/teams/">Teams</a> / {info?.division ?? team}</div>
+	<div class="row">
+		<TeamBadge {team} size="lg" />
+		<div>
+			<h1>{teamName(team)}</h1>
+			<div class="facts">
+				<span>{prefs.season}</span>
+				{#if weeks.length}<span><b>{record(team).text}</b></span>{/if}
+				{#if myRating}<span>#{myRating.rank} in power ratings</span>{/if}
+				{#if style}<span>{style} offense</span>{/if}
+			</div>
+		</div>
+	</div>
 </section>
 
 {#if meta}
@@ -311,48 +438,150 @@
 			Team
 			<select
 				value={team}
-				onchange={(e) => (location.search = `?t=${(e.currentTarget as HTMLSelectElement).value}`)}
+				onchange={(e) => switchTeam((e.currentTarget as HTMLSelectElement).value)}
 			>
-				{#each allTeams as t (t)}<option value={t}>{t}</option>{/each}
+				{#each allTeams as t (t)}<option value={t}>{teamName(t)}</option>{/each}
 			</select>
 		</label>
 	</div>
+	<SampleWarning {status} />
 {/if}
 
-{#if me}
+{#if teamsRes.error}
+	<LoadError message={teamsRes.error} />
+{:else if !teamsRes.value}
+	<Skeleton height={300} />
+{:else if me}
 	<div class="tiles">
-		{#each tiles as t (t.label)}
-			<div class="card tile">
-				<div class="label">{t.label}</div>
-				<div class="value">{t.value}</div>
-				<div class="note">{t.rank ? `#${t.rank} of ${season.length}` : (t.note ?? '')}</div>
+		<div class="card tile">
+			<div class="label">Net EPA/play</div>
+			<div class="value">{epa(me.net_epa_play)}</div>
+			<div class="note">#{rankOf('net_epa_play', true)} of {season.length}</div>
+		</div>
+		<div class="card tile">
+			<div class="label">Offense EPA/play</div>
+			<div class="value">{epa(me.off_epa_play)}</div>
+			<div class="note">#{rankOf('off_epa_play', true)} of {season.length}</div>
+		</div>
+		<div class="card tile">
+			<div class="label">Defense EPA/play</div>
+			<div class="value">{epa(me.def_epa_play)}</div>
+			<div class="note">#{rankOf('def_epa_play', false)} of {season.length} (lower is better)</div>
+		</div>
+		<div class="card tile">
+			<div class="label">Power rating</div>
+			<div class="value">{myRating ? `${signed(myRating.points)} pts` : '–'}</div>
+			<div class="note">{myRating ? `#${myRating.rank} after week ${lastWeek}` : ''}</div>
+		</div>
+		<div class="card tile">
+			<div class="label">Schedule so far</div>
+			<div class="value">{sos.value == null ? '–' : `${signed(sos.value)} pts`}</div>
+			<div class="note">
+				{sos.rank ? `Avg opponent rating, #${sos.rank} hardest of ${sos.of}` : ''}
 			</div>
-		{/each}
+		</div>
+		<div class="card tile">
+			<div class="label">Record vs points</div>
+			<div class="value">{weeks.length ? record(team).text : '–'}</div>
+			<div class="note">
+				{rec ? `Pythagorean ${num(rec.pythag_wins, 1)} wins (${signed(rec.wins_over_pythag)})` : ''}
+			</div>
+		</div>
+	</div>
+
+	<div class="grid-2">
+		<div class="card">
+			<h2>Team identity</h2>
+			<p class="sub">
+				League rank on the traits that define a team ({prefs.scope === 'all'
+					? 'all plays'
+					: 'garbage time excluded'}).
+			</p>
+			<div class="ident">
+				<div>
+					<div class="eyebrow">Strengths</div>
+					<ul>
+						{#if !strengths.length}<li class="muted">Nothing in the top third</li>{/if}
+						{#each strengths as p (p.key)}
+							<li>
+								<span class="chip good">#{p.rank}</span>
+								{p.label} <span class="muted tnum">{fmtProfile(p, p.value)}</span>
+							</li>
+						{/each}
+					</ul>
+				</div>
+				<div>
+					<div class="eyebrow" style="color: var(--bad-ink)">Weaknesses</div>
+					<ul>
+						{#if !weaknesses.length}<li class="muted">Nothing in the bottom third</li>{/if}
+						{#each weaknesses as p (p.key)}
+							<li>
+								<span class="chip bad">#{p.rank}</span>
+								{p.label} <span class="muted tnum">{fmtProfile(p, p.value)}</span>
+							</li>
+						{/each}
+					</ul>
+				</div>
+			</div>
+			<div class="bars">
+				{#each profile as p (p.key)}
+					{@const score = Math.round(
+						((season.length - p.rank!) / Math.max(1, season.length - 1)) * 100
+					)}
+					<div class="bar-row">
+						<span>{p.label}</span>
+						<span class="track"
+							><span
+								class="fill"
+								class:high={score >= 65}
+								class:low={score < 35}
+								style="width: {Math.max(3, score)}%"
+							></span></span
+						>
+						<span class="tnum muted">#{p.rank}</span>
+					</div>
+				{/each}
+			</div>
+		</div>
+		<div class="card">
+			<h2>{info?.division ?? 'Division'}</h2>
+			<p class="sub">Standings with point differential and current power rating.</p>
+			<table class="div">
+				<thead><tr><th>Team</th><th>W–L</th><th>Diff</th><th>Power</th></tr></thead>
+				<tbody>
+					{#each division as d (d.team)}
+						<tr class:me={d.team === team}>
+							<td><TeamBadge team={d.team} name="nick" link /></td>
+							<td class="tnum">{d.rec.text}</td>
+							<td class="tnum">{signed(d.diff, 0)}</td>
+							<td class="tnum">{signed(d.power)}</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+			{#if myPath.length}
+				<h3 style="margin-top: 1rem">Power rating through {prefs.season}</h3>
+				<PlotFigure label="Power rating by week" render={ratingPath} />
+			{/if}
+		</div>
 	</div>
 
 	<div class="grid-2">
 		<div class="card">
 			<h2>Week by week</h2>
-			<p class="sub">
-				Dots are single games; lines are a trailing 4-game average. All plays, not just neutral
-				ones.
-			</p>
+			<p class="sub">Dots are single games; lines are a trailing 4-game average. All plays.</p>
 			{#if games.length}<PlotFigure label="Weekly EPA per play" render={weekly} />{/if}
 		</div>
 		<div class="card">
 			<h2>Season by season</h2>
-			<p class="sub">
-				Offense and defense EPA/play, {prefs.scope === 'all'
-					? 'all plays'
-					: 'garbage time excluded'}.
-			</p>
+			<p class="sub">Offense and defense EPA/play; the dashed line marks {prefs.season}.</p>
 			{#if history.length}<PlotFigure label="Season EPA per play history" render={seasons} />{/if}
 		</div>
 	</div>
 
 	<div class="card">
-		<div class="toolbar" style="margin-bottom: 0.25rem">
-			<h2 style="margin: 0">Situational splits</h2>
+		<div class="card-head">
+			<h2>Situational splits</h2>
 			<div class="seg" role="group" aria-label="Side of the ball">
 				<button aria-pressed={splitSide === 'off'} onclick={() => (splitSide = 'off')}
 					>Offense</button
@@ -396,26 +625,147 @@
 		</div>
 	</div>
 
-	{#if myPath.length}
-		<div class="card">
-			<h2>Power rating through {prefs.season}</h2>
-			<p class="sub">
-				Opponent-adjusted, recency-weighted rating in points vs an average team on a neutral field.
-				Early weeks lean on last season.
-			</p>
-			<PlotFigure label="Power rating by week" render={ratingPath} />
-		</div>
-	{/if}
-
 	<div class="card">
 		<h2>Game log</h2>
-		<DataTable rows={log} {columns} sortKey="week" sortDesc={false} />
+		<p class="sub">Click a game for its win-probability chart.</p>
+		<DataTable
+			rows={log}
+			{columns}
+			sortKey="week"
+			sortDesc={false}
+			showIndex={false}
+			maxHeight="none"
+			filename="{team}-{prefs.season}-games"
+			href={(r) => (r.game_id ? `${base}/game/?id=${r.game_id}` : `${base}/games/`)}
+		/>
 	</div>
-{:else if teams.length}
-	<p class="muted">No data for {team} in {prefs.season}.</p>
+{:else}
+	<p class="muted">No data for {teamName(team)} in {prefs.season}.</p>
 {/if}
 
 <style>
+	.team-hero {
+		border-radius: calc(var(--radius) + 4px);
+		padding: clamp(1.1rem, 0.9rem + 1.5vw, 1.75rem);
+		color: #fff;
+		background:
+			repeating-linear-gradient(
+				90deg,
+				transparent 0 calc(10% - 1px),
+				rgba(255, 255, 255, 0.07) calc(10% - 1px) 10%
+			),
+			linear-gradient(
+				120deg,
+				color-mix(in srgb, var(--team) 85%, #000),
+				color-mix(in srgb, var(--team2) 60%, #000)
+			);
+		box-shadow: var(--shadow-md);
+	}
+	.team-hero :global(.badge) {
+		box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85);
+	}
+	.team-hero h1 {
+		color: #fff;
+		margin: 0;
+	}
+	.crumbs {
+		font-size: 0.82rem;
+		opacity: 0.85;
+		margin-bottom: 0.6rem;
+	}
+	.crumbs a {
+		color: #fff;
+	}
+	.row {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+	}
+	.facts {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.3rem 1rem;
+		opacity: 0.92;
+		font-size: 0.92rem;
+	}
+	.ident {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+		gap: 0.5rem 1.5rem;
+		margin-bottom: 1rem;
+	}
+	.ident ul {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: 0.35rem;
+	}
+	.ident li {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-weight: 500;
+	}
+	.bars {
+		display: grid;
+		gap: 0.35rem;
+	}
+	.bar-row {
+		display: grid;
+		grid-template-columns: minmax(130px, 190px) 1fr 2.6rem;
+		gap: 0.6rem;
+		align-items: center;
+		font-size: 0.85rem;
+	}
+	.track {
+		height: 8px;
+		background: var(--surface-2);
+		border-radius: 999px;
+		overflow: hidden;
+	}
+	.fill {
+		display: block;
+		height: 100%;
+		border-radius: 999px;
+		background: var(--neutral-mark);
+		transform-origin: left;
+		animation: grow 0.6s var(--ease) both;
+	}
+	.fill.high {
+		background: var(--good);
+	}
+	.fill.low {
+		background: var(--bad);
+	}
+	@keyframes grow {
+		from {
+			transform: scaleX(0);
+		}
+	}
+	.div {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: 0.9rem;
+	}
+	.div th,
+	.div td {
+		padding: 0.4rem 0.4rem;
+		border-bottom: 1px solid var(--grid);
+		text-align: right;
+	}
+	.div th:first-child,
+	.div td:first-child {
+		text-align: left;
+	}
+	.div th {
+		font-size: 0.75rem;
+		color: var(--text-muted);
+		font-weight: 600;
+	}
+	.div tr.me td {
+		background: var(--accent-soft);
+	}
 	.splits {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
@@ -429,7 +779,7 @@
 	}
 	.splits caption {
 		text-align: left;
-		font-weight: 600;
+		font-weight: 700;
 		padding-bottom: 0.25rem;
 	}
 	.splits th {
@@ -439,7 +789,7 @@
 	}
 	.splits td,
 	.splits th {
-		padding: 0.2rem 0.4rem;
+		padding: 0.25rem 0.4rem;
 		border-bottom: 1px solid var(--grid);
 		white-space: nowrap;
 	}

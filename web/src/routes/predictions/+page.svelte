@@ -2,9 +2,11 @@
 	import { base } from '$app/paths';
 	import DataTable, { type Column } from '$lib/components/DataTable.svelte';
 	import PlotFigure from '$lib/components/Plot.svelte';
+	import LoadError from '$lib/components/LoadError.svelte';
+	import Skeleton from '$lib/components/Skeleton.svelte';
 	import { load } from '$lib/data';
 	import { num, pct, signed, spread } from '$lib/format';
-	import { gridX, gridY, Plot, plotStyle } from '$lib/plot';
+	import { gridX, gridY, Plot, plotStyle, thinTicks } from '$lib/plot';
 	import type { BacktestStats, GamePrediction, Lab, LabRow, Predictions } from '$lib/types';
 
 	let data = $state<Predictions>();
@@ -92,7 +94,7 @@
 			height: 300,
 			style: plotStyle,
 			marginRight: 120,
-			x: { label: null, tickFormat: 'd', ticks: seasons },
+			x: { label: null, tickFormat: 'd', ticks: thinTicks(seasons, width, 40) },
 			y: { label: '↓ Average miss (points, lower is better)', zero: false },
 			color: {
 				domain: ['Model', 'Vegas closing line'],
@@ -277,20 +279,27 @@
 
 <svelte:head><title>Predictions · Any Given Stat</title></svelte:head>
 
-<section>
-	<h1>Predictions</h1>
+<section class="page-head">
+	<div class="eyebrow">Games</div>
+	<h1>Predictions vs Vegas</h1>
 	<p class="lede">
 		Point spreads from opponent-adjusted EPA <a href="{base}/ratings/">power ratings</a> plus a
 		starting-quarterback adjustment, next to the Vegas line. Every game is predicted using only
-		games played before it. Coefficients were fit on {data?.params.fit_seasons.join('–')}, choices
-		made on
-		{data?.params.validate_seasons.join('–')}, and {t0}–{t1} was held back as a final test. The honest
-		result so far: it gets closer to the closing line but doesn't beat it. See
+		games played before it.
+		{#if data}
+			Coefficients were fit on {data.params.fit_seasons.join('–')}, choices made on
+			{data.params.validate_seasons.join('–')}, and {t0}–{t1} was held back as a final test.
+		{/if}
+		The honest result: it gets closer to the closing line but doesn't beat it. See
 		<a href="#lab">the attempt</a> below.
 	</p>
 </section>
 
-{#if data}
+{#if error}
+	<LoadError message={error} />
+{:else if !data}
+	<Skeleton height={360} />
+{:else}
 	{#if nextWeek}
 		<div class="card">
 			<h2>Week {nextWeek.week}, {nextWeek.season}</h2>
@@ -298,7 +307,14 @@
 				Sorted by disagreement with Vegas. Win probabilities assume the final margin varies around
 				the prediction with a standard deviation of {num(data.params.sigma, 1)} points.
 			</p>
-			<DataTable rows={picks} columns={pickColumns} sortKey="diff" />
+			<DataTable
+				rows={picks}
+				columns={pickColumns}
+				sortKey="diff"
+				showIndex={false}
+				filename="predictions-week-{nextWeek.week}"
+				href={(r) => `${base}/game/?id=${r.game_id}`}
+			/>
 		</div>
 	{/if}
 
@@ -424,6 +440,9 @@
 				sortKey="week"
 				sortDesc={false}
 				search="matchup"
+				showIndex={false}
+				filename="predictions-{shownSeason}"
+				href={(r) => `${base}/game/?id=${r.game_id}`}
 			/>
 		{/key}
 	</div>
@@ -455,6 +474,4 @@
 			collective information of everyone betting. That's why the line still wins.
 		</p>
 	</div>
-{:else}
-	<p class="muted">{error ?? 'Loading…'}</p>
 {/if}

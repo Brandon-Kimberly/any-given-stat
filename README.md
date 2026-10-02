@@ -1,21 +1,27 @@
 # Any Given Stat
 
-NFL analytics built on every play since 2016: team tiers, quarterback efficiency with confidence
-intervals, luck, a SQL console that runs in your browser, and a page that measures which football
-stats are signal and which are noise.
+NFL analytics built on every play since 2016: opponent-adjusted power ratings, win-probability
+charts for every game, predictions honestly scored against Vegas, fourth-down decision grades, an
+interactive primer on how football works in numbers, and a page that measures which stats are signal
+and which are noise.
 
 **Live site:** https://brandon-kimberly.github.io/any-given-stat/ (rebuilt daily during the season)
 
-![Team tiers: offense vs defense EPA per play, 2025](docs/tiers.png)
+![Home dashboard](docs/home.png)
 
 ## What's in it
 
 | Page | Question it answers |
 |---|---|
+| **Home** | What matters this week: model vs Vegas lines, power top 10, risers and fallers, regression candidates, QB leaders. |
+| **Games / game page** | Every game's win probability play by play, the plays that decided it, an efficiency box score, excitement index and comebacks. Upcoming games get a unit-vs-unit matchup preview. |
+| **How football works** | Expected points by field position and down, win probability by score and clock, pass vs run, the EPA distribution, and fourth-down math, each with interactive controls and data-driven takeaways. |
+| **Fourth downs** | An empirical decision model (what going, punting and kicking actually produced), league aggressiveness over time, and team grades by EPA left on the field. |
+| **Player pages** | League percentile profile, career arc with intervals, game logs. Search any player with ⌘K / Ctrl+K. |
 | **Team tiers** | Who is actually good? Offense vs defense EPA/play, raw or opponent-adjusted, with equal-net-EPA tier lines. |
 | **Power ratings** | Opponent-adjusted, recency-weighted team ratings in points, week by week. |
 | **Predictions** | Model spreads for the coming week vs the Vegas line, plus a walk-forward backtest and calibration check. |
-| **Teams / team detail** | Every efficiency stat by team, situational splits (down, field position, score, quarter), strength of schedule, weekly trends, game logs. |
+| **Teams / team page** | Every efficiency stat by team; per team: auto-generated identity (strengths and weaknesses by league rank), division standings, situational splits, strength of schedule, power-rating path, linked game log. |
 | **Quarterbacks** | EPA per dropback vs CPOE, plus 95% intervals that show when two QBs can't be told apart yet. |
 | **Receivers / Rushers** | Usage (target share, air yards share, WOPR) and efficiency over expectation (xYAC, catch rate). |
 | **Luck** | Record vs Pythagorean expectation, one-score games, fumble recovery, and how much luck reverses next season. |
@@ -41,6 +47,21 @@ Measured on 2016–2025 regular seasons, garbage time excluded (see *Signal vs n
   next season.
 
 ![Signal vs noise](docs/stability.png)
+
+## Built to be read
+
+<p>
+<img src="docs/game.png" alt="Game page: win probability chart" width="49%">
+<img src="docs/learn.png" alt="How football works: expected points" width="49%">
+</p>
+
+- **One design system:** Inter and Archivo type, light and dark themes chosen separately (not inverted),
+  team colors picked per theme to stay visible, colored team badges, consistent chart grammar
+  (single axis, legends for 2+ series, decluttered labels, tooltips everywhere).
+- **Accessible:** keyboard navigation (skip link, table rows as links, search palette), WCAG 2 AA
+  verified with axe-core on every page in both themes, motion off under `prefers-reduced-motion`.
+- **Fast and shareable:** fully static; datasets prefetch on link hover; season and filters live in
+  the URL, so any view can be shared as a link.
 
 ## How it works
 

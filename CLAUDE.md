@@ -9,13 +9,17 @@ parquet; a static SvelteKit site renders it. No backend.
   - `src/ags/db.py`: **canonical views** (`plays`, `scoped_plays`, `drives`, `games`, `team_games`). Every metric builds on these.
   - `src/ags/datasets.py`: one function per published dataset; `STABILITY_METRICS` list; `SPLITS` for team situational splits.
   - `src/ags/ratings.py`: ridge-regression team ratings (numpy), walk-forward spread model, backtest vs Vegas. Needs the `schedule` view (nflverse `games.csv`, team codes mapped via `db.TEAM_ALIASES`).
+  - `src/ags/teams.py` (names, divisions, theme-safe colors → `teams_meta.json`), `players.py` (directory + `full_name`/`position` merged into player datasets), `fourth.py` (empirical 4th-down model), `games.py` (per-season `games/games_<season>.json`: WP series, top plays, box).
+  - `db.py` also has `scrimmage_plays` (the `plays` filters without the REG-only restriction, for playoff box scores).
   - `src/ags/qb.py`: walk-forward starting-QB adjustment (listed starter vs the QBs behind the team's rating).
   - `src/ags/market.py`: the pre-registered beat-the-line experiment (`VARIANTS`, `THRESHOLDS`, selection rule) → `lab.json`.
   - `src/ags/build.py`: writes `web/static/data/*.json`, `pbp/pbp_<season>.parquet`, `meta.json`.
   - `tests/`: synthetic-pbp fixture in `conftest.py` (`make_pbp`, `run()` helper); `test_presets.py` runs explorer presets against real data (skipped if not built).
 - `web/` (SvelteKit 2, Svelte 5 runes, adapter-static, `ssr = false`, prerendered shells)
   - `src/lib/types.ts` mirrors the JSON shapes; keep it in sync with `datasets.py`.
-  - `src/lib/components/`: `Plot.svelte` (Observable Plot wrapper), `DataTable.svelte` (sort, percentile shading, CSV), `Controls.svelte` (season + garbage-time toggle).
+  - `src/lib/components/`: `Plot.svelte` (Observable Plot wrapper: labels any `className: 'declutter'` text mark, exposes the chart as one labeled image), `DataTable.svelte` (sort best-first, percentile shading, `href` row links, `team: true` badge columns, CSV), `Controls.svelte` (season + garbage-time toggle), `TeamBadge`, `CommandPalette` (⌘K), `Skeleton`, `LoadError`.
+  - Data loading: `resource('name')` (`src/lib/resource.svelte.ts`) gives `{value, error}`; each route's `+page.ts` calls `prefetch(...)` so downloads start on hover/navigation. Per-season game files via `loadSeasonGames` (`src/lib/games.ts`).
+  - Shared state: `prefs` (season/scope, synced to `?season=&scope=`), `theme` (re-renders theme-dependent charts), `teamMeta` with `teamColor`/`teamName` (`src/lib/teams.svelte.ts`). Site map in `src/lib/nav.ts`.
   - `src/lib/presets.ts`: SQL explorer presets (template literals; `test_presets.py` parses them with a regex, so keep the `title: '...'` / `sql: \`...\`` shape).
   - `src/lib/duck.ts`: DuckDB-WASM, self-hosted engine; the parquet extension is fetched from extensions.duckdb.org at runtime.
 - `data/raw/`: downloaded nflverse parquet (gitignored). `web/static/data/`: generated (gitignored).
@@ -45,6 +49,8 @@ cd web && BASE_PATH=/any-given-stat npm run build   # what CI deploys; preview n
 
 - Add a metric: SQL in `datasets.py` → test with hand-computed answer in `tests/` → field in `types.ts` → column/chart in the page. Consider adding it to `STABILITY_METRICS` too.
 - Charts: dataviz conventions. Colors come from CSS tokens in `app.css` (`--series-1/2`, `--neutral-mark`, `--good/--bad` washes), never raw hex in pages; one y-axis; a legend whenever there are 2+ series; text in text tokens, never series colors.
-- Formatters in `src/lib/format.ts` (real minus sign, no negative zero). `DataTable` `fmt` takes the value only.
+- Formatters in `src/lib/format.ts` (real minus sign, no negative zero; `wlt` for records with ties). `DataTable` `fmt` takes the value only.
+- Team colors (`teamColor`) are fine for marks with a text label or tooltip (identity is never color-alone); multi-series comparisons use the validated `--series-1..4` palette instead.
+- Every page: `page-head` with an eyebrow, a `Skeleton` while loading, `LoadError` on failure, `SampleWarning` for in-progress seasons. Check new pages with axe (zero WCAG A/AA violations is the bar) at 1280px light and 390px dark.
 - Small samples are a feature, not a bug: in-progress seasons show `SampleWarning`; don't hide uncertainty.
 - SvelteKit is pinned to 2.x on purpose (3.0 shipped 2026-10-01). Don't bump majors casually.

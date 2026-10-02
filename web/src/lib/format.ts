@@ -45,3 +45,11 @@ export function spread(homeMargin: number | null | undefined, home: string, away
 	const fav = homeMargin > 0 ? home : away;
 	return `${fav} −${Math.abs(homeMargin).toFixed(1)}`;
 }
+
+/** "9–7–1" from half-win-for-tie totals (a .5 means one tie; two ties in a season is ~never). */
+export function wlt(wins: number | null | undefined, games: number | null | undefined): string {
+	if (!n(wins) || !n(games)) return dash;
+	const w = Math.floor(wins);
+	const t = wins % 1 ? 1 : 0;
+	return `${w}–${games - w - t}${t ? `–${t}` : ''}`;
+}

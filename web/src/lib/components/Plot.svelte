@@ -16,11 +16,17 @@
 		const node = render(width);
 		el.replaceChildren(node);
 		declutter(el);
+		// Expose each chart as one labeled image; Plot's per-mark aria-labels on <g> have no role.
+		for (const svg of el.querySelectorAll('svg')) {
+			svg.setAttribute('role', 'img');
+			svg.setAttribute('aria-label', label);
+			for (const g of svg.querySelectorAll('[aria-label]')) g.removeAttribute('aria-label');
+		}
 		return () => node.remove();
 	});
 </script>
 
-<div class="plot" role="figure" aria-label={label} bind:this={el} bind:clientWidth={width}></div>
+<div class="plot" bind:this={el} bind:clientWidth={width}></div>
 
 <style>
 	.plot {

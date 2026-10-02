@@ -462,8 +462,9 @@
 		justify-content: flex-end;
 		text-align: right;
 	}
-	.side.dim {
-		opacity: 0.55;
+	.side.dim .pts,
+	.side.dim .name {
+		color: var(--text-muted);
 	}
 	.name {
 		font: 800 clamp(1rem, 0.8rem + 1vw, 1.4rem) var(--display);

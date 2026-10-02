@@ -2,7 +2,7 @@
 	import { base } from '$app/paths';
 	import PlotFigure from '$lib/components/Plot.svelte';
 	import TeamBadge from '$lib/components/TeamBadge.svelte';
-	import { corr, epa, num, pct, signed, spread } from '$lib/format';
+	import { corr, epa, num, pct, signed, spread, wlt } from '$lib/format';
 	import { navGroups } from '$lib/nav';
 	import { isNarrow, Plot, plotStyle } from '$lib/plot';
 	import { resource } from '$lib/resource.svelte';
@@ -229,7 +229,7 @@
 				{#each [...luckRows.slice(0, 3), ...luckRows.slice(-3)] as l (l.team)}
 					<li>
 						<TeamBadge team={l.team} name="nick" link />
-						<span class="tnum muted">{l.wins}–{l.games - l.wins}</span>
+						<span class="tnum muted">{wlt(l.wins, l.games)}</span>
 						<span class="chip {l.wins_over_pythag > 0 ? 'bad' : 'good'}"
 							>{signed(l.wins_over_pythag)} W</span
 						>

@@ -7,7 +7,7 @@
 	import SampleWarning from '$lib/components/SampleWarning.svelte';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import { num, pct } from '$lib/format';
-	import { gridX, gridY, isNarrow, Plot, plotStyle } from '$lib/plot';
+	import { gridX, gridY, isNarrow, Plot, plotStyle, thinTicks } from '$lib/plot';
 	import { prefs } from '$lib/prefs.svelte';
 	import { resource } from '$lib/resource.svelte';
 	import { teamColor, teamName } from '$lib/teams.svelte';
@@ -61,7 +61,11 @@
 			height: 280,
 			style: plotStyle,
 			marginRight: narrow ? 10 : 200,
-			x: { label: null, tickFormat: 'd', ticks: [...new Set(trend.map((t) => t.season))] },
+			x: {
+				label: null,
+				tickFormat: 'd',
+				ticks: thinTicks([...new Set(trend.map((t) => t.season))], width, 42)
+			},
 			y: {
 				label: '↑ Share of 4th downs',
 				tickFormat: '.0%',
