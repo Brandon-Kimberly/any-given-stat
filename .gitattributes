@@ -1,0 +1,3 @@
+# Launchers keep their native line endings on every checkout.
+*.cmd text eol=crlf
+*.sh text eol=lf

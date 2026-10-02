@@ -1,0 +1,228 @@
+<script lang="ts">
+	import LoadError from '$lib/components/LoadError.svelte';
+	import RecordList, { type RecordItem } from '$lib/components/RecordList.svelte';
+	import Skeleton from '$lib/components/Skeleton.svelte';
+	import { epa, num, pct, signed } from '$lib/format';
+	import { resource } from '$lib/resource.svelte';
+	import { teamName } from '$lib/teams.svelte';
+	import type { RecordGame, RecordPlayer, RecordTeam } from '$lib/types';
+
+	const res = resource('records');
+	const r = $derived(res.value);
+
+	const record = (t: RecordTeam) => `${t.wins}–${t.losses}${t.ties ? `–${t.ties}` : ''}`;
+	const teamItems = (rows: RecordTeam[], stat: (t: RecordTeam) => string): RecordItem[] =>
+		rows.map((t) => ({
+			key: `${t.season}-${t.team}`,
+			href: `/team/?t=${t.team}&season=${t.season}`,
+			team: t.team,
+			title: `${t.season} ${teamName(t.team)}`,
+			sub: `${record(t)} · off ${epa(t.off_epa, 2)} · def ${epa(t.def_epa, 2)}`,
+			stat: stat(t)
+		}));
+	const playerItems = (
+		rows: RecordPlayer[],
+		sub: (p: RecordPlayer) => string,
+		stat: (p: RecordPlayer) => string
+	): RecordItem[] =>
+		rows.map((p) => ({
+			key: `${p.season}-${p.player_id}`,
+			href: `/player/?id=${p.player_id}&season=${p.season}`,
+			team: p.team,
+			title: `${p.full_name ?? p.name}, ${p.season}`,
+			sub: sub(p),
+			stat: stat(p)
+		}));
+	const gameLabel = (g: {
+		season: number;
+		week: number;
+		season_type?: string;
+		game_type?: string;
+	}) =>
+		(g.season_type ?? g.game_type) === 'REG'
+			? `${g.season} week ${g.week}`
+			: `${g.season} playoffs`;
+	const gameItems = (rows: RecordGame[], stat: (g: RecordGame) => string): RecordItem[] =>
+		rows.map((g) => ({
+			key: g.game_id,
+			href: `/game/?id=${g.game_id}`,
+			team: g.winner ?? g.home,
+			title: `${g.away} ${g.away_score} @ ${g.home} ${g.home_score}`,
+			sub: gameLabel(g),
+			stat: stat(g)
+		}));
+
+	const sections = $derived(
+		r
+			? [
+					{
+						id: 'teams',
+						label: 'Teams',
+						lists: [
+							{
+								title: 'Best teams',
+								blurb: `Net EPA per play (offense minus defense), min ${r.thresholds.min_team_games} games.`,
+								items: teamItems(r.team_best, (t) => epa(t.net_epa))
+							},
+							{
+								title: 'Worst teams',
+								blurb: 'The other end of the same list.',
+								items: teamItems(r.team_worst, (t) => epa(t.net_epa))
+							},
+							{
+								title: 'Best offenses',
+								blurb: 'Offensive EPA per play.',
+								items: teamItems(r.offense_best, (t) => epa(t.off_epa))
+							},
+							{
+								title: 'Best defenses',
+								blurb: 'Defensive EPA per play allowed (lower is better).',
+								items: teamItems(r.defense_best, (t) => epa(t.def_epa))
+							}
+						]
+					},
+					{
+						id: 'players',
+						label: 'Players',
+						lists: [
+							{
+								title: 'Best QB seasons',
+								blurb: `EPA per dropback, min ${r.thresholds.min_qb_dropbacks} dropbacks.`,
+								items: playerItems(
+									r.qb_best,
+									(p) => `${p.team} · ${num(p.dropbacks)} dropbacks · CPOE ${signed(p.cpoe)}`,
+									(p) => epa(p.epa_db)
+								)
+							},
+							{
+								title: 'Worst QB seasons',
+								blurb: 'Someone had to start these games.',
+								items: playerItems(
+									r.qb_worst,
+									(p) => `${p.team} · ${num(p.dropbacks)} dropbacks · CPOE ${signed(p.cpoe)}`,
+									(p) => epa(p.epa_db)
+								)
+							},
+							{
+								title: 'Best receiving seasons',
+								blurb: 'Total EPA on targets.',
+								items: playerItems(
+									r.receiver_best,
+									(p) =>
+										`${p.position ?? ''} ${p.team} · ${num(p.targets)} targets · ${num(p.yards)} yds`,
+									(p) => num(p.total_epa, 1)
+								)
+							},
+							{
+								title: 'Best rushing seasons',
+								blurb: `Total EPA on designed runs, min ${r.thresholds.min_rush_carries} carries.`,
+								items: playerItems(
+									r.rusher_best,
+									(p) =>
+										`${p.position ?? ''} ${p.team} · ${num(p.carries)} carries · ${num(p.yards)} yds`,
+									(p) => num(p.total_epa, 1)
+								)
+							}
+						]
+					},
+					{
+						id: 'games',
+						label: 'Games',
+						lists: [
+							{
+								title: 'Biggest upsets',
+								blurb: 'Largest closing spreads overcome by the underdog.',
+								items: r.upsets.map((u) => ({
+									key: u.game_id,
+									href: `/game/?id=${u.game_id}`,
+									team: u.underdog,
+									title: `${u.underdog} over ${u.favorite}, ${Math.max(u.home_score, u.away_score)}–${Math.min(u.home_score, u.away_score)}`,
+									sub: gameLabel(u),
+									stat: `+${num(Math.abs(u.spread), 1)}`
+								}))
+							},
+							{
+								title: 'Most exciting games',
+								blurb: 'Total win-probability swing (median game: about 3.7).',
+								items: gameItems(r.excitement, (g) => num(g.excitement, 1))
+							},
+							{
+								title: 'Greatest comebacks',
+								blurb: "The winner's lowest win probability during the game.",
+								items: gameItems(r.comebacks, (g) =>
+									g.winner_min_wp != null && g.winner_min_wp < 0.01
+										? '<1%'
+										: pct(g.winner_min_wp, 1)
+								)
+							},
+							{
+								title: 'Biggest plays',
+								blurb: 'Largest single-play win-probability swing.',
+								items: r.biggest_plays.map((p) => ({
+									key: `${p.game_id}-${p.qtr}-${p.time}`,
+									href: `/game/?id=${p.game_id}`,
+									team: p.wpa >= 0 ? p.posteam : p.defteam,
+									title: p.desc.replace(/^\(\d+:\d+\)\s*/, ''),
+									sub: `${p.posteam} vs ${p.defteam} · ${gameLabel(p)} · Q${p.qtr > 4 ? 'OT' : p.qtr} ${p.time ?? ''}`,
+									stat: `${Math.round(Math.abs(p.wpa) * 100)}% WP`
+								}))
+							}
+						]
+					}
+				]
+			: []
+	);
+</script>
+
+<svelte:head><title>Record book · Any Given Stat</title></svelte:head>
+
+<div class="page-head">
+	<div class="eyebrow">History</div>
+	<h1>The record book</h1>
+	<p class="lede">
+		The best and worst of every season since {r?.seasons[0] ?? 2016}, by efficiency rather than
+		box-score totals, plus the wildest games and plays.
+	</p>
+</div>
+
+{#if res.error}
+	<LoadError message={res.error} />
+{:else if !r}
+	<Skeleton height={500} />
+{:else}
+	<nav class="jump" aria-label="Sections">
+		{#each sections as s (s.id)}<a class="chip" href="#{s.id}">{s.label}</a>{/each}
+	</nav>
+	{#each sections as s (s.id)}
+		<h2 class="section" id={s.id}>{s.label}</h2>
+		<div class="grid-2">
+			{#each s.lists as l (l.title)}
+				<RecordList title={l.title} blurb={l.blurb} items={l.items} />
+			{/each}
+		</div>
+	{/each}
+	<p class="muted small">
+		Season lists are regular season only; game lists include the playoffs. {r.wp_note}
+	</p>
+{/if}
+
+<style>
+	.jump {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+		margin-bottom: 0.5rem;
+	}
+	.jump a {
+		text-decoration: none;
+	}
+	.section {
+		font-size: 1.4rem;
+		margin: 1.5rem 0 0.75rem;
+		scroll-margin-top: 80px;
+	}
+	.small {
+		font-size: 0.8rem;
+		max-width: 80ch;
+	}
+</style>

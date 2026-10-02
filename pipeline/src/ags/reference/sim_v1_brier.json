@@ -1,0 +1,41 @@
+{
+ "note": "Brier scores of the version-1 simulator (EPA ratings only, ratings fixed within a sim, random tiebreaks), recorded 2026-10-02 before it was replaced.",
+ "seasons": {
+  "2017": {
+   "brier_playoffs": 0.10613923013888889,
+   "brier_division": 0.07947033072916666
+  },
+  "2018": {
+   "brier_playoffs": 0.15291483871527778,
+   "brier_division": 0.10531037076388888
+  },
+  "2019": {
+   "brier_playoffs": 0.09692115822916667,
+   "brier_division": 0.07221917677083334
+  },
+  "2020": {
+   "brier_playoffs": 0.08684641628472223,
+   "brier_division": 0.085179345625
+  },
+  "2021": {
+   "brier_playoffs": 0.16132015726973684,
+   "brier_division": 0.09578945523026317
+  },
+  "2022": {
+   "brier_playoffs": 0.12160919542763157,
+   "brier_division": 0.09688904904605262
+  },
+  "2023": {
+   "brier_playoffs": 0.15159244720394738,
+   "brier_division": 0.14343257312500002
+  },
+  "2024": {
+   "brier_playoffs": 0.10575249240131578,
+   "brier_division": 0.09268431654605264
+  },
+  "2025": {
+   "brier_playoffs": 0.16204216888157896,
+   "brier_division": 0.177427924375
+  }
+ }
+}
