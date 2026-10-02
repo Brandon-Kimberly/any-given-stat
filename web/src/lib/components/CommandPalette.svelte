@@ -20,7 +20,7 @@
 	let query = $state('');
 	let active = $state(0);
 	let input = $state<HTMLInputElement>();
-	let players = $state<Entry[]>([]);
+	let players = $state.raw<Entry[]>([]);
 	let loadedPlayers = false;
 
 	const pages = allPages.map<Entry>((p) => ({

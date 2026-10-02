@@ -26,7 +26,7 @@
 	const ratings = resource('ratings');
 	const teams = resource('teams');
 
-	let game = $state<GameDetail | null>(null);
+	let game = $state.raw<GameDetail | null>(null);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	$effect(() => {

@@ -51,6 +51,9 @@
 	// svelte-ignore state_referenced_locally
 	let sortDesc = $state(initialDesc);
 	let query = $state('');
+	// Render a first screenful quickly; long tables reveal the rest on request.
+	const STEP = 75;
+	let limit = $state(STEP);
 
 	const visible = $derived.by(() => {
 		const q = query.trim().toLowerCase();
@@ -171,7 +174,7 @@
 			</tr>
 		</thead>
 		<tbody>
-			{#each visible as row, i (i)}
+			{#each visible.slice(0, limit) as row, i (i)}
 				<tr
 					class:clickable={!!(href || onrowclick)}
 					class:hl={highlight?.(row)}
@@ -210,6 +213,11 @@
 		</tbody>
 	</table>
 </div>
+{#if visible.length > limit}
+	<button class="more" onclick={() => (limit = Infinity)}>
+		Show all {visible.length} rows
+	</button>
+{/if}
 
 <style>
 	.table-tools {
@@ -341,6 +349,13 @@
 	.cell-btn:focus-visible {
 		outline: 2px solid var(--accent);
 		border-radius: 3px;
+	}
+	.more {
+		display: block;
+		margin: 0.6rem auto 0;
+		font-size: 0.85rem;
+		font-weight: 600;
+		color: var(--accent-ink);
 	}
 	.empty {
 		text-align: center;

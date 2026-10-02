@@ -25,11 +25,15 @@ export function thinTicks<T>(values: T[], width: number, minPx = 44): T[] {
 
 /** Hide labels in `.declutter` text marks that overlap an earlier label. */
 export function declutter(root: HTMLElement): void {
+	// Measure every label first (one layout pass), then hide; interleaving reads and writes
+	// would force a relayout per label.
+	const texts = [...root.querySelectorAll<SVGTextElement>('g.declutter text')];
+	const rects = texts.map((t) => t.getBoundingClientRect());
 	const kept: DOMRect[] = [];
+	const hide: SVGTextElement[] = [];
 	const pad = 1.5;
-	for (const t of root.querySelectorAll<SVGTextElement>('g.declutter text')) {
-		const r = t.getBoundingClientRect();
-		if (!r.width) continue;
+	rects.forEach((r, i) => {
+		if (!r.width) return;
 		const hit = kept.some(
 			(k) =>
 				r.left < k.right + pad &&
@@ -37,9 +41,10 @@ export function declutter(root: HTMLElement): void {
 				r.top < k.bottom + pad &&
 				r.bottom > k.top - pad
 		);
-		if (hit) t.style.display = 'none';
+		if (hit) hide.push(texts[i]);
 		else kept.push(r);
-	}
+	});
+	for (const t of hide) t.style.display = 'none';
 }
 
 export { Plot };

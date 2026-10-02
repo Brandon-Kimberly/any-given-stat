@@ -2,8 +2,14 @@ import { load } from './data';
 import { theme } from './theme.svelte';
 import type { TeamMeta } from './types';
 
-/** Team identity (names, divisions, colors). Empty until loaded; every helper falls back. */
-export const teamMeta = $state<{ byTeam: Record<string, TeamMeta> }>({ byTeam: {} });
+/** Team identity (names, divisions, colors). Empty until loaded; every helper falls back.
+ * Raw state: read per mark in every chart, so no proxy on the hot path. */
+let byTeam = $state.raw<Record<string, TeamMeta>>({});
+export const teamMeta = {
+	get byTeam() {
+		return byTeam;
+	}
+};
 
 let started = false;
 export function loadTeamMeta(): void {
@@ -11,7 +17,7 @@ export function loadTeamMeta(): void {
 	started = true;
 	load('teams_meta')
 		.then((rows) => {
-			teamMeta.byTeam = Object.fromEntries(rows.map((r) => [r.team, r]));
+			byTeam = Object.fromEntries(rows.map((r) => [r.team, r]));
 		})
 		.catch(() => {
 			/* optional dataset: badges fall back to neutral */

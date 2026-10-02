@@ -24,10 +24,21 @@ export function pp(v: number | null | undefined, digits = 1): string {
 	return n(v) ? signedFixed(v * 100, digits) : dash;
 }
 
+const numFormats = new Map<number, Intl.NumberFormat>();
+function numFormat(digits: number): Intl.NumberFormat {
+	let f = numFormats.get(digits);
+	if (!f) {
+		f = new Intl.NumberFormat('en-US', {
+			maximumFractionDigits: digits,
+			minimumFractionDigits: digits
+		});
+		numFormats.set(digits, f);
+	}
+	return f;
+}
+
 export function num(v: number | null | undefined, digits = 0): string {
-	return n(v)
-		? v.toLocaleString('en-US', { maximumFractionDigits: digits, minimumFractionDigits: digits })
-		: dash;
+	return n(v) ? numFormat(digits).format(v) : dash;
 }
 
 export function signed(v: number | null | undefined, digits = 1): string {

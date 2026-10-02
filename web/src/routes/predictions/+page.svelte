@@ -9,8 +9,8 @@
 	import { gridX, gridY, Plot, plotStyle, thinTicks } from '$lib/plot';
 	import type { BacktestStats, GamePrediction, Lab, LabRow, Predictions } from '$lib/types';
 
-	let data = $state<Predictions>();
-	let lab = $state<Lab>();
+	let data = $state.raw<Predictions>();
+	let lab = $state.raw<Lab>();
 	let error = $state<string | null>(null);
 	load('predictions')
 		.then((p) => (data = p))

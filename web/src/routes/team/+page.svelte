@@ -45,7 +45,7 @@
 	);
 
 	// Season game files give game ids (for links to game pages) and home/away.
-	let seasonGames = $state<GameDetail[]>([]);
+	let seasonGames = $state.raw<GameDetail[]>([]);
 	$effect(() => {
 		const s = prefs.season;
 		if (s == null) return;

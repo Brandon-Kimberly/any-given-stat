@@ -7,10 +7,10 @@
 	import { presets } from '$lib/presets';
 	import type { Meta } from '$lib/types';
 
-	let meta = $state<Meta>();
+	let meta = $state.raw<Meta>();
 	let picked = $state<number[]>([]);
 	let sql = $state(presets[0].sql);
-	let result = $state<QueryResult | null>(null);
+	let result = $state.raw<QueryResult | null>(null);
 	let error = $state<string | null>(null);
 	let busy = $state(false);
 	let engine = $state<'idle' | 'loading' | 'ready'>('idle');

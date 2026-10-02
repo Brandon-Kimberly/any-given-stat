@@ -1,6 +1,6 @@
 <script lang="ts">
 	import '../app.css';
-	import { afterNavigate, onNavigate, replaceState } from '$app/navigation';
+	import { afterNavigate, replaceState } from '$app/navigation';
 	import { base } from '$app/paths';
 	import { page } from '$app/state';
 	import CommandPalette from '$lib/components/CommandPalette.svelte';
@@ -15,7 +15,7 @@
 
 	let { children } = $props();
 
-	let meta = $state<Meta | null>(null);
+	let meta = $state.raw<Meta | null>(null);
 	let error = $state<string | null>(null);
 	let openGroup = $state<string | null>(null);
 	let drawer = $state(false);
@@ -55,17 +55,6 @@
 		openGroup = null;
 		drawer = false;
 		syncUrl();
-	});
-
-	// Cross-fade between pages where the browser supports view transitions.
-	onNavigate((nav) => {
-		if (!document.startViewTransition || nav.from?.url.pathname === nav.to?.url.pathname) return;
-		return new Promise((resolve) => {
-			document.startViewTransition(async () => {
-				resolve();
-				await nav.complete;
-			});
-		});
 	});
 
 	function onWindowClick(e: MouseEvent) {

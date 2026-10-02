@@ -18,7 +18,7 @@
 	import type { GameDetail } from '$lib/types';
 
 	const meta = resource('meta');
-	let games = $state<GameDetail[] | null>(null);
+	let games = $state.raw<GameDetail[] | null>(null);
 	let error = $state<string | null>(null);
 
 	$effect(() => {
