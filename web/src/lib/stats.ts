@@ -45,3 +45,25 @@ export function ols(xs: number[], ys: number[]): { a: number; b: number; r: numb
 export function rolling(xs: number[], window: number): number[] {
 	return xs.map((_, i) => mean(xs.slice(Math.max(0, i - window + 1), i + 1)));
 }
+
+/** Standard normal CDF (Abramowitz–Stegun 7.1.26, |error| < 1.5e-7). */
+export function normCdf(z: number): number {
+	const t = 1 / (1 + (0.3275911 * Math.abs(z)) / Math.SQRT2);
+	const poly =
+		t *
+		(0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429))));
+	const erf = 1 - poly * Math.exp(-(z * z) / 2);
+	return z >= 0 ? (1 + erf) / 2 : (1 - erf) / 2;
+}
+
+/** Percentile (0..100) of `x` within `pool`: share below plus half the ties. */
+export function percentileOf(x: number, pool: number[]): number {
+	if (!pool.length) return 50;
+	let below = 0;
+	let ties = 0;
+	for (const v of pool) {
+		if (v < x) below++;
+		else if (v === x) ties++;
+	}
+	return (100 * (below + ties / 2)) / pool.length;
+}

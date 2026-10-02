@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { median, ols, ranks, rolling, sd } from './stats';
+import { median, normCdf, ols, percentileOf, ranks, rolling, sd } from './stats';
 
 describe('stats', () => {
 	it('median handles even and odd lengths', () => {
@@ -25,5 +25,21 @@ describe('stats', () => {
 
 	it('rolling uses a shorter window at the start', () => {
 		expect(rolling([1, 2, 3, 4], 2)).toEqual([1, 1.5, 2.5, 3.5]);
+	});
+});
+
+describe('normCdf', () => {
+	it('matches standard normal values', () => {
+		expect(normCdf(0)).toBeCloseTo(0.5, 6);
+		expect(normCdf(1.96)).toBeCloseTo(0.975, 3);
+		expect(normCdf(-1)).toBeCloseTo(0.1587, 3);
+	});
+});
+
+describe('percentileOf', () => {
+	it('counts half of ties', () => {
+		expect(percentileOf(3, [1, 2, 3, 4])).toBe(62.5);
+		expect(percentileOf(0, [1, 2])).toBe(0);
+		expect(percentileOf(9, [1, 2])).toBe(100);
 	});
 });

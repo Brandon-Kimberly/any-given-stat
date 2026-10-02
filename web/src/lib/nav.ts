@@ -59,7 +59,10 @@ export const navGroups: NavGroup[] = [
 	},
 	{
 		label: 'Explore',
-		items: [{ href: '/explore/', label: 'SQL explorer', blurb: 'Query every play in your browser' }]
+		items: [
+			{ href: '/compare/', label: 'Compare', blurb: 'Any two teams or players, any seasons' },
+			{ href: '/explore/', label: 'SQL explorer', blurb: 'Query every play in your browser' }
+		]
 	}
 ];
 
