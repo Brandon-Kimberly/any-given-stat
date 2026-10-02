@@ -131,14 +131,7 @@ def build_frame(
     f["tz_crossed"] = np.array([t[0] for t in trav])
     f["west_early"] = np.array([t[1] for t in trav])
 
-    indexed = context.index_odds(odds)
-    f["stakes_diff"] = np.array(
-        [
-            context.stakes(indexed, g["season"], g["week"], g["home"])
-            - context.stakes(indexed, g["season"], g["week"], g["away"])
-            for g in games
-        ]
-    )
+    set_stakes(games, f, odds)
 
     domes = context.dome_teams(con)
     today = dt.date.today().isoformat()
@@ -170,6 +163,18 @@ def build_frame(
     f["home_dog"] = ((f["vegas"] < 0) & (f["home_ind"] == 1)).astype(float)
     f["season"] = np.array([g["season"] for g in games], dtype=float)
     return games, f, inj
+
+
+def set_stakes(games: list[dict], f: dict[str, np.ndarray], odds: dict[int, dict]) -> None:
+    """(Re)compute the late-season stakes feature from playoff-odds payloads."""
+    indexed = context.index_odds(odds)
+    f["stakes_diff"] = np.array(
+        [
+            context.stakes(indexed, g["season"], g["week"], g["home"])
+            - context.stakes(indexed, g["season"], g["week"], g["away"])
+            for g in games
+        ]
+    )
 
 
 def _days_ahead(days: int) -> str:
@@ -244,9 +249,13 @@ def choose(selection: list[dict]) -> dict | None:
 
 
 def lab(
-    con: duckdb.DuckDBPyConnection, lam: float, half_life: float, odds: dict[int, dict]
+    con: duckdb.DuckDBPyConnection,
+    lam: float,
+    half_life: float,
+    odds: dict[int, dict],
+    frame: tuple[list[dict], dict[str, np.ndarray], dict] | None = None,
 ) -> dict | None:
-    games, f, inj = build_frame(con, lam, half_life, odds)
+    games, f, inj = frame or build_frame(con, lam, half_life, odds)
     seasons = set(f["season"].astype(int).tolist())
     if not set(TEST_SEASONS) <= seasons:
         return None

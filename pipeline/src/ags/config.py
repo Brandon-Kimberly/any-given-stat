@@ -6,6 +6,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 RAW_DIR = REPO_ROOT / "data" / "raw"
+CACHE_DIR = REPO_ROOT / "data" / "cache"
 OUT_DIR = REPO_ROOT / "web" / "static" / "data"
 
 SCHEDULE_URL = "https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv"

@@ -1,61 +1,77 @@
 """Monte Carlo playoff odds: simulate the rest of the regular season and the bracket.
 
 For each "as of" state w of a season (0 = preseason, then after each completed week),
-team ratings are fit on games before week w + 1 (``ratings.fit_before``) and every
-unplayed game's home margin is drawn from
+team strengths are fit on games before week w + 1 (EPA ratings, ``ratings.fit_before``,
+and points ratings, ``strength.fit_mov``) and every unplayed game's home margin is
 
-    Normal(points_per_epa * epa_margin + home_points * home_ind, sigma)
+    expected = b_epa * epa_gap + b_mov * points_gap + b_home * home_ind
+    margin   = expected + delta[home] - delta[away] + Normal(0, sigma_game)
 
-with the calibration the spread model publishes (predictions.json ``params``; the
-starting-QB adjustment is left out because future starters are unknown). Games already
-played keep their result; an actual tie counts half a win. The same rating snapshot
-plays the postseason.
+with the round-3 forecast's coefficients (``lab3.py``, fit on FIT seasons only). Next
+week's games use a better number when one exists: the market blend (betting line plus the
+model's small correction) or the full model with the starting QB and injuries.
 
-Seeding is simplified: division winners by win percentage, then wild cards by win
-percentage, and every tie is broken at random per simulation (the NFL's head-to-head,
-division and common-games tiebreakers are not modeled).
+``delta`` is one draw per team per simulated season, Normal(0, tau): how wrong our
+strength estimate might be. It makes a team's games move together, as they do in
+reality (a team that is better than we think wins more of all its games). The per-game
+noise shrinks to keep each single game's spread at the calibrated sigma:
+sigma_game^2 = sigma^2 - 2 tau^2. ``tau`` falls from ``TAU_PRESEASON`` to ``TAU_LATE``
+over the season and was tuned on FIT seasons by the Brier score of playoff odds.
+
+Seeding follows the NFL's order where it can be computed from game results: win
+percentage, head-to-head among the tied clubs, division record (division ties) or
+conference record (wild cards), strength of victory, strength of schedule, then a coin
+flip. Common-games records and the NFL's multi-club wild-card procedure are approximated.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 
 import duckdb
 import numpy as np
 
-from . import ratings
+from . import ratings, strength
 from .db import has_relation, records
 
 SIMS = 10_000
 SEED = 2016
+# Bump when simulation logic changes: cached states are keyed by it and by every input.
+SIM_VERSION = 2
 TIEBREAK_EPS = 1e-6  # far below the smallest win-percentage gap (0.5 / (17 * 16))
 DIVISION_BONUS = 2.0  # > any win percentage: puts division winners ahead of wild cards
+# Rating uncertainty in points (sd of one team's true strength around our estimate),
+# tuned on FIT seasons 2017-2021 by playoff Brier (see tune_tau; grid TAU_GRID, 2,000 sims):
+# 0.1193 vs 0.1199 with no uncertainty. Preseason -> after the last regular-season week.
+TAU_PRESEASON = 4.5
+TAU_LATE = 2.0
+# Lexicographic tiebreak weights: each step can only reorder clubs equal on the previous.
+KEY_WEIGHTS = (1.0, 1e-2, 1e-4, 1e-6, 1e-8, 1e-10, 1e-12)
 
 
 @dataclass(frozen=True)
-class GameModel:
-    lam: float
-    half_life: float
-    points_per_epa: float
-    home_points: float
+class SimModel:
+    """Game model for simulated games (points), from lab3's frozen forecast."""
+
+    epa_lam: float
+    epa_half_life: float
+    mov_lam: float
+    mov_half_life: float
+    b_epa: float  # points per EPA/play of net rating gap
+    b_mov: float  # points per point of points-rating gap
+    b_home: float
     sigma: float
+    tau_preseason: float = TAU_PRESEASON
+    tau_late: float = TAU_LATE
 
-    @classmethod
-    def from_params(cls, params: dict) -> GameModel:
-        """From the ``params`` block of predictions.json (ratings.predictions)."""
-        return cls(
-            lam=params["lambda"],
-            half_life=params["half_life_weeks"] or 1e9,
-            points_per_epa=params["points_per_epa"],
-            home_points=params["home_points"],
-            sigma=params["sigma"],
-        )
-
-    def margin(self, net_home, net_away, home_ind):
-        """Expected home margin in points."""
-        return self.points_per_epa * (net_home - net_away) + self.home_points * home_ind
+    def tau(self, week: int) -> float:
+        k = min(1.0, max(0.0, week / 18))
+        return self.tau_preseason * (1 - k) + self.tau_late * k
 
 
 def playoff_format(season: int) -> tuple[int, int]:
@@ -95,24 +111,127 @@ def season_wins(n_teams: int, home, away, home_win: np.ndarray) -> np.ndarray:
     return home_win @ H + (1.0 - home_win) @ A
 
 
+@dataclass
+class Standings:
+    """Per-sim records the tiebreakers need. Arrays are (sims, teams) unless noted."""
+
+    win_pct: np.ndarray
+    home: np.ndarray  # (games,) team ids
+    away: np.ndarray
+    home_win: np.ndarray  # (sims, games) in {0, 0.5, 1}
+    div_pct: np.ndarray
+    conf_pct: np.ndarray
+    sov: np.ndarray  # strength of victory: mean win pct of teams beaten
+    sos: np.ndarray  # strength of schedule: mean win pct of opponents
+
+
+def _pct(won: np.ndarray, games: np.ndarray) -> np.ndarray:
+    return np.where(games > 0, won / np.maximum(games, 1), 0.5)
+
+
+def _onehot(ids: np.ndarray, n: int) -> np.ndarray:
+    m = np.zeros((len(ids), n))
+    m[np.arange(len(ids)), ids] = 1.0
+    return m
+
+
+def standings(
+    n_teams: int, home, away, home_win: np.ndarray, div_id: np.ndarray, conf_id: np.ndarray
+) -> Standings:
+    home = np.asarray(home, dtype=int)
+    away = np.asarray(away, dtype=int)
+    H, A = _onehot(home, n_teams), _onehot(away, n_teams)
+    wins = home_win @ H + (1.0 - home_win) @ A
+    n_games = H.sum(axis=0) + A.sum(axis=0)
+    win_pct = _pct(wins, n_games)
+
+    def record(mask):
+        w = home_win[:, mask] @ H[mask] + (1.0 - home_win[:, mask]) @ A[mask]
+        return _pct(w, H[mask].sum(axis=0) + A[mask].sum(axis=0))
+
+    # Strength of victory: the beaten opponents' win pct, summed per winner (ties count half).
+    sov_num = (home_win * win_pct[:, away]) @ H + ((1.0 - home_win) * win_pct[:, home]) @ A
+    sov = np.where(wins > 0, sov_num / np.maximum(wins, 1e-9), 0.0)
+    opp_sum = win_pct[:, away] @ H + win_pct[:, home] @ A
+    sos = opp_sum / np.maximum(n_games, 1)
+    return Standings(
+        win_pct=win_pct,
+        home=home,
+        away=away,
+        home_win=home_win,
+        div_pct=record(div_id[home] == div_id[away]),
+        conf_pct=record(conf_id[home] == conf_id[away]),
+        sov=sov,
+        sos=sos,
+    )
+
+
+def tiebreak_key(
+    st: Standings, cols: np.ndarray, group: np.ndarray, stage: str, rng: np.random.Generator
+) -> np.ndarray:
+    """Sort key (higher = better) for teams ``cols``, comparing teams within the same
+    ``group`` label (per sim, shape (sims, len(cols))). ``stage``: 'division' or 'wildcard'.
+
+    Head-to-head is the record in games among the clubs tied on win percentage within the
+    group; then division record (division stage) or conference record (wild card), then
+    strength of victory, strength of schedule, and a random draw.
+    """
+    cols = np.asarray(cols)
+    k = len(cols)
+    pos = np.full(len(st.win_pct[0]), -1)
+    pos[cols] = np.arange(k)
+    hp, ap = pos[st.home], pos[st.away]
+    inside = (hp >= 0) & (ap >= 0)
+    hp, ap, hw = hp[inside], ap[inside], st.home_win[:, inside]
+    wp = st.win_pct[:, cols]
+    rows = np.arange(len(wp))[:, None]
+    tied = (np.abs(wp[:, hp] - wp[:, ap]) < 1e-9) & (group[rows, hp] == group[rows, ap])
+    tied = tied.astype(float)
+    Hc, Ac = _onehot(hp, k), _onehot(ap, k)
+    won = (hw * tied) @ Hc + ((1.0 - hw) * tied) @ Ac
+    played = tied @ (Hc + Ac)
+    h2h = np.where(played > 0, won / np.maximum(played, 1), 0.5)
+    record = st.div_pct[:, cols] if stage == "division" else st.conf_pct[:, cols]
+    parts = [wp, h2h, record]
+    if stage == "division":
+        parts.append(st.conf_pct[:, cols])
+    parts += [st.sov[:, cols], st.sos[:, cols], rng.random(wp.shape)]
+    return sum(wgt * x for wgt, x in zip(KEY_WEIGHTS, parts, strict=False))
+
+
 def seed_conference(
-    win_pct: np.ndarray, divisions: list[np.ndarray], n_seeds: int, rng: np.random.Generator
+    win_pct: np.ndarray,
+    divisions: list[np.ndarray],
+    n_seeds: int,
+    rng: np.random.Generator,
+    st: Standings | None = None,
+    members: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Seed one conference in every sim.
 
     ``win_pct`` is (sims, teams) for the conference's teams; ``divisions`` lists column
     indices. Returns (seeds, div_winner): seeds is (sims, n_seeds) column indices in seed
-    order (division winners 1-4 by record, then wild cards by record); div_winner is a
-    (sims, teams) bool mask. Ties are broken at random, independently per sim.
+    order (division winners 1-4, then wild cards); div_winner is a (sims, teams) bool mask.
+    With ``st`` (league standings) and ``members`` (the conference's league team ids),
+    ties follow the NFL tiebreakers; without them ties are broken at random.
     """
-    n, _ = win_pct.shape
-    key = win_pct + rng.random(win_pct.shape) * TIEBREAK_EPS
-    div_winner = np.zeros(win_pct.shape, dtype=bool)
+    n, k = win_pct.shape
     rows = np.arange(n)
+    div_of = np.zeros(k, dtype=int)
+    for d, cols in enumerate(divisions):
+        div_of[np.asarray(cols)] = d
+    if st is None:
+        key_div = key_wc = win_pct + rng.random(win_pct.shape) * TIEBREAK_EPS
+    else:
+        key_div = tiebreak_key(st, members, np.broadcast_to(div_of, (n, k)), "division", rng)
+    div_winner = np.zeros(win_pct.shape, dtype=bool)
     for cols in divisions:
         cols = np.asarray(cols)
-        div_winner[rows, cols[np.argmax(key[:, cols], axis=1)]] = True
-    order = np.argsort(-(key + DIVISION_BONUS * div_winner), axis=1, kind="stable")
+        div_winner[rows, cols[np.argmax(key_div[:, cols], axis=1)]] = True
+    if st is not None:
+        # Winners are compared with winners (seeds 1-4), the rest with the rest.
+        key_wc = tiebreak_key(st, members, div_winner.astype(int), "wildcard", rng)
+    order = np.argsort(-(key_wc + DIVISION_BONUS * div_winner), axis=1, kind="stable")
     return order[:, :n_seeds], div_winner
 
 
@@ -177,42 +296,56 @@ def simulate(
     league: League,
     home: np.ndarray,
     away: np.ndarray,
-    home_ind: np.ndarray,
     fixed: np.ndarray,
-    net: np.ndarray,
-    model: GameModel,
+    expected: np.ndarray,
+    team_strength: np.ndarray,
+    model: SimModel,
     season: int,
     sims: int,
     rng: np.random.Generator,
+    tau: float = 0.0,
 ) -> list[dict]:
-    """Simulate one state. Per game: ``fixed`` = home wins (1, 0.5, 0) or nan to simulate.
-
-    ``net`` is each team's net EPA/play rating. Returns one row per team.
+    """Simulate one state. Per game: ``fixed`` = home wins (1, 0.5, 0) or nan to simulate;
+    ``expected`` = expected home margin (points, home field included). ``team_strength``
+    is each team's rating in points (for playoff games). ``tau``: rating uncertainty.
+    Returns one row per team.
     """
     n_teams = len(league.teams)
-    pred = model.margin(net[home], net[away], home_ind)
+    delta = rng.normal(0.0, tau, (sims, n_teams)) if tau > 0 else np.zeros((sims, n_teams))
+    sigma_game = float(np.sqrt(max(model.sigma**2 - 2 * tau**2, 1.0)))
     todo = np.isnan(fixed)
     home_win = np.broadcast_to(np.nan_to_num(fixed), (sims, len(fixed))).copy()
     if todo.any():
+        h, a = home[todo], away[todo]
         z = rng.standard_normal((sims, int(todo.sum())))
-        home_win[:, todo] = (pred[todo] + model.sigma * z > 0).astype(float)
+        margin = expected[todo] + delta[:, h] - delta[:, a] + sigma_game * z
+        home_win[:, todo] = np.where(margin > 0, 1.0, 0.0)
+    div_id = np.zeros(n_teams, dtype=int)
+    conf_id = np.zeros(n_teams, dtype=int)
+    for c, (members, divisions) in enumerate(league.conferences):
+        conf_id[members] = c
+        for d, cols in enumerate(divisions):
+            div_id[members[np.asarray(cols)]] = c * 10 + d
+    st = standings(n_teams, home, away, home_win, div_id, conf_id)
     wins = season_wins(n_teams, home, away, home_win)
-    n_games = np.bincount(home, minlength=n_teams) + np.bincount(away, minlength=n_teams)
-    win_pct = wins / np.maximum(n_games, 1)
+    rows = np.arange(sims)
 
     def higher_seed_wins(h, a, home_ind=1.0):
-        margin = model.margin(net[h], net[a], home_ind)
-        return margin + model.sigma * rng.standard_normal(len(h)) > 0
+        mean = team_strength[h] - team_strength[a] + model.b_home * home_ind
+        noise = delta[rows, h] - delta[rows, a] + sigma_game * rng.standard_normal(len(h))
+        return mean + noise > 0
 
     n_seeds, byes = playoff_format(season)
     seed_num = np.zeros((sims, n_teams), dtype=int)  # 0 = missed the playoffs
     div_win = np.zeros((sims, n_teams), dtype=bool)
     champs = []
-    rows = np.arange(sims)[:, None]
+    col = rows[:, None]
     for members, divisions in league.conferences:
-        seeds, dw = seed_conference(win_pct[:, members], divisions, n_seeds, rng)
+        seeds, dw = seed_conference(
+            st.win_pct[:, members], divisions, n_seeds, rng, st=st, members=members
+        )
         team_seeds = members[seeds]
-        seed_num[rows, team_seeds] = np.arange(1, n_seeds + 1)
+        seed_num[col, team_seeds] = np.arange(1, n_seeds + 1)
         div_win[:, members] = dw
         champs.append(play_bracket(team_seeds, byes, higher_seed_wins))
     if len(champs) == 2:
@@ -268,17 +401,8 @@ def actual_outcomes(teams: list[str], post: list[dict]) -> dict[str, dict] | Non
     return out
 
 
-def playoff_odds(
-    con: duckdb.DuckDBPyConnection, params: dict, sims: int = SIMS
-) -> list[tuple[int, dict]]:
-    """[(season, payload)] for every loaded season after the first.
-
-    Needs the ``schedule`` and ``team_colors`` views (alignment); returns [] without them.
-    """
-    if not (has_relation(con, "schedule") and has_relation(con, "team_colors")):
-        return []
-    model = GameModel.from_params(params)
-    alignment = {
+def _alignment(con: duckdb.DuckDBPyConnection) -> dict[str, tuple[str, str]]:
+    return {
         r["team"]: (r["conf"], r["division"])
         for r in records(
             con,
@@ -288,15 +412,38 @@ def playoff_odds(
             """,
         )
     }
+
+
+def playoff_odds(
+    con: duckdb.DuckDBPyConnection,
+    model: SimModel,
+    sims: int = SIMS,
+    overrides: dict[str, float] | None = None,
+    seasons: list[int] | None = None,
+    cache_dir: Path | None = None,
+) -> list[tuple[int, dict]]:
+    """[(season, payload)] for every loaded season after the first (or ``seasons``).
+
+    ``overrides``: game_id -> expected home margin for a better-informed number (market
+    blend or full model), used only for the week right after each state.
+    Needs the ``schedule`` and ``team_colors`` views (alignment); returns [] without them.
+    """
+    if not (has_relation(con, "schedule") and has_relation(con, "team_colors")):
+        return []
+    overrides = overrides or {}
+    alignment = _alignment(con)
     rows = ratings.load_rows(con)
     rating_idx = {t: i for i, t in enumerate(rows.teams)}
-    seasons = sorted(set(rows.season.tolist()))[1:]  # first season: no prior-year ratings
+    mov_rows = strength.load_mov_rows(con, rows.teams)
+    loaded = sorted(set(rows.season.tolist()))[1:]  # first season: no prior-year ratings
     out = []
-    for season in seasons:
+    for season in seasons or loaded:
+        if season not in loaded:
+            continue
         sched = records(
             con,
             """
-            select game_type, week, home_team as home, away_team as away, result,
+            select game_id, game_type, week, home_team as home, away_team as away, result,
                    case when location = 'Neutral' then 0 else 1 end as home_ind
             from schedule where season = ?
             order by week, game_id
@@ -321,28 +468,53 @@ def playoff_odds(
         home_all = np.array([tid[g["home"]] for g in reg])
         away_all = np.array([tid[g["away"]] for g in reg])
         home_ind_all = np.array([float(g["home_ind"]) for g in reg])
+        ids = [g["game_id"] for g in reg]
         outcome = np.where(result > 0, 1.0, np.where(result < 0, 0.0, 0.5))
+        r_idx = np.array([rating_idx.get(t, -1) for t in league.teams])
         states = []
         for w in range(last + 1):
-            keep = ~(reg_over & (week <= w) & ~played)
-            fixed = np.where((week <= w) & played, outcome, np.nan)[keep]
-            f = ratings.fit_before(
-                rows, int(ratings.time_index(season, w + 1)), model.lam, model.half_life
+            t_now = int(ratings.time_index(season, w + 1))
+            f = ratings.fit_before(rows, t_now, model.epa_lam, model.epa_half_life)
+            s_mov = strength.fit_mov(mov_rows, t_now, model.mov_lam, model.mov_half_life)
+            net = np.where(r_idx >= 0, f.net[r_idx], 0.0)
+            mov = np.where(r_idx >= 0, s_mov[r_idx], 0.0)
+            team_strength = model.b_epa * net + model.b_mov * mov
+            expected = (
+                team_strength[home_all] - team_strength[away_all] + model.b_home * home_ind_all
             )
-            net = np.array([f.net[rating_idx[t]] if t in rating_idx else 0.0 for t in teams])
-            rng = np.random.default_rng([SEED, season, w])
-            for r in simulate(
-                league,
-                home_all[keep],
-                away_all[keep],
-                home_ind_all[keep],
-                fixed,
-                net,
-                model,
-                season,
-                sims,
-                rng,
-            ):
+            nxt = week == w + 1
+            for i in np.flatnonzero(nxt):
+                if ids[i] in overrides:
+                    expected[i] = overrides[ids[i]]
+            latest = w == last and not reg_over
+            # Fix results as of the state; the live state also fixes games already played
+            # in the week in progress (e.g. Thursday night).
+            fixed_mask = played & ((week <= w) | latest)
+            keep = ~(reg_over & (week <= w) & ~played)
+            fixed = np.where(fixed_mask, outcome, np.nan)[keep]
+            key = _state_key(
+                season, w, sims, model, home_all[keep], away_all[keep], fixed, expected[keep],
+                team_strength, league.teams,
+            )  # fmt: skip
+            cached = _cache_read(cache_dir, key)
+            if cached is None:
+                rng = np.random.default_rng([SEED, season, w])
+                cached = simulate(
+                    league,
+                    home_all[keep],
+                    away_all[keep],
+                    fixed,
+                    expected[keep],
+                    team_strength,
+                    model,
+                    season,
+                    sims,
+                    rng,
+                    tau=model.tau(w),
+                )
+                _cache_write(cache_dir, key, cached)
+            for r in cached:
+                r = dict(r)
                 states.append({"team": r.pop("team"), "week": w} | r)
         post = [g for g in sched if g["game_type"] != "REG"]
         n_seeds, byes = playoff_format(season)
@@ -357,7 +529,89 @@ def playoff_odds(
                     "weeks": list(range(last + 1)),
                     "rows": states,
                     "actual": actual_outcomes(teams, post),
+                    "model": {
+                        "b_epa": model.b_epa,
+                        "b_mov": model.b_mov,
+                        "b_home": model.b_home,
+                        "sigma": model.sigma,
+                        "tau_preseason": model.tau_preseason,
+                        "tau_late": model.tau_late,
+                    },
                 },
             )
+        )
+    return out
+
+
+def _state_key(season, w, sims, model, home, away, fixed, expected, strength_, teams) -> str:
+    """Hash of everything a simulated state depends on (inputs rounded to kill float noise)."""
+    h = hashlib.sha256()
+    # Fitted coefficients wobble in the last digits between runs (summation order), so
+    # model parameters are rounded too.
+    params = [round(float(v), 6) for v in vars(model).values()]
+    h.update(json.dumps([SIM_VERSION, season, w, sims, list(teams), params]).encode())
+    for arr in (home, away, np.nan_to_num(fixed, nan=-1), expected, strength_):
+        h.update(np.round(np.asarray(arr, dtype=float), 6).tobytes())
+    return f"{season}_{w:02d}_{h.hexdigest()[:20]}"
+
+
+def _cache_read(cache_dir: Path | None, key: str) -> list[dict] | None:
+    if cache_dir is None:
+        return None
+    path = cache_dir / f"{key}.json"
+    try:
+        return json.loads(path.read_text()) if path.exists() else None
+    except (OSError, ValueError):
+        return None
+
+
+def _cache_write(cache_dir: Path | None, key: str, rows: list[dict]) -> None:
+    if cache_dir is None:
+        return
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    season_w = key.rsplit("_", 1)[0]
+    for old in cache_dir.glob(f"{season_w}_*.json"):  # one entry per (season, state)
+        old.unlink(missing_ok=True)
+    (cache_dir / f"{key}.json").write_text(json.dumps(rows))
+
+
+def brier(payloads: list[tuple[int, dict]], key: str = "p_playoffs") -> float | None:
+    """Mean Brier score of make-the-playoffs (or division) odds over every state."""
+    field = {"p_playoffs": "made_playoffs", "p_division": "won_division"}[key]
+    errs = []
+    for _, p in payloads:
+        if not p["actual"]:
+            continue
+        for r in p["rows"]:
+            out = p["actual"].get(r["team"])
+            if out is not None and field in out:
+                errs.append((r[key] - float(out[field])) ** 2)
+    return float(np.mean(errs)) if errs else None
+
+
+TAU_GRID = ((0.0, 0.0), (1.5, 0.0), (3.0, 0.0), (3.0, 1.0), (4.5, 1.0), (4.5, 2.0), (6.0, 2.0))
+
+
+def tune_tau(
+    con: duckdb.DuckDBPyConnection,
+    model: SimModel,
+    seasons: list[int],
+    sims: int = 2000,
+    overrides: dict[str, float] | None = None,
+) -> list[dict]:
+    """Brier score of playoff odds on ``seasons`` for each (preseason, late) tau pair."""
+    from dataclasses import replace
+
+    out = []
+    for pre, late in TAU_GRID:
+        m = replace(model, tau_preseason=pre, tau_late=late)
+        payloads = playoff_odds(con, m, sims=sims, overrides=overrides, seasons=seasons)
+        out.append(
+            {
+                "tau_preseason": pre,
+                "tau_late": late,
+                "brier_playoffs": brier(payloads),
+                "brier_division": brier(payloads, "p_division"),
+            }
         )
     return out

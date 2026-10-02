@@ -18,6 +18,7 @@ from . import (
     fourth,
     games,
     lab2,
+    lab3,
     market,
     people,
     playbyplay,
@@ -26,7 +27,7 @@ from . import (
     records,
     sim,
 )
-from .config import OUT_DIR
+from .config import CACHE_DIR, OUT_DIR
 from .db import has_relation
 from .teams import teams_meta
 
@@ -109,15 +110,28 @@ def build_all(con: duckdb.DuckDBPyConnection, out_dir: Path = OUT_DIR, explorer:
             )
         else:
             preds, power = model
-            write_json(out_dir / "predictions.json", preds)
             write_json(out_dir / "ratings.json", power)
             write_by_season(out_dir, "ratings", power)
             params = preds["params"]
+            half_life = params["half_life_weeks"] or 1e9
+            # --- round-3 forecast (lab3.py): the site's predictions and the simulator's
+            # game model. Stakes need playoff odds, which need the forecast, so the frame
+            # is built without odds and the stakes feature is filled in afterwards.
+            with timed("forecast features"):
+                frame = lab2.build_frame(con, params["lambda"], half_life, {})
+                games3, f3, inj3 = frame
+                mov = lab3.add_mov(con, games3, f3)
+                fc = lab3.fit_forecast(f3)
+                sim_model, overrides = lab3.sim_inputs(fc, games3, f3, mov, params)
+            preds = lab3.apply_to_predictions(preds, games3, f3, fc)
+            write_json(out_dir / "predictions.json", preds)
             # --- playoff odds (sim.py) ---
             with timed("playoff odds"):
                 odds_index = []
                 odds_payloads = {}
-                for season, payload in sim.playoff_odds(con, params):
+                for season, payload in sim.playoff_odds(
+                    con, sim_model, overrides=overrides, cache_dir=CACHE_DIR / "odds"
+                ):
                     odds_payloads[season] = payload
                     dest = out_dir / "playoff_odds" / f"{season}.json"
                     write_json(dest, payload)
@@ -129,14 +143,17 @@ def build_all(con: duckdb.DuckDBPyConnection, out_dir: Path = OUT_DIR, explorer:
                     write_json(out_dir / "playoff_odds" / "index.json", odds_index)
                 else:
                     print("skip playoff odds: no team alignment (teams csv)", file=sys.stderr)
-            half_life = params["half_life_weeks"] or 1e9
+            lab2.set_stakes(games3, f3, odds_payloads)
             experiment = market.lab(con, params["lambda"], half_life)
             if experiment is not None:
                 write_json(out_dir / "lab.json", experiment)
             with timed("beat-the-line round 2"):
-                round2 = lab2.lab(con, params["lambda"], half_life, odds_payloads)
+                round2 = lab2.lab(con, params["lambda"], half_life, odds_payloads, frame=frame)
             if round2 is not None:
                 write_json(out_dir / "lab2.json", round2)
+            v1 = json.loads((Path(__file__).parent / "reference" / "sim_v1_brier.json").read_text())
+            round3 = lab3.lab(games3, f3, fc, inj3, sorted(odds_payloads.items()), v1["seasons"])
+            write_json(out_dir / "lab3.json", round3)
     write_json(out_dir / "teams.json", teams)
     splits = datasets.team_splits(con)
     write_json(out_dir / "team_splits.json", splits)

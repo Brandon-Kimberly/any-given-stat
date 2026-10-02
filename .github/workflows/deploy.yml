@@ -32,7 +32,9 @@ jobs:
       # Past seasons rarely change; cache downloads and always refresh the latest season.
       - uses: actions/cache@v4
         with:
-          path: data/raw
+          path: |
+            data/raw
+            data/cache
           key: pbp-raw-${{ github.run_id }}
           restore-keys: pbp-raw-
 

@@ -3,7 +3,10 @@ import pytest
 
 from ags import sim
 
-MODEL = sim.GameModel(lam=1000, half_life=16, points_per_epa=200, home_points=2, sigma=13)
+MODEL = sim.SimModel(
+    epa_lam=1000, epa_half_life=16, mov_lam=64, mov_half_life=16,
+    b_epa=200, b_mov=0, b_home=2, sigma=13,
+)  # fmt: skip
 
 
 def test_playoff_format_by_era():
@@ -100,10 +103,11 @@ def test_simulate_with_every_game_played_is_deterministic():
     home = np.array([*range(n), 0])
     away = np.array([*((i + 1) % n for i in range(n)), 2])
     fixed = np.array([0.0] * n + [0.5])
-    net = np.zeros(n)
+    expected = np.full(n + 1, 2.0)
     rows = sim.simulate(
-        league, home, away, np.ones(n + 1), fixed, net, MODEL, 2024, 200, np.random.default_rng(3)
-    )
+        league, home, away, fixed, expected, np.zeros(n), MODEL, 2024, 200,
+        np.random.default_rng(3),
+    )  # fmt: skip
     by = {r["team"]: r for r in rows}
     assert sum(r["p_playoffs"] for r in rows) == pytest.approx(14)
     assert sum(r["p_division"] for r in rows) == pytest.approx(8)
@@ -121,19 +125,21 @@ def test_simulate_dominant_team_wins_everything():
     league = _league()
     n = len(league.teams)
     home, away = np.triu_indices(n, 1)  # everyone plays everyone once
-    net = np.zeros(n)
-    net[5] = 1.0  # +200 points per game
+    strength_pts = np.zeros(n)
+    strength_pts[5] = 200.0  # +200 points per game
+    expected = strength_pts[home] - strength_pts[away] + 2.0
     rows = sim.simulate(
         league,
         home,
         away,
-        np.ones(len(home)),
         np.full(len(home), np.nan),
-        net,
+        expected,
+        strength_pts,
         MODEL,
         2024,
         500,
         np.random.default_rng(4),
+        tau=3.0,
     )
     star = rows[5]
     assert star["p_playoffs"] == 1.0 and star["p_bye"] == 1.0 and star["p_sb"] == 1.0
@@ -158,6 +164,73 @@ def test_actual_outcomes_from_postseason_games():
 
 
 def test_playoff_odds_skips_without_reference_views(make_pbp):
-    params = {"lambda": 1000.0, "half_life_weeks": None, "points_per_epa": 200.0}
-    params |= {"home_points": 2.0, "sigma": 13.0}
-    assert sim.playoff_odds(make_pbp([{}]), params) == []
+    assert sim.playoff_odds(make_pbp([{}]), MODEL) == []
+
+
+def _standings(home, away, results, n=4, div=None, conf=None):
+    home_win = np.array([results], dtype=float)
+    div = np.zeros(n, dtype=int) if div is None else np.array(div)
+    conf = np.zeros(n, dtype=int) if conf is None else np.array(conf)
+    return sim.standings(n, home, away, home_win, div, conf)
+
+
+def test_standings_records_h2h_and_strength_of_victory():
+    # 0 beats 1 and 2; 1 beats 2; 3 beats 0. Teams 0-1 are one division, 2-3 another.
+    st = _standings([0, 0, 1, 3], [1, 2, 2, 0], [1, 1, 1, 1], div=[0, 0, 1, 1])
+    assert st.win_pct[0].tolist() == pytest.approx([2 / 3, 1 / 2, 0, 1])
+    assert st.div_pct[0, 0] == 1.0  # 0's only division game: beat 1
+    # Strength of victory for 0: beat 1 (0.5) and 2 (0.0).
+    assert st.sov[0, 0] == pytest.approx(0.25)
+
+
+def test_head_to_head_breaks_a_division_tie():
+    # 1 beats 0, 0 beats 2, 3 beats 1: teams 0 and 1 both finish 1-1, 1 won head-to-head.
+    st = _standings([1, 0, 3], [0, 2, 1], [1, 1, 1])
+    assert st.win_pct[0, 0] == st.win_pct[0, 1] == 0.5
+    key = sim.tiebreak_key(
+        st, np.arange(4), np.zeros((1, 4), dtype=int), "division", np.random.default_rng(0)
+    )
+    assert key[0, 1] > key[0, 0]
+
+
+def test_seed_conference_uses_tiebreakers():
+    # Two divisions of two in one conference; 0 and 1 tie, 1 won their game.
+    home = [1, 0, 2, 3]
+    away = [0, 2, 3, 1]
+    res = [1, 1, 1, 0]  # 1 beats 0; 0 beats 2; 2 beats 3; 1 beats 3 (away win)
+    st = _standings(home, away, res, div=[0, 0, 1, 1])
+    divisions = [np.array([0, 1]), np.array([2, 3])]
+    seeds, dw = sim.seed_conference(
+        st.win_pct, divisions, 3, np.random.default_rng(0), st=st, members=np.arange(4)
+    )
+    assert dw[0, 1] and not dw[0, 0]
+
+
+def test_tau_keeps_single_game_spread_but_correlates_a_season():
+    league = _league()
+    n = len(league.teams)
+    home, away = np.triu_indices(n, 1)
+    expected = np.zeros(len(home))
+    common = (home, away, np.full(len(home), np.nan), expected, np.zeros(n), MODEL, 2024, 3000)
+    flat = sim.simulate(league, *common, np.random.default_rng(5), tau=0.0)
+    wide = sim.simulate(league, *common, np.random.default_rng(5), tau=6.0)
+    # Same average wins, but uncertain strengths widen each team's win distribution.
+    mean = lambda rows: np.mean([r["mean_wins"] for r in rows])  # noqa: E731
+    assert mean(wide) == pytest.approx(mean(flat), abs=0.05)
+    width = lambda rows: np.mean([r["wins_p90"] - r["wins_p10"] for r in rows])  # noqa: E731
+    assert width(wide) > width(flat) + 0.5
+
+
+def test_state_cache_round_trip(tmp_path):
+    rows = [{"team": "A", "p_playoffs": 0.5}]
+    args = (2024, 3, 100, MODEL, [0], [1], [np.nan], [1.5], [0.0, 1.0], ["A", "B"])
+    key = sim._state_key(*args)
+    assert sim._cache_read(tmp_path, key) is None
+    sim._cache_write(tmp_path, key, rows)
+    assert sim._cache_read(tmp_path, key) == rows
+    # Any input change gives a new key, and writing it replaces the stale entry.
+    key2 = sim._state_key(*args[:7], [2.0], *args[8:])
+    assert key2 != key
+    sim._cache_write(tmp_path, key2, rows)
+    assert sim._cache_read(tmp_path, key) is None
+    assert sim._cache_read(None, key) is None
