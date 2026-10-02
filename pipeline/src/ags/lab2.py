@@ -350,6 +350,44 @@ def lab(
             }
             upcoming.append(row)
 
+    # Does the closing line already price each factor? Regress the line's miss
+    # (result - line) on the factor over every completed season: a coefficient near 0 means
+    # the market prices it. Descriptive, all seasons, no betting decision rides on it.
+    miss = f["result"] - f["vegas"]
+    done = before & played & ~np.isnan(f["vegas"])
+    market_check = []
+    for c in INJ_TOTAL + INJ_GROUPS + SPOTS + WEATHER_DIV + ["home_dog"]:
+        x = f[c][done]
+        if np.std(x) == 0:
+            continue
+        X1 = np.column_stack([np.ones_like(x), x])
+        b_m, se_m = ols(X1, miss[done])
+        X2 = np.column_stack([f[k][done] for k in BASE] + [x])
+        b_r, se_r = ols(X2, f["result"][done])
+        market_check.append(
+            {
+                "feature": c,
+                "label": LABELS.get(c, c),
+                "vs_ratings": float(b_r[-1]),
+                "vs_ratings_se": float(se_r[-1]),
+                "vs_line": float(b_m[1]),
+                "vs_line_se": float(se_m[1]),
+                "share_nonzero": float(np.mean(x != 0)),
+            }
+        )
+
+    # How much of the upcoming week's injury report has final game statuses yet.
+    statuses_posted = None
+    if upcoming and has_relation(con, "injuries"):
+        wk = upcoming[0]["week"]
+        statuses_posted = con.execute(
+            """
+            select count(distinct team) from injuries
+            where season = ? and week = ? and game_type = 'REG' and report_status is not null
+            """,
+            [current, wk],
+        ).fetchone()[0]
+
     span = lambda r: [min(r), max(r)]  # noqa: E731
     return {
         "protocol": {
@@ -364,7 +402,10 @@ def lab(
             "status_weights": context.STATUS_WEIGHT,
             "role_games": context.ROLE_GAMES,
             "has_injuries": has_relation(con, "injuries") and has_relation(con, "snaps"),
+            "teams_with_final_statuses": statuses_posted,
+            "teams_playing": 2 * len(upcoming),
         },
+        "market_check": market_check,
         "variants": VARIANTS,
         "labels": LABELS,
         "selection": selection,
