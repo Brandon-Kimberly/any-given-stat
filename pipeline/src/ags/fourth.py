@@ -57,7 +57,7 @@ CAVEAT = (
 def situations_sql() -> str:
     """4th-down population, one row per play, with its bucket and the decision taken."""
     return f"""
-    select season, posteam as team, epa,
+    select game_id, season, posteam as team, epa,
            {bucket_case("ydstogo", DISTANCE_BUCKETS, True)} as distance,
            {bucket_case("ydstogo", DISTANCE_BUCKETS, False)} as dist_ord,
            {bucket_case("yardline_100", FIELD_BUCKETS, True)} as field,

@@ -72,6 +72,15 @@ PBP_COLUMNS: dict[str, tuple[str, object]] = {
     "field_goal_attempt": ("double", 0.0),
     "field_goal_result": ("varchar", None),
     "kick_distance": ("double", None),
+    "total_home_score": ("double", None),
+    "total_away_score": ("double", None),
+    "home_wp_post": ("double", None),
+    "penalty": ("double", 0.0),
+    "penalty_team": ("varchar", None),
+    "penalty_yards": ("double", None),
+    "drive_start_yard_line": ("varchar", None),
+    "drive_end_yard_line": ("varchar", None),
+    "drive_time_of_possession": ("varchar", None),
 }
 
 

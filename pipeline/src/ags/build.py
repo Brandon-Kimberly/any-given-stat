@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
+import contextlib
 import datetime as dt
 import json
 import math
 import sys
+import time
 from decimal import Decimal
 from pathlib import Path
 
 import duckdb
 
-from . import datasets, fourth, games, market, players, ratings
+from . import datasets, fourth, games, market, people, playbyplay, players, ratings, records, sim
 from .config import OUT_DIR
 from .db import has_relation
 from .teams import teams_meta
@@ -33,10 +35,27 @@ def _clean(value):
     return value
 
 
-def write_json(path: Path, payload) -> None:
+def write_json(path: Path, payload, quiet: bool = False) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(_clean(payload), separators=(",", ":")))
-    print(f"wrote {path} ({path.stat().st_size / 1024:.0f} KB)", file=sys.stderr)
+    if not quiet:
+        print(f"wrote {path} ({path.stat().st_size / 1024:.0f} KB)", file=sys.stderr)
+
+
+def write_by_season(out_dir: Path, name: str, rows: list[dict]) -> None:
+    """``name``/<season>.json for each season in ``rows`` (same row shape as the combined
+    file), so pages can load one season at a time."""
+    seasons = sorted({r["season"] for r in rows})
+    for s in seasons:
+        write_json(out_dir / name / f"{s}.json", [r for r in rows if r["season"] == s], True)
+    print(f"wrote {out_dir / name}/ ({len(seasons)} seasons)", file=sys.stderr)
+
+
+@contextlib.contextmanager
+def timed(label: str):
+    start = time.perf_counter()
+    yield
+    print(f"[time] {label}: {time.perf_counter() - start:.1f}s", file=sys.stderr)
 
 
 def season_status(con: duckdb.DuckDBPyConnection) -> list[dict]:
@@ -80,14 +99,33 @@ def build_all(con: duckdb.DuckDBPyConnection, out_dir: Path = OUT_DIR, explorer:
             preds, power = model
             write_json(out_dir / "predictions.json", preds)
             write_json(out_dir / "ratings.json", power)
+            write_by_season(out_dir, "ratings", power)
             params = preds["params"]
+            # --- playoff odds (sim.py) ---
+            with timed("playoff odds"):
+                odds_index = []
+                for season, payload in sim.playoff_odds(con, params):
+                    dest = out_dir / "playoff_odds" / f"{season}.json"
+                    write_json(dest, payload)
+                    odds_index.append(
+                        {"season": season, "file": f"playoff_odds/{dest.name}"}
+                        | {"weeks": payload["weeks"]}
+                    )
+                if odds_index:
+                    write_json(out_dir / "playoff_odds" / "index.json", odds_index)
+                else:
+                    print("skip playoff odds: no team alignment (teams csv)", file=sys.stderr)
             half_life = params["half_life_weeks"] or 1e9
             experiment = market.lab(con, params["lambda"], half_life)
             if experiment is not None:
                 write_json(out_dir / "lab.json", experiment)
     write_json(out_dir / "teams.json", teams)
-    write_json(out_dir / "team_splits.json", datasets.team_splits(con))
-    write_json(out_dir / "team_weeks.json", datasets.team_weeks(con))
+    splits = datasets.team_splits(con)
+    write_json(out_dir / "team_splits.json", splits)
+    write_by_season(out_dir, "team_splits", splits)
+    weeks = datasets.team_weeks(con)
+    write_json(out_dir / "team_weeks.json", weeks)
+    write_by_season(out_dir, "team_weeks", weeks)
     write_json(out_dir / "luck.json", datasets.luck(con))
     qbs = datasets.quarterbacks(con)
     receivers = datasets.receivers(con)
@@ -102,16 +140,20 @@ def build_all(con: duckdb.DuckDBPyConnection, out_dir: Path = OUT_DIR, explorer:
     write_json(out_dir / "receivers.json", receivers)
     write_json(out_dir / "rushers.json", rushers)
     write_json(out_dir / "players.json", directory)
-    write_json(out_dir / "qb_games.json", datasets.qb_games(con))
+    qb_game_rows = datasets.qb_games(con)
+    write_json(out_dir / "qb_games.json", qb_game_rows)
+    write_by_season(out_dir, "qb_games", qb_game_rows)
     team_meta = teams_meta(con)
     if not team_meta:
         print("teams_colors_logos.csv missing: teams_meta.json is empty", file=sys.stderr)
     write_json(out_dir / "teams_meta.json", team_meta)
     write_json(out_dir / "stability.json", datasets.stability(con, complete))
     write_json(out_dir / "concepts.json", datasets.concepts(con, reference))
-    write_json(out_dir / "fourth_downs.json", fourth.fourth_downs(con, reference))
+    fourth_payload = fourth.fourth_downs(con, reference)
+    write_json(out_dir / "fourth_downs.json", fourth_payload)
 
     games_index = []
+    game_summaries = []
     for s in status:
         season_games = games.season_games(con, s["season"])
         dest = out_dir / "games" / f"games_{s['season']}.json"
@@ -119,7 +161,41 @@ def build_all(con: duckdb.DuckDBPyConnection, out_dir: Path = OUT_DIR, explorer:
         games_index.append(
             {"season": s["season"], "file": f"games/{dest.name}", "games": len(season_games)}
         )
+        game_summaries.extend(filter(None, map(records.game_summary, season_games)))
     write_json(out_dir / "games" / "index.json", games_index)
+
+    # --- per-game play-by-play and drives (playbyplay.py) ---
+    with timed("play-by-play files"):
+        for s in status:
+            n = size = 0
+            for game_id, payload in playbyplay.season_games(con, s["season"]):
+                dest = out_dir / "games" / str(s["season"]) / f"{game_id}.json"
+                write_json(dest, payload, quiet=True)
+                n += 1
+                size += dest.stat().st_size
+            print(
+                f"wrote {out_dir / 'games' / str(s['season'])}/ ({n} games, {size / 1e6:.1f} MB)",
+                file=sys.stderr,
+            )
+
+    # --- all-time records, coaches, referees (records.py, people.py) ---
+    with timed("records"):
+        write_json(
+            out_dir / "records.json",
+            records.alltime(
+                con,
+                teams=teams,
+                qbs=qbs,
+                receivers=receivers,
+                rushers=rushers,
+                game_summaries=game_summaries,
+            ),
+        )
+    with timed("coaches + referees"):
+        if not has_relation(con, "schedule"):
+            print("no schedule: coaches.json / referees.json are empty", file=sys.stderr)
+        write_json(out_dir / "coaches.json", people.coaches(con, fourth_payload["buckets"]))
+        write_json(out_dir / "referees.json", people.referees(con))
 
     explorer_files = []
     if explorer:
