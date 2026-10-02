@@ -5,6 +5,8 @@
 	import { navigating, page } from '$app/state';
 	import CommandPalette from '$lib/components/CommandPalette.svelte';
 	import Shortcuts from '$lib/components/Shortcuts.svelte';
+	import BackToTop from '$lib/components/BackToTop.svelte';
+	import { pushRecent } from '$lib/recent';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import SyncControl from '$lib/components/SyncControl.svelte';
 	import Toast from '$lib/components/Toast.svelte';
@@ -57,6 +59,12 @@
 	});
 	afterNavigate((nav) => {
 		if (ready && nav.type !== 'enter') prefsFromUrl(page.url);
+		// Remember teams, players and pages (not home or games) for the search palette.
+		const p = page.url.pathname.slice(base.length);
+		const q = page.url.searchParams;
+		if (p.startsWith('/team/') && q.get('t')) pushRecent(`/team/?t=${q.get('t')}`);
+		else if (p.startsWith('/player/') && q.get('id')) pushRecent(`/player/?id=${q.get('id')}`);
+		else if (p !== '/' && !p.startsWith('/game/')) pushRecent(p);
 		ready = true;
 		openGroup = null;
 		drawer = false;
@@ -78,7 +86,7 @@
 		const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
 		if (mins < 60) return `${Math.max(1, mins)} min ago`;
 		const hrs = Math.round(mins / 60);
-		if (hrs < 48) return `${hrs} h ago`;
+		if (hrs < 48) return `${hrs} hr ago`;
 		return new Date(iso).toLocaleDateString();
 	}
 </script>
@@ -244,9 +252,12 @@
 <main id="main" tabindex="-1">
 	{#if error}
 		<div class="card">
-			<h2>Data not found</h2>
+			<h2>The data couldn't load</h2>
 			<p class="muted">{error}</p>
-			<p>Build it with <code>cd pipeline &amp;&amp; uv run ags build</code>.</p>
+			<p>
+				Try reloading the page. Running the site yourself? Build the data first with
+				<code>.\start.cmd</code> (Windows) or <code>./start.sh</code>.
+			</p>
 		</div>
 	{:else if meta && prefs.season != null}
 		{#key path}
@@ -259,7 +270,21 @@
 	{/if}
 </main>
 
+<BackToTop />
+
 <footer>
+	<nav class="sitemap" aria-label="Site map">
+		{#each navGroups as g (g.label)}
+			<div>
+				<div class="eyebrow">{g.label}</div>
+				<ul>
+					{#each g.items as item (item.href)}
+						<li><a href="{base}{item.href}">{item.label}</a></li>
+					{/each}
+				</ul>
+			</div>
+		{/each}
+	</nav>
 	<div class="foot">
 		<div>
 			<div class="foot-brand">Any Given <b>Stat</b></div>
@@ -584,6 +609,35 @@
 	footer {
 		border-top: 1px solid var(--border);
 		background: var(--surface);
+	}
+	.sitemap {
+		max-width: 1280px;
+		margin: 0 auto;
+		padding: 1.75rem 16px 0;
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+		gap: 1rem 1.5rem;
+	}
+	.sitemap .eyebrow {
+		margin-bottom: 0.35rem;
+	}
+	.sitemap ul {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: 0.1rem;
+	}
+	.sitemap a {
+		display: inline-block;
+		padding: 0.2rem 0;
+		color: var(--text-secondary);
+		text-decoration: none;
+		font-size: 0.88rem;
+	}
+	.sitemap a:hover {
+		color: var(--text-primary);
+		text-decoration: underline;
 	}
 	.foot {
 		max-width: 1280px;

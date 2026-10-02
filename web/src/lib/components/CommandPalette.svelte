@@ -6,13 +6,14 @@
 	import { allPages } from '$lib/nav';
 	import { favorite } from '$lib/favorite.svelte';
 	import { teamMeta } from '$lib/teams.svelte';
+	import { readRecent } from '$lib/recent';
 	import { toggleTheme } from '$lib/theme.svelte';
 	import { copyLink } from '$lib/toast.svelte';
 
 	let { open = $bindable(false) }: { open?: boolean } = $props();
 
 	interface Entry {
-		kind: 'Page' | 'Team' | 'Player' | 'Action';
+		kind: 'Page' | 'Team' | 'Player' | 'Action' | 'Recent';
 		label: string;
 		detail: string;
 		href: string;
@@ -111,8 +112,23 @@
 		return 0;
 	}
 
+	// Empty query: recently opened teams, players and pages first, then every page.
+	let recent = $state<string[]>([]);
+	const recentEntries = $derived.by(() => {
+		const all = [...teams, ...players, ...pages];
+		const path = (h: string) => h.split('&')[0];
+		return recent.flatMap((h) => {
+			const e = all.find((x) => path(x.href) === path(h));
+			return e ? [{ ...e, kind: 'Recent' as const, detail: `${e.kind} · ${e.detail}` }] : [];
+		});
+	});
+
 	const results = $derived.by(() => {
 		const q = query.trim().toLowerCase();
+		if (!q && recentEntries.length) {
+			const seen = new Set(recentEntries.map((e) => e.href));
+			return [...recentEntries, ...pages.filter((p) => !seen.has(p.href))].slice(0, 12);
+		}
 		return [...pages, ...actions, ...teams, ...players]
 			.map((e) => ({ e, s: score(e, q) }))
 			.filter((r) => r.s > 0)
@@ -123,6 +139,7 @@
 
 	$effect(() => {
 		if (open) {
+			recent = readRecent();
 			query = '';
 			active = 0;
 			loadPlayers();
@@ -198,7 +215,7 @@
 					aria-controls="palette-results"
 					aria-activedescendant={results.length ? `palette-${active}` : undefined}
 				/>
-				<kbd>esc</kbd>
+				<kbd>Esc</kbd>
 			</div>
 			<ul id="palette-results" role="listbox">
 				{#each results as r, i (r.kind + r.href)}

@@ -587,3 +587,90 @@ button.ghost:hover {
 	white-space: nowrap;
 	border: 0;
 }
+
+/* ---------- Finishing touches ---------- */
+::selection {
+	background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+@media (prefers-reduced-motion: no-preference) {
+	html {
+		scroll-behavior: smooth;
+	}
+}
+/* Thin, theme-colored scrollbars on scroll containers (tables, feeds, menus). */
+* {
+	scrollbar-width: thin;
+	scrollbar-color: var(--border-strong) transparent;
+}
+a {
+	text-underline-offset: 0.18em;
+	text-decoration-thickness: 1px;
+}
+a:hover {
+	text-decoration-thickness: 2px;
+}
+/* Switching themes crossfades colors instead of snapping (class set briefly by toggleTheme). */
+html.theming,
+html.theming *,
+html.theming *::before,
+html.theming *::after {
+	transition:
+		background-color 0.25s ease,
+		border-color 0.25s ease,
+		color 0.25s ease,
+		fill 0.25s ease,
+		stroke 0.25s ease !important;
+}
+
+/* Hero banners: a soft light that drifts slowly behind the content. */
+.hero,
+.team-hero {
+	position: relative;
+	overflow: hidden;
+	isolation: isolate;
+}
+.hero::before,
+.team-hero::before {
+	content: '';
+	position: absolute;
+	inset: -50%;
+	z-index: -1;
+	background: radial-gradient(
+		closest-side,
+		rgba(255, 255, 255, 0.16),
+		rgba(255, 255, 255, 0.05) 55%,
+		transparent
+	);
+	width: 60%;
+	height: 160%;
+	animation: hero-drift 16s ease-in-out infinite alternate;
+	pointer-events: none;
+}
+@keyframes hero-drift {
+	from {
+		transform: translate(10%, -10%);
+	}
+	to {
+		transform: translate(120%, 15%);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.hero::before,
+	.team-hero::before {
+		animation: none;
+	}
+}
+
+/* Dark mode: a faint top edge so cards read as raised surfaces, not flat patches. */
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme='light']) .card {
+		box-shadow:
+			inset 0 1px 0 rgba(255, 255, 255, 0.04),
+			var(--shadow-sm);
+	}
+}
+:root[data-theme='dark'] .card {
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.04),
+		var(--shadow-sm);
+}

@@ -17,6 +17,10 @@ export function initTheme(): void {
 
 export function toggleTheme(): void {
 	const root = document.documentElement;
+	if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+		root.classList.add('theming');
+		setTimeout(() => root.classList.remove('theming'), 300);
+	}
 	root.dataset.theme = resolve() ? 'light' : 'dark';
 	try {
 		localStorage.setItem('ags-theme', root.dataset.theme);
