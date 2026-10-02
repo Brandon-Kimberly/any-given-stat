@@ -13,6 +13,7 @@ parquet; a static SvelteKit site renders it. No backend.
   - `db.py` also has `scrimmage_plays` (the `plays` filters without the REG-only restriction, for playoff box scores).
   - `src/ags/qb.py`: walk-forward starting-QB adjustment (listed starter vs the QBs behind the team's rating).
   - `src/ags/market.py`: the pre-registered beat-the-line experiment (`VARIANTS`, `THRESHOLDS`, selection rule) → `lab.json`.
+  - `src/ags/lab2.py`: round 2 vs the closing line (`VARIANTS`, `FROZEN` choice committed 2026-10-02; 2024–2025 reported as a *reused* test; games after the freeze are the sealed live test) → `lab2.json`. Features from `context.py` (injuries = role × presence by position group from injury reports + snap counts; rest/bye; time zones; weather as margin compressors; late-season stakes from `sim.py`) and `forecast.py` (Open-Meteo kickoff forecasts for live games; backtests use recorded weather). Never edit `FROZEN` or `VARIANTS` to chase results; a new idea is round 3 with its own freeze.
   - `src/ags/sim.py`: Monte Carlo playoff odds (10,000 sims per week state, ratings fixed within a sim, random tiebreaks) → `playoff_odds/<season>.json` + `index.json`.
   - `src/ags/playbyplay.py`: per-game plays (compact arrays, `PLAYS_COLUMNS`, flag letters) and drives → `games/<season>/<game_id>.json`.
   - `src/ags/records.py` (`records.json`; regular-season OT excluded from WP lists) and `people.py` (`coaches.json`, `referees.json`).
@@ -28,7 +29,7 @@ parquet; a static SvelteKit site renders it. No backend.
   - Shared state: `prefs` (season/scope, synced to `?season=&scope=`), `theme` (re-renders theme-dependent charts), `teamMeta` with `teamColor`/`teamName` (`src/lib/teams.svelte.ts`). Site map in `src/lib/nav.ts`.
   - `src/lib/presets.ts`: SQL explorer presets (template literals; `test_presets.py` parses them with a regex, so keep the `title: '...'` / `sql: \`...\`` shape).
   - `src/lib/duck.ts`: DuckDB-WASM, self-hosted engine; the parquet extension is fetched from extensions.duckdb.org at runtime.
-- `data/raw/`: downloaded nflverse parquet (gitignored). `web/static/data/`: generated (gitignored).
+- `data/raw/`: downloaded nflverse parquet, incl. `injuries_<season>` and `snap_counts_<season>` (gitignored). `web/static/data/`: generated (gitignored).
 
 ## Commands
 

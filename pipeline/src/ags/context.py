@@ -69,7 +69,7 @@ def injury_impacts(
     earlier games only. Empty when the injury or snap data isn't loaded.
     """
     out: dict[tuple[int, int, str], dict] = {}
-    if not (has_relation(con, "injuries") and has_relation(con, "snaps")):
+    if not all(has_relation(con, v) for v in ("injuries", "snaps", "players")):
         return out
     snap_rows = records(
         con,

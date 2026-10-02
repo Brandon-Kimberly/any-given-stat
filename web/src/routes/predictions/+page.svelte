@@ -4,14 +4,16 @@
 	import DataTable, { type Column } from '$lib/components/DataTable.svelte';
 	import PlotFigure from '$lib/components/Plot.svelte';
 	import LoadError from '$lib/components/LoadError.svelte';
+	import Round2 from '$lib/components/Round2.svelte';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import { load } from '$lib/data';
 	import { num, pct, signed, spread } from '$lib/format';
 	import { gridX, gridY, Plot, plotStyle, thinTicks } from '$lib/plot';
-	import type { BacktestStats, GamePrediction, Lab, LabRow, Predictions } from '$lib/types';
+	import type { BacktestStats, GamePrediction, Lab, Lab2, LabRow, Predictions } from '$lib/types';
 
 	let data = $state.raw<Predictions>();
 	let lab = $state.raw<Lab>();
+	let lab2 = $state.raw<Lab2>();
 	let error = $state<string | null>(null);
 	load('predictions')
 		.then((p) => (data = p))
@@ -19,6 +21,9 @@
 	load('lab')
 		.then((l) => (lab = l))
 		.catch(() => {}); // optional: absent in partial builds
+	load('lab2')
+		.then((l) => (lab2 = l))
+		.catch(() => {});
 
 	const test = $derived(data?.summary.find((s) => s.split === 'test'));
 	const [t0, t1] = $derived(data?.params.test_seasons ?? [0, 0]);
@@ -249,7 +254,7 @@
 			...r,
 			label: r.threshold ? `${r.variant}, ${r.threshold}+ pt gap` : `${r.variant}, every game`,
 			chosen: r.variant === lab?.chosen?.variant && r.threshold === lab?.chosen?.threshold,
-			mae_gap: r.val_mae - r.val_vegas_mae
+			mae_gap: (r.val_mae ?? 0) - (r.val_vegas_mae ?? 0)
 		}))
 	);
 	const labColumns: Column<LabView>[] = [
@@ -423,6 +428,8 @@
 		</div>
 	{/if}
 
+	{#if lab2}<Round2 lab={lab2} />{/if}
+
 	<div class="card">
 		<div class="toolbar" style="margin-bottom: 0.5rem">
 			<h2 style="margin: 0">Every prediction</h2>
@@ -473,8 +480,10 @@
 			returning. Only adjustments of 1+ point are listed.
 		</p>
 		<p class="muted">
-			What the market still knows that this doesn't: other injuries, weather, motivation, and the
-			collective information of everyone betting. That's why the line still wins.
+			Injuries beyond the QB, travel, weather and late-season motivation are tested in <a
+				href="#round2">round 2</a
+			>. What no public dataset has is the collective information of everyone betting, and the early
+			lines sharp bettors beat before the market settles.
 		</p>
 	</div>
 {/if}

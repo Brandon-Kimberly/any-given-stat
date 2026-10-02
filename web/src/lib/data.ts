@@ -5,6 +5,7 @@ import type {
 	FourthDowns,
 	GameIndexEntry,
 	Lab,
+	Lab2,
 	Player,
 	PlayoffIndexEntry,
 	QBGame,
@@ -37,6 +38,7 @@ export interface Datasets {
 	ratings: Rating[];
 	team_splits: TeamSplit[];
 	lab: Lab;
+	lab2: Lab2;
 	teams_meta: TeamMeta[];
 	players: Player[];
 	concepts: Concepts;

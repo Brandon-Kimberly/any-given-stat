@@ -255,8 +255,8 @@ export interface TeamSplit {
 
 export interface BetScore {
 	games: number;
-	mae: number;
-	vegas_mae: number;
+	mae: number | null;
+	vegas_mae: number | null;
 	bets: number;
 	wins: number;
 	win_rate: number | null;
@@ -629,4 +629,71 @@ export type RefCareer = RefStats & { seasons: number; first: number; last: numbe
 export interface Referees {
 	seasons: RefSeason[];
 	careers: RefCareer[];
+}
+
+export interface Lab2Game {
+	game_id: string;
+	week: number;
+	gameday: string;
+	home: string;
+	away: string;
+	vegas: number | null;
+	/** Predicted home margin. */
+	model: number;
+	result: number | null;
+	/** Team the model bets on (|model - line| >= threshold), else null. */
+	bet: string | null;
+	won: boolean | null;
+	/** Kicked off after the freeze date: part of the clean test. */
+	sealed: boolean;
+}
+
+export interface Lab2Upcoming extends Lab2Game {
+	factors: { feature: string; label: string; points: number }[];
+	injuries: Record<
+		'home' | 'away',
+		{ name: string; pos: string; status: string; impact: number }[]
+	>;
+	weather: {
+		roof: string | null;
+		temp: number | null;
+		wind: number | null;
+		source: 'recorded' | 'forecast' | null;
+	};
+}
+
+export interface Lab2 {
+	protocol: Lab['protocol'] & {
+		freeze_date: string;
+		live_season: number;
+		status_weights: Record<string, number>;
+		role_games: number;
+		has_injuries: boolean;
+		teams_with_final_statuses: number | null;
+		teams_playing: number;
+	};
+	market_check: {
+		feature: string;
+		label: string;
+		vs_ratings: number;
+		vs_ratings_se: number;
+		vs_line: number;
+		vs_line_se: number;
+		share_nonzero: number;
+	}[];
+	variants: Record<string, string[]>;
+	labels: Record<string, string>;
+	selection: (Omit<LabRow, 'beta'> & { beta?: number[] })[];
+	chosen: { variant: string; threshold: number };
+	selection_agrees: boolean;
+	test: BetScore;
+	coefficients: {
+		feature: string;
+		label: string;
+		beta: number;
+		se: number;
+		typical_points: number;
+	}[];
+	live: { pre_freeze: BetScore; sealed: BetScore; games: Lab2Game[] };
+	upcoming: Lab2Upcoming[];
 }

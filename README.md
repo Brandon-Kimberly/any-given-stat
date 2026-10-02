@@ -49,6 +49,11 @@ Measured on 2016–2025 regular seasons, garbage time excluded (see *Signal vs n
   the 52.4% break-even. Models given the line as an input put ~95% weight on it and add nothing.
 - **Luck reverses.** Teams that beat their Pythagorean record by 2+ wins averaged about 3 fewer wins the
   next season.
+- **Injuries matter, and the line mostly knows it.** Each full-time starter out (beyond the QB) is
+  worth about −0.9 points against team ratings; beyond the closing line the effect shrinks to
+  −0.5 ± 0.2, and a pre-registered round 2 adding injuries, travel, weather and late-season stakes
+  went 68–65 (51.1%) on 2024–2025, below the 52.4% break-even. Its choice was frozen in a commit
+  before any result was computed; every game after 2026-10-02 is a sealed, live test on the site.
 - **Preseason playoff odds are nearly worthless.** Scored against 2017–2025 outcomes, simulated odds
   before week 1 improve on "every team has the league-average chance" by only 6% (Brier skill); by
   week 8 it's 45%.
