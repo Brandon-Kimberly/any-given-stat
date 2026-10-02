@@ -5,15 +5,25 @@
 	import PlotFigure from '$lib/components/Plot.svelte';
 	import LoadError from '$lib/components/LoadError.svelte';
 	import Round2 from '$lib/components/Round2.svelte';
+	import Round3 from '$lib/components/Round3.svelte';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import { load } from '$lib/data';
 	import { num, pct, signed, spread } from '$lib/format';
 	import { gridX, gridY, Plot, plotStyle, thinTicks } from '$lib/plot';
-	import type { BacktestStats, GamePrediction, Lab, Lab2, LabRow, Predictions } from '$lib/types';
+	import type {
+		BacktestStats,
+		GamePrediction,
+		Lab,
+		Lab2,
+		Lab3,
+		LabRow,
+		Predictions
+	} from '$lib/types';
 
 	let data = $state.raw<Predictions>();
 	let lab = $state.raw<Lab>();
 	let lab2 = $state.raw<Lab2>();
+	let lab3 = $state.raw<Lab3>();
 	let error = $state<string | null>(null);
 	load('predictions')
 		.then((p) => (data = p))
@@ -23,6 +33,9 @@
 		.catch(() => {}); // optional: absent in partial builds
 	load('lab2')
 		.then((l) => (lab2 = l))
+		.catch(() => {});
+	load('lab3')
+		.then((l) => (lab3 = l))
 		.catch(() => {});
 
 	const test = $derived(data?.summary.find((s) => s.split === 'test'));
@@ -37,6 +50,7 @@
 		matchup: string;
 		model_line: string;
 		vegas_line: string;
+		best_line: string;
 		diff: number | null;
 		favorite_wp: string;
 		qb_note: string;
@@ -61,6 +75,7 @@
 			matchup: `${g.away} ${g.neutral ? 'vs' : '@'} ${g.home}`,
 			model_line: spread(g.model, g.home, g.away),
 			vegas_line: spread(g.vegas, g.home, g.away),
+			best_line: g.blend == null ? '–' : spread(g.blend, g.home, g.away),
 			diff: g.vegas == null ? null : Math.abs(g.model - g.vegas),
 			favorite_wp:
 				g.home_wp >= 0.5 ? `${g.home} ${pct(g.home_wp, 0)}` : `${g.away} ${pct(1 - g.home_wp, 0)}`,
@@ -74,6 +89,12 @@
 		{ key: 'gameday', label: 'Date' },
 		{ key: 'model_line', label: 'Model line' },
 		{ key: 'vegas_line', label: 'Vegas line' },
+		{
+			key: 'best_line',
+			label: 'Best estimate',
+			title:
+				'The line plus a fitted share of the model’s disagreement: as accurate as the line, in tests'
+		},
 		{
 			key: 'diff',
 			label: 'Disagreement',
@@ -226,6 +247,7 @@
 					matchup: `Wk ${g.week}: ${g.away} ${g.neutral ? 'vs' : '@'} ${g.home}`,
 					model_line: spread(g.model, g.home, g.away),
 					vegas_line: spread(g.vegas, g.home, g.away),
+					best_line: g.blend == null ? '–' : spread(g.blend, g.home, g.away),
 					diff: g.vegas == null ? null : Math.abs(g.model - g.vegas),
 					favorite_wp: '',
 					qb_note: qbNote(g),
@@ -289,15 +311,15 @@
 	<div class="eyebrow">Games</div>
 	<h1>Predictions vs Vegas</h1>
 	<p class="lede">
-		Point spreads from opponent-adjusted EPA <a href="{base}/ratings/">power ratings</a> plus a
-		starting-quarterback adjustment, next to the Vegas line. Every game is predicted using only
-		games played before it.
+		Point spreads from two opponent-adjusted <a href="{base}/ratings/">team ratings</a> (EPA per
+		play and final scores), the starting quarterback and the injury report, next to the Vegas line.
+		Every game is predicted using only games played before it.
 		{#if data}
 			Coefficients were fit on {data.params.fit_seasons.join('–')}, choices made on
 			{data.params.validate_seasons.join('–')}, and {t0}–{t1} was held back as a final test.
 		{/if}
-		The honest result: it gets closer to the closing line but doesn't beat it. See
-		<a href="#lab">the attempt</a> below.
+		The honest result: it gets close to the closing line but doesn't beat it. See
+		<a href="#round3">how accurate it is</a> and <a href="#lab">the attempts to beat the line</a>.
 	</p>
 </section>
 
@@ -323,6 +345,8 @@
 			/>
 		</div>
 	{/if}
+
+	{#if lab3}<Round3 lab={lab3} />{/if}
 
 	{#if test}
 		<div class="tiles">
@@ -460,16 +484,29 @@
 	<div class="card">
 		<h2>How the model works</h2>
 		<p>
-			Each team-game becomes a row: the offense's EPA/play, explained by an offense rating, the
-			opposing defense's rating and home field. A ridge regression (penalty {num(
-				data.params.lambda
-			)}
+			<strong>EPA ratings.</strong> Each team-game becomes a row: the offense's EPA/play, explained
+			by an offense rating, the opposing defense's rating and home field. A ridge regression
+			(penalty {num(data.params.lambda)}
 			plays, the equivalent of padding every team with that many plays of average football) fits it, weighting
 			recent games more (half-life
 			{data.params.half_life_weeks ? `${data.params.half_life_weeks} weeks` : 'none'}, with last
-			season fading in). Ratings convert to points at
-			{num(data.params.points_per_epa, 0)} points per EPA/play of rating gap, plus
-			{num(data.params.home_points, 1)} points for home field. Garbage time is excluded.
+			season fading in). Garbage time is excluded.
+		</p>
+		<p>
+			<strong>Points ratings.</strong> The same idea on final margins: a ridge regression of each game's
+			home margin on team strengths and home field, recency-weighted. Noisier than EPA, but it measures
+			the thing being predicted, including special teams and the full value of turnovers.
+		</p>
+		<p>
+			<strong>Injuries.</strong> Each player listed Out or Doubtful (a quarter of each Questionable one)
+			counts by his snap share times how much of the team's recent play he was part of, so absences the
+			ratings already absorbed aren't counted twice.
+		</p>
+		<p>
+			<strong>Putting it together.</strong> A regression of the final margin on both rating gaps,
+			the QB adjustment, injuries and home field turns them into points{#if lab3}
+				(weights in <a href="#round3">round 3</a>){/if}; win probabilities assume the margin varies
+			around that by σ = {num(data.params.sigma, 1)} points.
 		</p>
 		<p>
 			<strong>Quarterback adjustment.</strong> Team ratings bake in whoever played QB recently. For

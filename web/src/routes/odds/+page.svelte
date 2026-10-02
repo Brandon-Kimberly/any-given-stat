@@ -235,6 +235,54 @@
 	});
 	const skill = $derived(skillByWeek(history));
 	let calWeek = $state(0);
+
+	// Old vs new simulator, season by season (lab3.json records v1's scores).
+	const lab3 = resource('lab3');
+	const tauPre = $derived(odds?.model?.tau_preseason ?? 0);
+	const tauLate = $derived(odds?.model?.tau_late ?? 0);
+	const versions = $derived(
+		(lab3.value?.sim.seasons ?? []).filter(
+			(s) => s.brier_playoffs != null && s.v1_brier_playoffs != null
+		)
+	);
+	const v2Mean = $derived(
+		versions.reduce((a, s) => a + s.brier_playoffs!, 0) / (versions.length || 1)
+	);
+	const v1Mean = $derived(
+		versions.reduce((a, s) => a + s.v1_brier_playoffs!, 0) / (versions.length || 1)
+	);
+	function versionChart(width: number) {
+		const rows = versions.flatMap((s) => [
+			{ season: s.season, brier: s.v1_brier_playoffs!, who: 'Old simulator' },
+			{ season: s.season, brier: s.brier_playoffs!, who: 'Current simulator' }
+		]);
+		return Plot.plot({
+			width,
+			height: 240,
+			style: plotStyle,
+			marginLeft: 48,
+			x: { label: null, tickFormat: 'd', ticks: versions.map((s) => s.season) },
+			y: { label: '↓ Brier score, make the playoffs (lower is better)', zero: false },
+			color: {
+				domain: ['Old simulator', 'Current simulator'],
+				range: ['var(--neutral-mark)', 'var(--series-1)'],
+				legend: true
+			},
+			marks: [
+				gridY(),
+				Plot.line(rows, { x: 'season', y: 'brier', stroke: 'who', strokeWidth: 2 }),
+				Plot.dot(rows, { x: 'season', y: 'brier', fill: 'who', r: 3.5 }),
+				Plot.tip(
+					rows,
+					Plot.pointer({
+						x: 'season',
+						y: 'brier',
+						title: (d: (typeof rows)[number]) => `${d.season} ${d.who}: ${d.brier.toFixed(4)}`
+					})
+				)
+			]
+		});
+	}
 	const cal = $derived(calibration(history, calWeek));
 	const pre = $derived(skill.find((s) => s.week === 0));
 	const mid = $derived(skill.find((s) => s.week === 8));
@@ -348,8 +396,8 @@
 	{#if isFinal}
 		<div class="callout info" role="note">
 			Regular season over: playoff and division columns show what actually happened (✓). Bye and
-			title odds are still simulated, and the simulation breaks ties in the standings at random (the
-			NFL's tiebreakers aren't modeled).
+			title odds are still simulated; the simulator's tiebreakers approximate the NFL's (common
+			games and some multi-team wild-card steps aren't modeled).
 		</div>
 	{/if}
 
@@ -463,9 +511,7 @@
 				{#if pre}Preseason odds have a skill of <b>{Math.round(pre.skill * 100)}%</b>: barely better
 					than knowing nothing about the teams.{/if}
 				{#if mid}By week 8 it's <b>{Math.round(mid.skill * 100)}%</b>.{/if}
-				The ratings are held fixed for the rest of each simulated season, so the odds are a little overconfident
-				at the extremes: dots below the diagonal on the right mean "favorites" made it less often than
-				forecast.
+				Points near the diagonal mean a "70%" made it about 70% of the time.
 			</p>
 			<div class="grid-2">
 				<div>
@@ -487,12 +533,29 @@
 		{/if}
 	</section>
 
+	{#if versions.length}
+		<section class="card">
+			<h2>Old simulator vs current</h2>
+			<p class="sub">
+				Average Brier score {versions[0].season}–{versions.at(-1)?.season}: {v2Mean.toFixed(4)} now vs
+				{v1Mean.toFixed(4)} before (EPA ratings only, fixed ratings, coin-flip tiebreaks). The current
+				version's uncertainty setting was tuned on 2017–2021, so later seasons are the fair comparison.
+			</p>
+			<PlotFigure
+				label="Playoff-odds Brier score by season, old and current simulator"
+				render={versionChart}
+			/>
+		</section>
+	{/if}
+
 	<p class="muted small method">
-		How it works: each unplayed game's margin is drawn from a normal distribution centered on the
-		<a href="{base}/predictions/">spread model</a>'s rating difference plus home field (σ = the
-		model's error), using ratings fit only on games already played. Seeding uses win percentage with
-		random tiebreaks; the bracket reseeds. The starting-QB adjustment is left out because future
-		starters are unknown.
+		How it works: each unplayed game's margin is drawn around the
+		<a href="{base}/predictions/#round3">round-3 forecast</a>'s rating difference (EPA and points
+		ratings, fit only on games already played) plus home field; next week's games use the betting
+		line nudged by the model. Each simulated season also draws how wrong each team's rating might be
+		(σ {num(tauPre, 1)} points preseason, {num(tauLate, 1)} by season's end, tuned on 2017–2021), so a
+		team's games move together, as they do in reality. Seeding follows the NFL's tiebreakers: head-to-head,
+		division or conference record, strength of victory and schedule. The bracket reseeds.
 	</p>
 {/if}
 

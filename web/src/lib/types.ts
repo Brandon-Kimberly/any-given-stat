@@ -194,6 +194,8 @@ export interface GamePrediction {
 	home_qb: string | null;
 	away_qb: string | null;
 	result?: number;
+	/** Market blend (line + k * (model - line)): the best single estimate. */
+	blend?: number;
 }
 
 export interface BacktestStats {
@@ -219,6 +221,10 @@ export interface Predictions {
 		fit_seasons: [number, number];
 		validate_seasons: [number, number];
 		test_seasons: [number, number];
+		/** The frozen round-3 forecast that produced `model` (lab3.json). */
+		model?: string | null;
+		/** Market blend weight: line + k * (model - line). */
+		blend_k?: number;
 	};
 	summary: (BacktestStats & { split: 'fit' | 'validate' | 'test' })[];
 	by_season: (BacktestStats & { season: number })[];
@@ -487,6 +493,15 @@ export interface PlayoffOdds {
 	byes: number;
 	weeks: number[];
 	rows: PlayoffOddsRow[];
+	/** The simulator's game model (v2). */
+	model?: {
+		b_epa: number;
+		b_mov: number;
+		b_home: number;
+		sigma: number;
+		tau_preseason: number;
+		tau_late: number;
+	};
 	/** What actually happened, once the season is over. */
 	actual: Record<
 		string,
@@ -696,4 +711,86 @@ export interface Lab2 {
 	}[];
 	live: { pre_freeze: BetScore; sealed: BetScore; games: Lab2Game[] };
 	upcoming: Lab2Upcoming[];
+}
+
+export interface ForecastMetrics {
+	games: number;
+	rmse?: number;
+	mae?: number;
+	log_loss?: number;
+	brier?: number;
+	winner?: number;
+}
+
+export interface PairedDiff {
+	games: number;
+	/** Mean (squared error of a) - (squared error of b); negative favors a. */
+	diff: number;
+	se: number;
+}
+
+export type Lab3Split = Record<
+	'round3' | 'blend' | 'vegas' | 'round2' | 'round1',
+	ForecastMetrics
+> &
+	Record<'round3_vs_vegas' | 'round3_vs_round1' | 'blend_vs_vegas', PairedDiff | null>;
+
+export interface Lab3 {
+	protocol: {
+		fit_seasons: [number, number];
+		validate_seasons: [number, number];
+		test_seasons: [number, number];
+		freeze_date: string;
+		live_season: number;
+	};
+	variants: Record<string, string[]>;
+	labels: Record<string, string>;
+	selection: ({ variant: string; features: number; sigma: number } & {
+		[K in keyof Required<ForecastMetrics> as `fit_${K}` | `val_${K}`]: number;
+	})[];
+	chosen: { variant: string };
+	selection_agrees: boolean;
+	sigma: number;
+	blend_k: number;
+	coefficients: {
+		feature: string;
+		label: string;
+		beta: number;
+		se: number;
+		typical_points: number;
+	}[];
+	comparison: Record<'fit' | 'validate' | 'test' | 'pre_freeze' | 'sealed', Lab3Split>;
+	by_season: {
+		season: number;
+		round3: number | null;
+		vegas: number | null;
+		round1: number | null;
+		games: number;
+	}[];
+	sim: {
+		b_epa: number;
+		b_mov: number;
+		b_home: number;
+		sigma: number;
+		seasons: {
+			season: number;
+			brier_playoffs: number | null;
+			brier_division: number | null;
+			v1_brier_playoffs: number | null;
+			v1_brier_division: number | null;
+		}[];
+	};
+	upcoming: {
+		game_id: string;
+		week: number;
+		home: string;
+		away: string;
+		vegas: number | null;
+		model: number;
+		blend: number;
+		home_wp: number;
+		blend_wp: number;
+		factors: { feature: string; label: string; points: number }[];
+		injuries: Lab2Upcoming['injuries'];
+	}[];
 }
