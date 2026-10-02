@@ -78,9 +78,10 @@
 	<div class="eyebrow">Games</div>
 	<h1>Scores & game charts</h1>
 	<p class="lede">
-		Every game's win probability, play by play. The line in each card is the home team's chance of
-		winning; the more it swings, the higher the excitement index (total win-probability movement).
-		Open a game for the full chart and the plays that decided it.
+		Every game's win probability, play by play. The line in each card is the home team's win
+		probability (above the middle = home team favored). The more it swings, the higher the
+		excitement index (total win-probability movement). Open a game for the full chart and the plays
+		that decided it.
 	</p>
 </section>
 
@@ -149,7 +150,7 @@
 	<div class="grid-2">
 		<div class="card">
 			<h2>Most exciting games of {prefs.season}</h2>
-			<p class="sub">Ranked by total win-probability movement.</p>
+			<p class="sub">Ranked by total win-probability movement (median game ≈ 3.7).</p>
 			<ol class="rank">
 				{#each best as g (g.game_id)}
 					<li>

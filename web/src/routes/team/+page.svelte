@@ -324,7 +324,7 @@
 					30
 				)
 			},
-			y: { label: '↑ Net rating (points)', tickFormat: signedTick },
+			y: { label: '↑ Power rating (points)', tickFormat: signedTick },
 			marks: [
 				gridY(),
 				Plot.ruleY([0], { stroke: 'var(--axis)' }),
@@ -437,7 +437,7 @@
 			title="Your team gets a gold ring everywhere on the site and a card on the home page"
 		>
 			<span aria-hidden="true">{favorite.team === team ? '★' : '☆'}</span>
-			{favorite.team === team ? 'My team' : 'Make my team'}
+			{favorite.team === team ? 'My team' : 'Set as my team'}
 		</button>
 	</div>
 </section>
@@ -510,7 +510,7 @@
 			<p class="sub">
 				League rank on the traits that define a team ({prefs.scope === 'all'
 					? 'all plays'
-					: 'garbage time excluded'}).
+					: 'no garbage time'}).
 			</p>
 			<div class="ident">
 				<div>
@@ -562,7 +562,7 @@
 			<h2>{info?.division ?? 'Division'}</h2>
 			<p class="sub">Standings with point differential and current power rating.</p>
 			<table class="div">
-				<thead><tr><th>Team</th><th>W–L</th><th>Diff</th><th>Power</th></tr></thead>
+				<thead><tr><th>Team</th><th>W–L</th><th>Diff</th><th>Rating</th></tr></thead>
 				<tbody>
 					{#each division as d (d.team)}
 						<tr class:me={d.team === team}>
@@ -584,7 +584,10 @@
 	<div class="grid-2">
 		<div class="card">
 			<h2>Week by week</h2>
-			<p class="sub">Dots are single games; lines are a trailing 4-game average. All plays.</p>
+			<p class="sub">
+				Dots are single games; lines are 4-game rolling averages. All plays. Offense: higher is
+				better; defense: lower is better.
+			</p>
 			{#if games.length}<PlotFigure label="Weekly EPA per play" render={weekly} />{/if}
 		</div>
 		<div class="card">
@@ -609,7 +612,7 @@
 		<p class="sub">
 			EPA/play by situation with league rank (1 = best{splitSide === 'def'
 				? ', i.e. allowed the least'
-				: ''}). All regulation plays. Score is from the {splitSide === 'off'
+				: ''}). Regulation plays, garbage time included. Score is from the {splitSide === 'off'
 				? 'offense'
 				: 'defense'}'s point of view. Small buckets are noisy; check the play counts.
 		</p>
@@ -619,9 +622,9 @@
 					<caption>{g.name}</caption>
 					<thead>
 						<tr
-							><th></th><th class="num">Plays</th><th class="num">EPA</th><th class="num">SR</th><th
-								class="num">Rank</th
-							></tr
+							><th></th><th class="num">Plays</th><th class="num">EPA</th><th class="num"
+								>Success</th
+							><th class="num">Rank</th></tr
 						>
 					</thead>
 					<tbody>

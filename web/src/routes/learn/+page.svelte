@@ -360,8 +360,7 @@
 				Plot.text(b, {
 					x: 'field',
 					y: 'distance',
-					text: (d: FourthBucket) =>
-						narrow ? d.best!.toUpperCase().slice(0, 2) : DECISION[d.best!],
+					text: (d: FourthBucket) => (narrow ? SHORT[d.best!] : DECISION[d.best!]),
 					fill: '#fff',
 					fontWeight: 700,
 					fontSize: narrow ? 9 : 10.5
@@ -388,8 +387,8 @@
 	<h1>How football works, in numbers</h1>
 	<p class="lede">
 		Five ideas that explain most of modern football analytics, each measured from every play
-		{c ? `${c.seasons[0]}–${c.seasons[1]}` : 'since 2016'}. Understand these and you understand why
-		coaches go for it more, pass more, and why some teams' records lie.
+		{c ? `${c.seasons[0]}–${c.seasons[1]}` : 'since 2016'}. Understand these and you'll see why
+		coaches go for it more and pass more.
 	</p>
 	<nav class="toc" aria-label="Lessons">
 		<a href="#ep">1 · Expected points</a>
@@ -479,8 +478,8 @@
 		<p class="takeaway">
 			<strong>Takeaway:</strong> passing produced more EPA per play in {passWins} of {c.situations
 				.length} situations. Running holds up mainly in short yardage, where it's efficient and safe.
-			Teams still run often on early downs, which is why “pass rate over expected” is a coaching-aggressiveness
-			stat.
+			Teams still run often on early downs. That gap is why pass rate over expected (PROE) measures coaching
+			aggressiveness.
 		</p>
 	</section>
 
@@ -525,8 +524,8 @@
 			<h3 style="margin-top: 1rem">What actually paid off</h3>
 			<p class="muted small">
 				For each distance and field position, the decision with the highest average EPA over
-				{fourthRes.value.meta.reference_seasons?.join('–')}. Solid = a clear edge (0.3+ EPA, or the
-				only option with data); outlined with “?” = a close call.
+				{fourthRes.value.meta.reference_seasons?.join('–')}. Darker = a bigger edge. Faint = a close
+				call (under 0.3 EPA) or only one option with data.
 				{fourthRes.value.meta.caveat}
 			</p>
 			<PlotFigure

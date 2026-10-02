@@ -38,7 +38,7 @@ order by epa_per_db desc`
 	},
 	{
 		title: 'Neutral early-down pass rate',
-		question: 'Who passes on early downs when the game is close (the analytics-approved choice)?',
+		question: 'Who passes on early downs when the game is close?',
 		sql: `select posteam as team,
        count(*) as plays,
        round(avg(pass), 3) as pass_rate,
@@ -68,7 +68,7 @@ order by 1`
 	},
 	{
 		title: 'Does wind hurt passing?',
-		question: 'Pass EPA by wind speed in outdoor games.',
+		question: 'How much does wind cut passing EPA outdoors?',
 		sql: `select case when wind is null then 'unknown'
             when wind < 5 then '0-4 mph'
             when wind < 10 then '5-9 mph'
@@ -102,7 +102,7 @@ order by min(air_yards)`
 	},
 	{
 		title: 'Biggest plays by win probability',
-		question: 'The plays that swung games the most.',
+		question: 'Which plays swung games the most?',
 		sql: `select season, week, posteam as offense, defteam as defense, qtr,
        round(wpa, 3) as wpa, round(epa, 2) as epa, "desc"
 from pbp

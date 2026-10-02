@@ -101,9 +101,15 @@
 			title: 'Weighted opportunity: 1.5 × target share + 0.7 × air yards share'
 		},
 		{ key: 'adot', label: 'aDOT', fmt: (v) => num(v, 1) },
-		{ key: 'epa_target', label: 'EPA/tgt', fmt: epa, better: 'high' },
+		{ key: 'epa_target', label: 'EPA/tgt', fmt: epa, better: 'high', title: 'EPA per target' },
 		{ key: 'total_epa', label: 'Total EPA', fmt: (v) => signed(v), better: 'high' },
-		{ key: 'success_rate', label: 'Success', fmt: pct, better: 'high' },
+		{
+			key: 'success_rate',
+			label: 'Success',
+			fmt: pct,
+			better: 'high',
+			title: 'Share of targets with positive EPA'
+		},
 		{
 			key: 'catch_rate_oe',
 			label: 'Catch% OE',
@@ -127,8 +133,8 @@
 	<div class="eyebrow">Players</div>
 	<h1>Receivers</h1>
 	<p class="lede">
-		Usage is a role: target share and air yards share (combined as WOPR) describe how an offense is
-		built around a player. Per-target efficiency is one of the noisiest stats measured on
+		Usage reflects role: target share and air yards share (combined as WOPR) describe how an offense
+		is built around a player. Per-target efficiency is one of the noisiest stats measured on
 		<a href="{base}/stability/">Signal vs noise</a>, so don't over-read a great EPA per target on a
 		small sample.
 	</p>

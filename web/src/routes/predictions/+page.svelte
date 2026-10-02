@@ -27,7 +27,7 @@
 	let error = $state<string | null>(null);
 	load('predictions')
 		.then((p) => (data = p))
-		.catch(() => (error = 'Predictions need seasons 2016–2021 in the build (uv run ags build).'));
+		.catch(() => (error = 'Couldn’t load predictions.'));
 	load('lab')
 		.then((l) => (lab = l))
 		.catch(() => {}); // optional: absent in partial builds
@@ -93,13 +93,13 @@
 			key: 'best_line',
 			label: 'Best estimate',
 			title:
-				'The line plus a fitted share of the model’s disagreement: as accurate as the line, in tests'
+				'The Vegas line moved partway toward the model. In tests, about as accurate as the line alone.'
 		},
 		{
 			key: 'diff',
 			label: 'Disagreement',
 			fmt: (v) => (v == null ? '–' : `${num(v, 1)} pts`),
-			title: 'Absolute gap between the model and the closing line'
+			title: 'Gap between the model and the Vegas line, in points'
 		},
 		{ key: 'favorite_wp', label: 'Model win prob' },
 		{
@@ -255,7 +255,7 @@
 						g.result === 0 ? 'Tie' : `${g.result > 0 ? g.home : g.away} by ${Math.abs(g.result)}`,
 					model_err: Math.abs(g.model - g.result),
 					vegas_err: g.vegas == null ? null : Math.abs(g.vegas - g.result),
-					ats: !side || !actual ? 'No bet / push' : side === actual ? 'Win' : 'Loss'
+					ats: !side || !actual ? 'Push / no pick' : side === actual ? 'Won' : 'Lost'
 				};
 			})
 	);
@@ -263,11 +263,19 @@
 		{ key: 'matchup', label: 'Game', sticky: true },
 		{ key: 'model_line', label: 'Model' },
 		{ key: 'vegas_line', label: 'Vegas' },
-		{ key: 'qb_note', label: 'QB adj' },
+		{
+			key: 'qb_note',
+			label: 'QB adj',
+			title: 'Points added for the listed starter vs the QBs behind the team’s rating'
+		},
 		{ key: 'final', label: 'Final' },
 		{ key: 'model_err', label: 'Model miss', fmt: (v) => num(v, 1), better: 'low' },
 		{ key: 'vegas_err', label: 'Vegas miss', fmt: (v) => num(v, 1), better: 'low' },
-		{ key: 'ats', label: 'Model ATS' }
+		{
+			key: 'ats',
+			label: 'Model ATS',
+			title: 'Would a bet on the model’s side of the Vegas line have won?'
+		}
 	];
 
 	type LabView = LabRow & { label: string; chosen: boolean; mae_gap: number };
@@ -332,8 +340,8 @@
 		<div class="card">
 			<h2>Week {nextWeek.week}, {nextWeek.season}</h2>
 			<p class="sub">
-				Sorted by disagreement with Vegas. Win probabilities assume the final margin varies around
-				the prediction with a standard deviation of {num(data.params.sigma, 1)} points.
+				Sorted by disagreement with Vegas. Win probabilities assume the real margin misses the
+				prediction by about {num(data.params.sigma, 1)} points (one standard deviation).
 			</p>
 			<DataTable
 				rows={picks}
@@ -351,7 +359,7 @@
 	{#if test}
 		<div class="tiles">
 			<div class="card tile">
-				<div class="label">Average miss, {t0}–{t1} (held out)</div>
+				<div class="label">Average miss, {t0}–{t1} test seasons</div>
 				<div class="value"><CountUp text={`${num(test.model_mae, 2)} pts`} /></div>
 				<div class="note">Vegas: {num(test.vegas_mae, 2)} pts ({test.games} games)</div>
 			</div>
@@ -364,14 +372,14 @@
 				<div class="label">Against the spread</div>
 				<div class="value"><CountUp text={`${test.ats_w}–${test.ats_l}`} /></div>
 				<div class="note">
-					{pct(atsPct(test))}; break-even at −110 is {pct(BREAKEVEN)}
+					{pct(atsPct(test))}; {pct(BREAKEVEN)} needed to profit at −110
 				</div>
 			</div>
 			<div class="card tile">
 				<div class="label">When it disagrees by 3+ points</div>
 				<div class="value"><CountUp text={`${test.edge3_w}–${test.edge3_l}`} /></div>
 				<div class="note">
-					{pct(test.edge3_w / (test.edge3_w + test.edge3_l))}: big disagreements aren't an edge
+					{pct(test.edge3_w / (test.edge3_w + test.edge3_l))}, vs {pct(BREAKEVEN)} needed to profit
 				</div>
 			</div>
 		</div>
@@ -379,18 +387,18 @@
 
 	<div class="grid-2">
 		<div class="card">
-			<h2>Model vs the market, by season</h2>
+			<h2>Model vs Vegas, by season</h2>
 			<p class="sub">
-				Average absolute error of the predicted margin. The shaded seasons were never used for
-				tuning.
+				Average miss on the final margin, in points. Shaded seasons weren't used to fit the
+				coefficients.
 			</p>
 			<PlotFigure label="Model and Vegas average error by season" render={maeChart} />
 		</div>
 		<div class="card">
 			<h2>Are the win probabilities honest?</h2>
 			<p class="sub">
-				Out-of-sample games grouped by predicted home win probability. Points on the diagonal mean a
-				“70%” really wins about 70% of the time. Dot size = games.
+				Test-season games ({t0}–{t1}), grouped by the model's home win probability. Dots on the
+				diagonal mean 70% picks won about 70% of the time. Dot size = games.
 			</p>
 			{#if calibration.length}<PlotFigure
 					label="Calibration of predicted win probabilities"
@@ -401,15 +409,16 @@
 
 	{#if lab}
 		<div class="card" id="lab">
+			<div class="eyebrow">Round 1</div>
 			<h2>Can anything here beat Vegas?</h2>
 			<p class="sub">
-				An attempt with rules fixed before looking at results. Six model variants, each fit on
-				{lab.protocol.fit_seasons.join('–')} and scored on {lab.protocol.validate_seasons.join(
-					'–'
-				)}, betting every game or only when the model and the closing line disagree by
-				{lab.protocol.thresholds.filter((t) => t).join(', ')}+ points. The best validation win rate
-				(with at least {lab.protocol.min_validate_bets} bets) earned one look at
-				{lab.protocol.test_seasons.join('–')}. Break-even at −110 is {pct(lab.protocol.breakeven)}.
+				Round 1 fixed its rules before looking at results. {Object.keys(lab.variants).length} model variants
+				were fit on {lab.protocol.fit_seasons.join('–')} and scored on
+				{lab.protocol.validate_seasons.join('–')}, betting every game or only when the model and the
+				closing line disagreed by {lab.protocol.thresholds.filter((t) => t).join(', ')}+ points. The
+				variant with the best validation win rate (min {lab.protocol.min_validate_bets} bets) got one
+				look at {lab.protocol.test_seasons.join('–')}. Break-even at −110 is
+				{pct(lab.protocol.breakeven)}.
 			</p>
 			{#if lab.chosen && lab.test}
 				<div class="tiles" style="margin-bottom: 1rem">
@@ -485,42 +494,43 @@
 		<h2>How the model works</h2>
 		<p>
 			<strong>EPA ratings.</strong> Each team-game becomes a row: the offense's EPA/play, explained
-			by an offense rating, the opposing defense's rating and home field. A ridge regression
-			(penalty {num(data.params.lambda)}
-			plays, the equivalent of padding every team with that many plays of average football) fits it, weighting
-			recent games more (half-life
-			{data.params.half_life_weeks ? `${data.params.half_life_weeks} weeks` : 'none'}, with last
-			season fading in). Garbage time is excluded.
+			by an offense rating, the opposing defense's rating and home field. A ridge regression fits
+			it. Ridge pulls every team toward average, as if each had {num(data.params.lambda)} extra plays
+			of average football.
+			{#if data.params.half_life_weeks}Recent games count more (a game {data.params.half_life_weeks}
+				weeks old counts half), and last season's games carry weight early in the year.{/if}
+			Garbage time is excluded.
 		</p>
 		<p>
-			<strong>Points ratings.</strong> The same idea on final margins: a ridge regression of each game's
-			home margin on team strengths and home field, recency-weighted. Noisier than EPA, but it measures
+			<strong>Points ratings.</strong> The same idea on final margins: each game's home margin, explained
+			by team strengths and home field, with recent games counting more. Noisier than EPA, but it measures
 			the thing being predicted, including special teams and the full value of turnovers.
 		</p>
 		<p>
-			<strong>Injuries.</strong> Each player listed Out or Doubtful (a quarter of each Questionable one)
-			counts by his snap share times how much of the team's recent play he was part of, so absences the
-			ratings already absorbed aren't counted twice.
+			<strong>Injuries.</strong> Players listed Out or Doubtful count fully; Questionable players count
+			a quarter. Each is weighted by his usual snap share and by how much of the team's recent play he
+			was on the field for. That way a long absence the ratings already reflect isn't counted twice.
+		</p>
+		<p>
+			<strong>Quarterback adjustment.</strong> Team ratings bake in whoever played QB recently. For
+			each game, the model compares the listed starter's EPA per dropback with that of the QBs
+			behind the rating, scaled to 35 dropbacks and a fitted weight of {num(
+				data.params.qb_weight,
+				2
+			)}. The starter's number is pulled toward a below-average baseline as if he had 430 extra
+			dropbacks, the sample at which QB EPA is half signal. That catches backups starting, stars
+			resting and stars returning. Only adjustments of 1+ point are listed.
 		</p>
 		<p>
 			<strong>Putting it together.</strong> A regression of the final margin on both rating gaps,
 			the QB adjustment, injuries and home field turns them into points{#if lab3}
-				(weights in <a href="#round3">round 3</a>){/if}; win probabilities assume the margin varies
-			around that by σ = {num(data.params.sigma, 1)} points.
-		</p>
-		<p>
-			<strong>Quarterback adjustment.</strong> Team ratings bake in whoever played QB recently. For
-			each game the model compares the listed starter's EPA per dropback (shrunk toward a
-			below-average prior by 430 dropbacks, where QB EPA becomes half signal) with the
-			dropback-weighted QBs behind the rating, times 35 dropbacks, with a fitted weight of
-			{num(data.params.qb_weight, 2)}. That catches backups starting, stars resting and stars
-			returning. Only adjustments of 1+ point are listed.
+				(weights in <a href="#round3">round 3</a>){/if}. Win probabilities assume the real margin
+			misses that by about {num(data.params.sigma, 1)} points (one standard deviation).
 		</p>
 		<p class="muted">
-			Injuries beyond the QB, travel, weather and late-season motivation are tested in <a
-				href="#round2">round 2</a
-			>. What no public dataset has is the collective information of everyone betting, and the early
-			lines sharp bettors beat before the market settles.
+			Travel, rest, weather and late-season stakes were tested in <a href="#round2">round 2</a>.
+			What no public dataset has: the pooled knowledge of everyone betting, and the early lines
+			sharp bettors beat before the market settles.
 		</p>
 	</div>
 {/if}

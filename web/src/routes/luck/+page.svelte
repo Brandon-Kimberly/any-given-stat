@@ -204,9 +204,14 @@
 			title: 'Share of all fumbles in their games that they recovered. ~50% is normal.'
 		},
 		{ key: 'fumbles', label: 'Fumbles', fmt: num },
-		{ key: 'turnover_margin', label: 'TO margin', fmt: (v) => signed(v, 0) },
-		{ key: 'points_for', label: 'PF', fmt: num },
-		{ key: 'points_against', label: 'PA', fmt: num }
+		{
+			key: 'turnover_margin',
+			label: 'TO margin',
+			fmt: (v) => signed(v, 0),
+			title: 'Takeaways minus giveaways'
+		},
+		{ key: 'points_for', label: 'PF', fmt: num, title: 'Points for' },
+		{ key: 'points_against', label: 'PA', fmt: num, title: 'Points against' }
 	];
 </script>
 
@@ -285,8 +290,11 @@
 			<p class="sub">
 				Every team-season since {firstPair}.
 				{#if fit}
-					Slope {signed(fit.b, 2)}, r = {corr(fit.r)}. A negative slope means luck reverses: each
-					win of luck in season N predicts about {num(Math.abs(fit.b), 2)} fewer wins the next season.
+					Slope {signed(fit.b, 2)}, r = {corr(fit.r)}: each win of luck in one season predicts about {num(
+						Math.abs(fit.b),
+						2
+					)}
+					{fit.b < 0 ? 'fewer' : 'more'} wins the next.
 				{/if}
 			</p>
 			{#if pairs.length}<PlotFigure

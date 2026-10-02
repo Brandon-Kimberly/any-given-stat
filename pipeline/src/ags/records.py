@@ -22,10 +22,9 @@ DESC_CHARS = 200
 # nflfastR occasionally posts a bogus home_wp_post at the end of a period.
 WP_CONSISTENCY = 0.1
 WP_NOTE = (
-    "Regular-season overtime is left out of the win-probability lists (excitement and "
-    "comebacks use regulation only; biggest plays skip it): nflfastR's win probability is "
-    "unreliable while a tie is possible. Biggest plays also require a play's post-snap win "
-    "probability to match the next play's."
+    "Win-probability lists skip regular-season overtime, where nflfastR's win probability "
+    "is unreliable because a tie is possible. Biggest plays also skip plays whose win "
+    "probability doesn't line up with the next play's."
 )
 
 

@@ -49,7 +49,7 @@ FIELD_BUCKETS = [
 ]
 
 CAVEAT = (
-    "Teams go for it more often when they expect to convert, so the 'go' averages are "
+    "Teams go for it more often when they expect to convert, so the “go” averages are "
     "flattered by selection and the recommendations lean toward going for it."
 )
 

@@ -125,7 +125,13 @@
 	const columns: Column<StabilityMetric>[] = [
 		{ key: 'label', label: 'Metric', sticky: true },
 		{ key: 'group', label: 'Group' },
-		{ key: 'split_half_r', label: 'Split-half r', fmt: corr, better: 'high' },
+		{
+			key: 'split_half_r',
+			label: 'Split-half r',
+			fmt: corr,
+			better: 'high',
+			title: 'Correlation between odd and even weeks of a season'
+		},
 		{
 			key: 'full_season_reliability',
 			label: 'Season reliability',
@@ -143,7 +149,7 @@
 		},
 		{ key: 'denominator', label: 'Unit' },
 		{ key: 'avg_season_n', label: 'Typical season n', fmt: (v) => num(v) },
-		{ key: 'yoy_pairs', label: 'YoY pairs', fmt: num }
+		{ key: 'yoy_pairs', label: 'Season pairs', fmt: num }
 	];
 </script>
 
@@ -187,8 +193,8 @@
 					r = {corr(current.yoy_r)} across {current.yoy_pairs}
 					{current.group.startsWith('team') ? 'team' : 'player'}-season pairs.
 					{#if (current.yoy_r ?? 0) < 0.2}Last year tells you almost nothing about this year.{:else if (current.yoy_r ?? 0) < 0.4}Real
-						but heavily regressed: expect teams to move most of the way back to average.{:else}A
-						genuine, persistent trait.{/if}
+						but heavily regressed: expect most of it to fade back toward average.{:else}A genuine,
+						persistent trait.{/if}
 				{/if}
 			</p>
 			<PlotFigure label="Year over year scatter" render={yoy} />
@@ -197,16 +203,17 @@
 			<h2>How to read this</h2>
 			<p>
 				<strong>Split-half r</strong> correlates a stat in odd weeks with the same stat in even weeks.
-				Weather, opponents and injuries mix evenly between the two halves, so what's left is mostly skill
-				versus luck.
+				Weather, opponents and injuries mix roughly evenly between the two halves, so the correlation
+				mostly measures skill, not luck.
 			</p>
 			<p>
 				<strong>Season reliability</strong> scales that up to a full season with the Spearman-Brown formula,
-				2r / (1 + r). That's the share of the variation between teams that is real.
+				2r / (1 + r). That's the share of the variation between teams (or players) that is real.
 			</p>
 			<p>
 				<strong>n for 50% signal</strong> is the sample size where a stat is half skill, half noise:
-				n<sub>half</sub> × (1 − r) / r. Below it, regress hard toward the league average.
+				n<sub>half</sub> × (1 − r) / r, where n<sub>half</sub> is the sample in each half. Below it, regress
+				hard toward the league average.
 			</p>
 			<p>
 				<strong>Year-over-year r</strong> also includes real change (roster turnover, coaching), so it's

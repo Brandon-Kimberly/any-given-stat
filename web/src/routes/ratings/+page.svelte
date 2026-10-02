@@ -84,7 +84,7 @@
 			style: plotStyle,
 			marginRight: narrow ? 12 : 50,
 			x: { label: 'After week', tickFormat: 'd', ticks: thinTicks(weeks, width, 34) },
-			y: { label: '↑ Net rating (points vs average team, neutral field)', tickFormat: '+.0f' },
+			y: { label: '↑ Power rating (points vs average team, neutral field)', tickFormat: '+.0f' },
 			color: { domain: highlighted, range: SLOTS.slice(0, highlighted.length), legend: true },
 			marks: [
 				gridY(),
@@ -160,7 +160,7 @@
 			key: 'change',
 			label: 'Δ rank',
 			fmt: (v) => (v == null ? '–' : v === 0 ? '0' : signed(v, 0)),
-			title: 'Change since the previous week'
+			title: 'Rank change since the previous week (+ = moved up)'
 		}
 	];
 </script>
@@ -172,9 +172,9 @@
 	<h1>Power ratings</h1>
 	<p class="lede">
 		Predictive ratings: each team's offense and defense, adjusted for who they played and where,
-		with recent games weighted more and last season fading in early on. These drive the
-		<a href="{base}/predictions/">predicted spreads</a>. A rating of +3 means the team would be
-		favored by about 3 points over an average team on a neutral field.
+		with recent games counting more and last season's games carrying weight early on. They are a
+		main input to the <a href="{base}/predictions/">predicted spreads</a>. A rating of +3 means the
+		team would be favored by about 3 points over an average team on a neutral field.
 	</p>
 </section>
 
@@ -184,7 +184,7 @@
 {/if}
 
 {#if ratingsRes.error}
-	<LoadError message="Ratings need seasons 2016–2021 in the build." />
+	<LoadError message="Couldn't load ratings for this season." />
 {:else if !ratingsRes.value}
 	<Skeleton height={380} />
 {:else if current.length}
@@ -207,12 +207,12 @@
 				{/if}
 			</div>
 		</div>
-		<p class="sub">Up to four teams in color; the rest of the league in grey for context.</p>
+		<p class="sub">Up to four teams in color; the rest of the league in gray for context.</p>
 		<PlotFigure label="Power rating by week" render={trajectories} />
 	</div>
 	<div class="card">
 		<div class="card-head">
-			<h2>Standings after week {shownWeek}</h2>
+			<h2>Ratings after week {shownWeek}</h2>
 			{#if weeks.length > 1}
 				<label class="field scrub">
 					Week

@@ -102,7 +102,13 @@
 		{ key: 'epa_rush', label: 'EPA/car', fmt: epa, better: 'high' },
 		{ key: 'total_epa', label: 'Total EPA', fmt: (v) => signed(v), better: 'high' },
 		{ key: 'success_rate', label: 'Success', fmt: pct, better: 'high' },
-		{ key: 'explosive_rate', label: '10+ yd%', fmt: pct, better: 'high' },
+		{
+			key: 'explosive_rate',
+			label: '10+ yd%',
+			fmt: pct,
+			better: 'high',
+			title: 'Runs of 10+ yards (explosive)'
+		},
 		{
 			key: 'stuff_rate',
 			label: 'Stuff%',
@@ -120,8 +126,8 @@
 	<h1>Rushers</h1>
 	<p class="lede">
 		Designed runs only (scrambles count as dropbacks). Most runs lose expected points, so a rusher
-		above zero EPA per carry is doing something real. Rusher efficiency is one of the noisiest stats
-		in football, though; check <a href="{base}/stability/">Signal vs noise</a> before you trust it.
+		above zero EPA per carry is doing something real. Rusher efficiency is also one of the noisiest
+		stats in football. Check <a href="{base}/stability/">Signal vs noise</a> before you trust it.
 	</p>
 </section>
 

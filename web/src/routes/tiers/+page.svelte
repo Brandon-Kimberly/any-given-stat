@@ -159,20 +159,38 @@
 			better: 'high',
 			title: 'Net EPA/play adjusted for opponents faced and home field'
 		},
-		{ key: 'off_epa_play', label: 'Off EPA', fmt: epa, better: 'high' },
+		{
+			key: 'off_epa_play',
+			label: 'Off EPA',
+			fmt: epa,
+			better: 'high',
+			title: 'Offense EPA per play'
+		},
 		{ key: 'off_pass_epa', label: 'Off pass', fmt: epa, better: 'high' },
 		{ key: 'off_rush_epa', label: 'Off rush', fmt: epa, better: 'high' },
 		{
 			key: 'off_success_rate',
-			label: 'Off SR',
+			label: 'Off success',
 			fmt: pct,
 			better: 'high',
 			title: 'Success rate: share of plays with EPA > 0'
 		},
-		{ key: 'def_epa_play', label: 'Def EPA', fmt: epa, better: 'low' },
+		{
+			key: 'def_epa_play',
+			label: 'Def EPA',
+			fmt: epa,
+			better: 'low',
+			title: 'EPA per play allowed (lower is better)'
+		},
 		{ key: 'def_pass_epa', label: 'Def pass', fmt: epa, better: 'low' },
 		{ key: 'def_rush_epa', label: 'Def rush', fmt: epa, better: 'low' },
-		{ key: 'def_success_rate', label: 'Def SR', fmt: pct, better: 'low' }
+		{
+			key: 'def_success_rate',
+			label: 'Def success',
+			fmt: pct,
+			better: 'low',
+			title: 'Success rate allowed (lower is better)'
+		}
 	];
 </script>
 
@@ -196,7 +214,7 @@
 			<button aria-pressed={!adjusted} onclick={() => (adjusted = false)}>Raw</button>
 			<button
 				aria-pressed={adjusted}
-				title="Adjusted for opponents faced and home field (ridge regression)"
+				title="Adjusted for opponents faced and home field"
 				onclick={() => (adjusted = true)}>Opponent-adjusted</button
 			>
 		</div>

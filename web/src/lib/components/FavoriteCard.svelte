@@ -43,7 +43,7 @@
 			<div>
 				<div class="k">Record</div>
 				<div class="v"><CountUp text={rec ? wlt(rec.wins, rec.games) : '–'} /></div>
-				{#if rec}<div class="n">{signed(rec.wins_over_pythag)} vs Pythagorean</div>{/if}
+				{#if rec}<div class="n">{signed(rec.wins_over_pythag)} wins vs Pythagorean</div>{/if}
 			</div>
 			<div>
 				<div class="k">Power rank</div>
@@ -55,7 +55,7 @@
 				<div class="v small">
 					{r ? `${signed(r.off_points)} / ${signed(r.def_points)}` : '–'}
 				</div>
-				<div class="n">points per game added</div>
+				<div class="n">points vs average</div>
 			</div>
 		</div>
 		{#if next}

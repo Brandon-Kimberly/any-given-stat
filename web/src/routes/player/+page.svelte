@@ -146,12 +146,12 @@
 						text: pct(me.int_rate) + ' INT'
 					},
 					{
-						label: 'Throws deep (aDOT)',
+						label: 'Throws deep (aDOT, style)',
 						p: pctile(v('adot'), me.adot ?? 0),
 						text: num(me.adot, 1) + ' yds'
 					},
 					{
-						label: 'Scrambles',
+						label: 'Scrambles (style)',
 						p: pctile(v('scramble_rate'), me.scramble_rate),
 						text: pct(me.scramble_rate)
 					}
@@ -195,7 +195,7 @@
 						text: signed(me.yac_oe)
 					},
 					{
-						label: 'Depth (aDOT)',
+						label: 'Depth (aDOT, style)',
 						p: pctile(v('adot'), me.adot ?? 0),
 						text: num(me.adot, 1) + ' yds'
 					}
@@ -469,8 +469,8 @@
 				{/if}
 			</div>
 			<p class="sub">
-				Percentile among {profile.n}
-				{profile.who} that season (each with at least 40% of the leader's volume; 100 = best in the league).
+				Percentile among the {profile.n}
+				{profile.who} that season (100 = best). Qualified = at least 40% of the leader's volume.
 			</p>
 			<div class="bars">
 				{#each profile.bars as b (b.label)}
@@ -497,7 +497,7 @@
 		<p class="sub">
 			{role === 'QB'
 				? 'EPA per dropback by season, with the 95% interval shaded. Dot color = team.'
-				: 'Efficiency by season. Dot color = team. Remember that per-play receiver and rusher efficiency is noisy year to year.'}
+				: `EPA per ${role === 'REC' ? 'target' : 'carry'} by season. Dot color = team. Remember that per-play receiver and rusher efficiency is noisy year to year.`}
 		</p>
 		<PlotFigure label="Career efficiency by season" render={careerChart} />
 	</div>
@@ -576,7 +576,7 @@
 		</div>
 	{/if}
 	<p class="muted small">
-		{teamName(lastTeam)} is the most recent team in the data, not necessarily the current roster.
+		{teamName(lastTeam)} is the most recent team in the data, not necessarily his current team.
 	</p>
 {/if}
 

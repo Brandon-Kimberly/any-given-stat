@@ -51,7 +51,7 @@
 				{
 					id: 'epa-db',
 					term: 'EPA per dropback',
-					def: 'QB EPA (crediting the QB with yards at the catch point when a receiver fumbles) on all dropbacks: completions, incompletions, sacks and scrambles.'
+					def: 'EPA credited to the QB on every dropback: completions, incompletions, sacks and scrambles. If a receiver fumbles, the QB keeps the value of the catch.'
 				},
 				{
 					id: 'cpoe',
@@ -76,7 +76,7 @@
 				{
 					id: 'ci',
 					term: '95% confidence interval',
-					def: 'Shown for QB EPA/dropback as mean ± 1.96 × SD / √n. EPA is fat-tailed, so treat it as a rough guide.'
+					def: 'The range that likely holds a QB’s true EPA/dropback: mean ± 1.96 × SD / √n. EPA has fat tails (rare huge plays), so treat it as a rough guide.'
 				},
 				{
 					id: 'percentile',
@@ -96,18 +96,28 @@
 				{
 					id: 'adjusted',
 					term: 'Opponent-adjusted EPA',
-					def: 'Each team-game’s EPA/play is modeled as league average + offense rating + opposing defense rating + home field, fit by ridge regression. The team ratings are what’s left after accounting for who they played and where.'
+					def: 'Each team-game’s EPA/play is modeled as league average + offense rating + opposing defense rating + home field, fit by ridge regression, which pulls extreme ratings toward average. The team ratings are what’s left after accounting for who they played and where.'
 				},
 				{
 					id: 'power',
 					term: 'Power rating',
-					def: 'The predictive version of the adjusted rating: recent games weigh more (16-week half-life) and last season fades in, so it’s stable early in the year. Expressed in points vs an average team on a neutral field.',
+					def: 'The predictive version of the adjusted rating: recent games count more (a game 16 weeks old counts half), and last season’s games carry it early in the year. Expressed in points vs an average team on a neutral field. It has two parts: the EPA rating above and a points rating.',
 					see: ['/ratings/', 'Power ratings']
+				},
+				{
+					id: 'points-rating',
+					term: 'Points rating',
+					def: 'A team rating built from final margins instead of EPA. Noisier, but it captures special teams and the full value of turnovers. The forecast uses both.'
+				},
+				{
+					id: 'blend',
+					term: 'Best estimate (blend)',
+					def: 'The Vegas line moved part of the way toward the model, by a share fit on past seasons.'
 				},
 				{
 					id: 'qb-adj',
 					term: 'QB adjustment',
-					def: 'For each game, the listed starter’s shrunk EPA per dropback compared with the QBs behind the team’s rating, times 35 dropbacks and a fitted weight. Catches injuries, rest and returns.'
+					def: 'For each game, the listed starter’s EPA per dropback (pulled toward a below-average baseline) compared with the QBs behind the team’s rating, times 35 dropbacks and a fitted weight. Catches injuries, rest and returns.'
 				},
 				{
 					id: 'pythag',
@@ -127,6 +137,11 @@
 					see: ['/fourth/', 'Fourth downs']
 				},
 				{
+					id: 'clear-go',
+					term: 'Clear-go spot',
+					def: 'A 4th down where going for it beat the best kicking option by 0.3+ EPA.'
+				},
+				{
 					id: 'excitement',
 					term: 'Excitement index',
 					def: 'Total win-probability movement over a game (the sum of every play’s absolute WP change). The median game since 2016 scores about 3.7; the top 10% score 5.8 or more.',
@@ -140,12 +155,42 @@
 				{
 					id: 'ats',
 					term: 'Against the spread (ATS)',
-					def: 'Betting the side the model prefers relative to the Vegas line. At standard −110 pricing you need to win 52.4% just to break even.'
+					def: 'Results measured against the point spread: a team covers if it beats the spread. For the model, it means betting its side of the Vegas line. At standard −110 odds you must win 52.4% to break even.'
+				},
+				{
+					id: 'closing-line',
+					term: 'Closing line',
+					def: 'The Vegas spread at kickoff, the sharpest public forecast. Backtests are scored against it.'
 				},
 				{
 					id: 'calibration',
 					term: 'Calibration',
 					def: 'Whether predicted probabilities mean what they say: of all games given a 70% win probability, about 70% should be won.'
+				},
+				{
+					id: 'average-miss',
+					term: 'Average miss / RMSE',
+					def: 'Average miss is the mean number of points a predicted margin is off by. RMSE (root-mean-square error) is similar but weighs big misses more. Lower is better for both.'
+				},
+				{
+					id: 'brier',
+					term: 'Brier score',
+					def: 'Average squared error of probability forecasts: 0 is perfect, lower is better. Skill compares it with a naive guess, such as giving every team the league-wide rate.'
+				},
+				{
+					id: 'log-loss',
+					term: 'Log loss',
+					def: 'Another score for win probabilities that punishes confident wrong calls hard. Lower is better.'
+				},
+				{
+					id: 'p-value',
+					term: 'p-value',
+					def: 'The chance of a result at least this good if there were no real edge. Small (under 0.05) suggests something real; it is not proof.'
+				},
+				{
+					id: 'funnel',
+					term: 'Funnel',
+					def: 'The shaded range where 95% of results would land by chance alone. It narrows as samples grow, so a dot outside it is unusual for its sample size.'
 				},
 				{
 					id: 'split-half',
@@ -156,7 +201,12 @@
 				{
 					id: 'holdout',
 					term: 'Fit / validate / test',
-					def: 'How the prediction model is kept honest: coefficients are fit on 2017–2021, choices are made on 2022–2023, and 2024–2025 is scored once at the end. A model judged on the data it was tuned on always looks better than it is.'
+					def: 'How the prediction model is kept honest: coefficients are fit on 2017–2021, choices are made on 2022–2023, and 2024–2025 is scored once at the end. Later experiments reuse 2024–2025 and label it a reused test. A model judged on the data it was tuned on always looks better than it is.'
+				},
+				{
+					id: 'live-test',
+					term: 'Reused test / live test',
+					def: 'A reused test is seasons an earlier experiment already looked at, so it is not clean. A live test is games played after a model choice was frozen (committed publicly), the only fully clean evidence.'
 				}
 			]
 		}

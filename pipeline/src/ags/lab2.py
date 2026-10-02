@@ -54,7 +54,7 @@ VARIANTS: dict[str, list[str]] = {
 
 LABELS = {
     "vegas": "Closing line",
-    "epa_margin": "Team ratings",
+    "epa_margin": "EPA ratings",
     "qb_adj": "Starting QB",
     "home_ind": "Home field",
     "inj_total": "Injuries (all)",

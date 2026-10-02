@@ -107,11 +107,26 @@
 	);
 	const selCols: Column<SelRow>[] = [
 		{ key: 'variant', label: 'Variant', sticky: true },
-		{ key: 'threshold', label: 'Edge ≥', fmt: (v) => (v ? `${v} pts` : 'every game') },
-		{ key: 'fit_win_rate', label: 'Fit ATS', fmt: (v) => pct(v) },
+		{
+			key: 'threshold',
+			label: 'Gap ≥',
+			fmt: (v) => (v ? `${v} pts` : 'every game'),
+			title: 'Bet only when the model and the line disagree by this much'
+		},
+		{
+			key: 'fit_win_rate',
+			label: 'Fit ATS',
+			fmt: (v) => pct(v),
+			title: 'Win rate against the spread on the fitting seasons'
+		},
 		{ key: 'val_bets', label: 'Val bets', fmt: num },
 		{ key: 'val_win_rate', label: 'Val ATS', fmt: (v) => pct(v), better: 'high' },
-		{ key: 'val_p_value', label: 'p', fmt: (v) => num(v, 2) },
+		{
+			key: 'val_p_value',
+			label: 'p',
+			fmt: (v) => num(v, 2),
+			title: 'Chance of this validation win rate with no real edge'
+		},
 		{ key: 'val_mae', label: 'Val miss', fmt: (v) => num(v, 2), better: 'low' },
 		{ key: 'val_vegas_mae', label: 'Vegas miss', fmt: (v) => num(v, 2) }
 	];
@@ -130,7 +145,7 @@
 				matchup: `${g.away} @ ${g.home}`,
 				line: spread(g.vegas, g.home, g.away),
 				model_line: spread(g.model, g.home, g.away),
-				outcome: g.won == null ? 'push' : g.won ? 'won' : 'lost'
+				outcome: g.won == null ? 'Push' : g.won ? 'Won' : 'Lost'
 			}))
 	);
 	const ledgerCols: Column<LedgerRow>[] = [
@@ -140,7 +155,7 @@
 		{ key: 'model_line', label: 'Model' },
 		{ key: 'bet', label: 'Bet', team: true },
 		{ key: 'outcome', label: 'Result' },
-		{ key: 'sealed', label: 'Sealed', fmt: (v) => (v ? 'yes' : 'before freeze') }
+		{ key: 'sealed', label: 'After freeze', fmt: (v) => (v ? 'Yes' : 'No') }
 	];
 </script>
 
@@ -148,15 +163,15 @@
 	<div class="eyebrow">Round 2</div>
 	<h2>Everything the line was supposed to know</h2>
 	<p class="sub">
-		Round 1's verdict was that the market knows things this model doesn't: injuries, weather,
-		motivation. So round 2 adds them, and the market's own known biases, under the same rules: {Object.keys(
+		Round 1 concluded that the line knows things the model doesn't: injuries, weather, motivation.
+		Round 2 adds them, plus the betting market's known biases, under the same rules: {Object.keys(
 			lab.variants
 		).length} variants fit on {p.fit_seasons.join('–')}, one chosen on {p.validate_seasons.join(
 			'–'
 		)}. The choice was
 		<a href="https://github.com/Brandon-Kimberly/any-given-stat/commit/97932fd">committed</a>
-		on {p.freeze_date}, before any test or live result existed. (The week table at the top of the
-		page is round 1's model; round 2's lines are below.)
+		on {p.freeze_date}, before any round-2 test or live result existed. (The week table at the top
+		of the page shows the round-3 forecast; round 2's lines are below.)
 	</p>
 	<div class="tiles">
 		<div class="card tile">
@@ -165,7 +180,7 @@
 			<div class="note">bet only when it disagrees with the line by {th}+ points</div>
 		</div>
 		<div class="card tile">
-			<div class="label">Sealed live test, {p.live_season}</div>
+			<div class="label">Live test, {p.live_season} (after the freeze)</div>
 			<div class="value">
 				<CountUp text={lab.live.sealed.bets ? record(lab.live.sealed) : '0–0'} />
 			</div>
@@ -201,9 +216,9 @@
 		</p>
 		{#if !injuryFresh}
 			<div class="callout info" role="note">
-				Final injury statuses are posted for {p.teams_with_final_statuses ?? 0} of {p.teams_playing}
-				teams so far (teams file them Friday; Thursday teams Wednesday). Until then injuries read as 0
-				here, and the lines will move when the site rebuilds.
+				Final injury statuses are in for {p.teams_with_final_statuses ?? 0} of {p.teams_playing} teams.
+				Teams file them Friday (Wednesday for Thursday games). Until then, injuries count as 0 here, and
+				lines will move when the site rebuilds.
 			</div>
 		{/if}
 		<div class="games">
@@ -265,9 +280,10 @@
 	<section class="card">
 		<h2>What does the line already price?</h2>
 		<p class="sub">
-			Blue: how much each factor moves the final margin beyond team ratings and the QB. Orange: how
-			much it still moves it beyond the closing line. Orange near 0 means the market has it priced.
-			Bars are 95% intervals; units are per starter-equivalent out, per day, per zone and so on.
+			“Beyond team ratings”: how much each factor moves the final margin after ratings and the QB.
+			“Beyond the closing line”: how much it still moves it after the line. Near 0 on the second
+			means the line already prices it. Bars are 95% intervals; units are per starter-equivalent
+			out, per day, per zone and so on.
 		</p>
 		<PlotFigure
 			label="Factor effects beyond ratings and beyond the closing line"
@@ -276,17 +292,19 @@
 		<p class="muted small">
 			All {p.fit_seasons[0]}–{p.test_seasons[1]} games, after the fact. With {lab.market_check
 				.length}
-			factors checked, about one lands two standard errors from zero by chance alone.
+			factors checked, expect about {Math.round(lab.market_check.length * 0.05)} to look significant (2+
+			standard errors from zero) by chance alone.
 		</p>
 	</section>
 	<section class="card">
 		<h2>Live coefficients</h2>
 		<p class="sub">
 			The frozen variant refit on every completed season before {p.live_season} (a fixed rule, no choices).
-			"Typical" is how many points the factor moves a game, one standard deviation.
+			“Per unit” is one unit's effect (± 95% range). “Typical” is how many points it moves a usual game
+			(one standard deviation).
 		</p>
 		<table class="coef">
-			<thead><tr><th>Factor</th><th>Per unit</th><th>Typical</th></tr></thead>
+			<thead><tr><th>Input</th><th>Per unit</th><th>Typical</th></tr></thead>
 			<tbody>
 				{#each lab.coefficients as c (c.feature)}
 					<tr>
@@ -300,9 +318,10 @@
 			</tbody>
 		</table>
 		<p class="muted small">
-			Injuries count each player listed Out or Doubtful (or a quarter of each Questionable one) by
-			his role (snap share over his last {p.role_games} games) times how much of the team's recent play
-			he was part of, so long absences the ratings already absorbed don't count twice.
+			Injuries: players listed Out or Doubtful count fully; Questionable players count a quarter.
+			Each is weighted by his usual snap share (over his last {p.role_games} games) and by how much of
+			the team's recent play he was on the field for. That way a long absence the ratings already reflect
+			isn't counted twice.
 		</p>
 	</section>
 </div>
@@ -311,7 +330,7 @@
 	<h2>All {selRows.length} options on validation</h2>
 	<p class="sub">
 		The highlighted row was chosen: best validation win rate with {p.min_validate_bets}+ bets. Note
-		how the flexible "market + everything" model wins in fit and loses on validation: that's
+		how the flexible “Market + everything” model wins in fit and loses on validation: that's
 		overfitting.
 	</p>
 	<DataTable
@@ -326,7 +345,7 @@
 {#if ledger.length}
 	<section class="card">
 		<h2>Every {p.live_season} bet</h2>
-		<p class="sub">The running record. Sealed bets are the only clean evidence.</p>
+		<p class="sub">The running record. Bets after the freeze are the only clean evidence.</p>
 		<DataTable
 			rows={ledger}
 			columns={ledgerCols}

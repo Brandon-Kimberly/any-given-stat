@@ -174,7 +174,7 @@
 						x: 't',
 						y: 'wp',
 						title: (d: { t: number; wp: number }) =>
-							`${Math.floor(d.t)}' elapsed\n${g.home} ${pct(d.wp, 0)} · ${g.away} ${pct(1 - d.wp, 0)}`
+							`${Math.floor(d.t)} min elapsed\n${g.home} ${pct(d.wp, 0)} · ${g.away} ${pct(1 - d.wp, 0)}`
 					})
 				)
 			]
@@ -399,7 +399,7 @@
 				<div class="card">
 					<div class="card-head">
 						<h2><TeamBadge team={t} name link /></h2>
-						{#if r}<span class="chip">#{r.rank} power</span>{/if}
+						{#if r}<span class="chip">Power rank #{r.rank}</span>{/if}
 					</div>
 					{#if r}
 						<div class="split">
@@ -417,7 +417,7 @@
 				{@const d = unit.get(m.d)}
 				<div class="card">
 					<h2>{m.label}</h2>
-					<p class="sub">Season EPA/play, garbage time excluded, with league rank (1 = best).</p>
+					<p class="sub">Season EPA/play (no garbage time) and league rank (1 = best).</p>
 					{#if o && d}
 						<table class="box">
 							<thead
