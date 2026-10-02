@@ -3,6 +3,7 @@
 	// replay through the season and an honest check of how calibrated past odds were.
 	import { base } from '$app/paths';
 	import LoadError from '$lib/components/LoadError.svelte';
+	import PageToc from '$lib/components/PageToc.svelte';
 	import PlotFigure from '$lib/components/Plot.svelte';
 	import SampleWarning from '$lib/components/SampleWarning.svelte';
 	import Skeleton from '$lib/components/Skeleton.svelte';
@@ -251,6 +252,14 @@
 	const v1Mean = $derived(
 		versions.reduce((a, s) => a + s.v1_brier_playoffs!, 0) / (versions.length || 1)
 	);
+	const tocItems = $derived([
+		{ id: 'afc', label: 'AFC' },
+		{ id: 'nfc', label: 'NFC' },
+		{ id: 'title', label: 'Title odds' },
+		{ id: 'divisions', label: 'Divisions' },
+		{ id: 'trust', label: 'Track record' },
+		...(versions.length ? [{ id: 'versions', label: 'Old vs new' }] : [])
+	]);
 	function versionChart(width: number) {
 		const rows = versions.flatMap((s) => [
 			{ season: s.season, brier: s.v1_brier_playoffs!, who: 'Old simulator' },
@@ -333,7 +342,7 @@
 			style: plotStyle,
 			marginLeft: 44,
 			x: { label: 'Weeks played →', tickFormat: (w: number) => (w === 0 ? 'Pre' : `${w}`) },
-			y: { domain: [0, 1], label: '↑ Skill vs base rate', tickFormat: '.0%' },
+			y: { domain: [0, 1], label: '↑ Skill vs league-average guess', tickFormat: '.0%' },
 			marks: [
 				gridY(),
 				Plot.ruleY([0], { stroke: 'var(--axis)' }),
@@ -359,8 +368,8 @@
 	<div class="eyebrow">Teams</div>
 	<h1>Playoff odds</h1>
 	<p class="lede">
-		The rest of the season played out {num(odds?.sims ?? 10000)} times from the power ratings, week by
-		week. Scrub or replay to watch the race take shape, then see how well past odds held up.
+		The rest of the season played out {num(odds?.sims ?? 10000)} times from the site's forecast, week
+		by week. Scrub or replay to watch the race take shape, then see how well past odds held up.
 	</p>
 </div>
 
@@ -393,17 +402,18 @@
 		>
 	</div>
 	<SampleWarning {status} />
+	<PageToc items={tocItems} />
 	{#if isFinal}
 		<div class="callout info" role="note">
-			Regular season over: playoff and division columns show what actually happened (✓). Bye and
-			title odds are still simulated; the simulator's tiebreakers approximate the NFL's (common
-			games and some multi-team wild-card steps aren't modeled).
+			Regular season over: the Playoffs and Division columns show what actually happened (✓). Bye
+			and Super Bowl odds are still simulated. The simulator's tiebreakers approximate the NFL's;
+			common-games and some multi-team wild-card steps aren't modeled.
 		</div>
 	{/if}
 
 	<div class="grid-2">
 		{#each confs as { c, rows } (c)}
-			<section class="card">
+			<section class="card" id={c.toLowerCase()}>
 				<div class="card-head">
 					<h2>{c}</h2>
 					<span class="muted small"
@@ -414,11 +424,11 @@
 					<thead>
 						<tr>
 							<th scope="col">Team</th>
-							<th scope="col" class="num">Wins</th>
+							<th scope="col" class="num">Proj. wins</th>
 							<th scope="col">Playoffs</th>
 							<th scope="col" class="opt">Division</th>
 							<th scope="col" class="opt">Bye</th>
-							<th scope="col" class="num">Title</th>
+							<th scope="col" class="num">Super Bowl</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -461,15 +471,15 @@
 	</div>
 
 	<div class="grid-2">
-		<section class="card">
+		<section class="card" id="title">
 			<h2>Title odds</h2>
 			<p class="sub">Chance to win the Super Bowl, {weekLabel(week).toLowerCase()}.</p>
 			<PlotFigure label="Super Bowl odds, top 10" render={titleChart} />
 		</section>
-		<section class="card">
+		<section class="card" id="moves">
 			<h2>Biggest moves</h2>
 			{#if movers.length}
-				<p class="sub">Change in playoff odds from the previous week.</p>
+				<p class="sub">Change in playoff odds from the previous week, in percentage points.</p>
 				<ul class="moves">
 					{#each shownMovers as m (m.r.team)}
 						<li>
@@ -487,10 +497,11 @@
 		</section>
 	</div>
 
-	<section class="card">
+	<section class="card" id="divisions">
 		<div class="card-head">
 			<h2>The division race</h2>
 		</div>
+		<p class="sub">Each team's playoff chances, week by week.</p>
 		<div class="seg divs" role="group" aria-label="Division">
 			{#each divisions as d (d)}
 				<button aria-pressed={activeDivision === d} onclick={() => (division = d)}>{d}</button>
@@ -499,19 +510,21 @@
 		<PlotFigure label="Playoff odds over the season, {activeDivision}" render={pathChart} />
 	</section>
 
-	<section class="card">
+	<section class="card" id="trust">
 		<h2>Should you trust these odds?</h2>
 		{#if skill.length}
 			<p class="sub">
 				Every forecast from {history[0]?.season}–{history.at(-1)?.season}, scored against what
-				happened. Skill is the Brier-score improvement over saying every team has the league-wide
-				playoff rate; 0% means no better than that.
+				happened. Skill = how much smaller the error (Brier score) is than giving every team the
+				league-wide playoff rate. 0% = no better than that guess.
 			</p>
 			<p>
-				{#if pre}Preseason odds have a skill of <b>{Math.round(pre.skill * 100)}%</b>: barely better
-					than knowing nothing about the teams.{/if}
+				{#if pre}Preseason odds have a skill of <b>{Math.round(pre.skill * 100)}%</b>{pre.skill <
+					0.15
+						? ': barely better than knowing nothing about the teams'
+						: ''}.{/if}
 				{#if mid}By week 8 it's <b>{Math.round(mid.skill * 100)}%</b>.{/if}
-				Points near the diagonal mean a "70%" made it about 70% of the time.
+				Dots near the diagonal mean teams given 70% made it about 70% of the time.
 			</p>
 			<div class="grid-2">
 				<div>
@@ -534,12 +547,13 @@
 	</section>
 
 	{#if versions.length}
-		<section class="card">
+		<section class="card" id="versions">
 			<h2>Old simulator vs current</h2>
 			<p class="sub">
 				Average Brier score {versions[0].season}–{versions.at(-1)?.season}: {v2Mean.toFixed(4)} now vs
-				{v1Mean.toFixed(4)} before (EPA ratings only, fixed ratings, coin-flip tiebreaks). The current
-				version's uncertainty setting was tuned on 2017–2021, so later seasons are the fair comparison.
+				{v1Mean.toFixed(4)} before (old version: EPA ratings only, no rating uncertainty, coin-flip tiebreaks).
+				The current version's uncertainty setting was tuned on 2017–2021, so later seasons are the fair
+				comparison.
 			</p>
 			<PlotFigure
 				label="Playoff-odds Brier score by season, old and current simulator"
@@ -550,12 +564,13 @@
 
 	<p class="muted small method">
 		How it works: each unplayed game's margin is drawn around the
-		<a href="{base}/predictions/#round3">round-3 forecast</a>'s rating difference (EPA and points
-		ratings, fit only on games already played) plus home field; next week's games use the betting
-		line nudged by the model. Each simulated season also draws how wrong each team's rating might be
-		(σ {num(tauPre, 1)} points preseason, {num(tauLate, 1)} by season's end, tuned on 2017–2021), so a
-		team's games move together, as they do in reality. Seeding follows the NFL's tiebreakers: head-to-head,
-		division or conference record, strength of victory and schedule. The bracket reseeds.
+		<a href="{base}/predictions/#round3">site's forecast</a>: the gap in EPA and points ratings
+		(from games already played) plus home field. Next week's games start from the Vegas line, nudged
+		toward the model. Each simulated season also draws how wrong each team's rating might be: a
+		typical error of {num(tauPre, 1)} points in the preseason, shrinking to {num(tauLate, 1)} by season's
+		end (tuned on 2017–2021). That way a team's games rise or fall together, as in real life. Seeding
+		uses the main NFL tiebreakers (head-to-head, division and conference record, strength of victory and
+		schedule), and the bracket reseeds.
 	</p>
 {/if}
 

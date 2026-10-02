@@ -61,7 +61,17 @@
 		letter-spacing: 0.02em;
 		box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
 	}
-	.badge.fav {
+	/* Dark mode: black and navy badges need a visible edge against the dark page. */
+	:global(:root[data-theme='dark']) .badge {
+		box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.24);
+	}
+	@media (prefers-color-scheme: dark) {
+		:global(:root:not([data-theme='light'])) .badge {
+			box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.24);
+		}
+	}
+	/* More specific than the dark-mode edge above, so the gold ring always wins. */
+	.team .badge.fav {
 		box-shadow:
 			0 0 0 1.5px var(--surface),
 			0 0 0 3px var(--fav, #e8b100);

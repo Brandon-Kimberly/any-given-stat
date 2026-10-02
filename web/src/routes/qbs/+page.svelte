@@ -44,6 +44,7 @@
 			width,
 			height: Math.min(560, Math.max(360, width * 0.6)),
 			style: plotStyle,
+			r: { type: 'identity' }, // radii below are pixels; Plot would rescale them
 			marginRight: 30,
 			x: { label: 'CPOE (completion % over expected) →', tickFormat: signedTick },
 			y: { label: '↑ EPA per dropback', tickFormat: '+.2f' },
@@ -58,7 +59,7 @@
 				Plot.dot(data, {
 					x: 'cpoe',
 					y: 'epa_db',
-					r: (d: QB) => Math.sqrt(d.dropbacks) / (narrow ? 4.5 : 3.2),
+					r: (d: QB) => Math.max(3.5, Math.sqrt(d.dropbacks) / (narrow ? 3.4 : 2.6)),
 					fill: (d: QB) => teamColor(d.team),
 					fillOpacity: 0.9,
 					stroke: 'var(--surface)',
@@ -104,7 +105,7 @@
 			style: plotStyle,
 			marginLeft: Math.min(130, width * 0.36),
 			x: {
-				label: 'EPA per dropback, 95% interval',
+				label: 'EPA per dropback, 95% interval →',
 				tickFormat: '+.2f',
 				ticks: Math.max(3, Math.floor(width / 110))
 			},
@@ -155,7 +156,7 @@
 			title: 'QB EPA per dropback (incl. sacks & scrambles)'
 		},
 		{ key: 'epa_db_lo', label: 'CI low', fmt: epa, title: '95% confidence interval, lower bound' },
-		{ key: 'epa_db_hi', label: 'CI high', fmt: epa },
+		{ key: 'epa_db_hi', label: 'CI high', fmt: epa, title: '95% confidence interval, upper bound' },
 		{
 			key: 'cpoe',
 			label: 'CPOE',
@@ -163,11 +164,22 @@
 			better: 'high',
 			title: 'Completion % over expected'
 		},
-		{ key: 'success_rate', label: 'Success', fmt: pct, better: 'high' },
+		{
+			key: 'success_rate',
+			label: 'Success',
+			fmt: pct,
+			better: 'high',
+			title: 'Share of dropbacks with positive EPA'
+		},
 		{ key: 'adot', label: 'aDOT', fmt: (v) => num(v, 1) },
 		{ key: 'sack_rate', label: 'Sack%', fmt: pct, better: 'low' },
 		{ key: 'int_rate', label: 'INT%', fmt: pct, better: 'low' },
-		{ key: 'scramble_rate', label: 'Scramble%', fmt: pct },
+		{
+			key: 'scramble_rate',
+			label: 'Scramble%',
+			fmt: pct,
+			title: 'Scrambles per dropback (style, not quality)'
+		},
 		{ key: 'designed_runs', label: 'Designed runs', fmt: num },
 		{
 			key: 'designed_run_epa',
@@ -182,7 +194,7 @@
 			better: 'high',
 			title: 'Dropback + designed-run EPA'
 		},
-		{ key: 'pass_yards', label: 'Yards', fmt: num },
+		{ key: 'pass_yards', label: 'Pass yds', fmt: num },
 		{ key: 'pass_tds', label: 'TD', fmt: num },
 		{ key: 'ints', label: 'INT', fmt: num }
 	];
@@ -195,9 +207,10 @@
 	<h1>Quarterbacks</h1>
 	<p class="lede">
 		EPA per dropback counts everything a QB does on a pass play, including sacks and scrambles. CPOE
-		is completion percentage over what's expected given the throw's depth, location and pressure.
-		The interval chart shows the honest answer to “is this QB actually better?”: where two bars
-		overlap, the data can't tell those QBs apart yet. The dashed line is the median among QBs shown.
+		is completion percentage over what's expected given the throw's depth, location, down and
+		distance. The interval chart shows the honest answer to “is this QB actually better?”: where two
+		bars overlap, the data can't reliably separate those QBs yet. The dashed line is the median
+		among QBs shown.
 	</p>
 </section>
 
@@ -231,7 +244,7 @@
 		</div>
 		<div class="card">
 			<h2>How sure are we?</h2>
-			<p class="sub">EPA/dropback with 95% confidence intervals (normal approximation).</p>
+			<p class="sub">EPA per dropback with 95% intervals. Overlapping bars: too close to call.</p>
 			<PlotFigure label="QB EPA per dropback with confidence intervals" render={intervals} />
 		</div>
 	</div>
@@ -246,5 +259,5 @@
 		/>
 	</div>
 {:else}
-	<p class="muted">No quarterbacks meet the dropback minimum.</p>
+	<p class="muted">No quarterbacks meet the dropback minimum. Try a lower one.</p>
 {/if}

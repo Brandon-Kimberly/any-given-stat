@@ -50,7 +50,7 @@
 			better: 'high'
 		},
 		{ key: 'off_turnover_rate', label: 'Giveaway rate', fmt: (v) => pct(v, 2), better: 'low' },
-		{ key: 'off_sack_rate', label: 'Sacks taken', fmt: pct, better: 'low' },
+		{ key: 'off_sack_rate', label: 'Sack rate (taken)', fmt: pct, better: 'low' },
 		{ key: 'off_proe', label: 'Pass rate over expected', fmt: (v) => pp(v), better: null },
 		{ key: 'def_epa_play', label: 'Defense EPA/play', fmt: epa, better: 'low' },
 		{ key: 'def_pass_epa', label: 'Pass defense EPA', fmt: epa, better: 'low' },
@@ -473,7 +473,10 @@
 				<b>{num(Math.abs(proj.margin), 1)}-point</b> favorite, winning
 				<b>{num(Math.max(proj.pA, 1 - proj.pA) * 100)}%</b> of the time
 				<span class="muted"
-					>(final ratings of each season; σ = {num(predsRes.value?.params.sigma, 1)} pts)</span
+					>(each season's final ratings; assumes a typical miss of {num(
+						predsRes.value?.params.sigma,
+						1
+					)} pts)</span
 				>.
 			</p>
 		{/if}

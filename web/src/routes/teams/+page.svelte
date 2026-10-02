@@ -29,9 +29,15 @@
 			{ key: k('epa_play'), label: 'EPA/play', fmt: epa, better: hi },
 			{ key: k('pass_epa'), label: 'Pass EPA', fmt: epa, better: hi },
 			{ key: k('rush_epa'), label: 'Rush EPA', fmt: epa, better: hi },
-			{ key: k('success_rate'), label: 'Success', fmt: pct, better: hi },
-			{ key: k('pass_success'), label: 'Pass SR', fmt: pct, better: hi },
-			{ key: k('rush_success'), label: 'Rush SR', fmt: pct, better: hi },
+			{
+				key: k('success_rate'),
+				label: 'Success',
+				fmt: pct,
+				better: hi,
+				title: 'Success rate: share of plays with EPA > 0'
+			},
+			{ key: k('pass_success'), label: 'Pass success', fmt: pct, better: hi },
+			{ key: k('rush_success'), label: 'Rush success', fmt: pct, better: hi },
 			{
 				key: k('explosive_rate'),
 				label: 'Explosive',
@@ -41,13 +47,19 @@
 			},
 			{
 				key: k('turnover_rate'),
-				label: 'TO rate',
+				label: p === 'off' ? 'Giveaways' : 'Takeaways',
 				fmt: (v) => pct(v, 2),
 				better: lo,
 				title: 'Interceptions + lost fumbles per play'
 			},
 			{ key: k('sack_rate'), label: 'Sack rate', fmt: pct, better: lo },
-			{ key: k('third_down_rate'), label: '3rd down', fmt: pct, better: hi },
+			{
+				key: k('third_down_rate'),
+				label: '3rd down',
+				fmt: pct,
+				better: hi,
+				title: '3rd-down conversion rate'
+			},
 			{
 				key: k('points_per_drive'),
 				label: 'Pts/drive',
@@ -67,9 +79,15 @@
 				key: k('proe'),
 				label: 'PROE',
 				fmt: pp,
-				title: 'Pass rate over expected (nflfastR xpass), percentage points'
+				title:
+					'Pass rate over expected, in percentage points (+ = passes more than the situation predicts)'
 			},
-			{ key: k('early_down_pass_rate'), label: '1st/2nd pass%', fmt: pct },
+			{
+				key: k('early_down_pass_rate'),
+				label: '1st/2nd pass%',
+				fmt: pct,
+				title: 'Pass rate on 1st and 2nd down'
+			},
 			{ key: k('adot'), label: 'aDOT', fmt: yds, title: 'Average depth of target (air yards)' },
 			{ key: k('plays'), label: 'Plays', fmt: num }
 		];

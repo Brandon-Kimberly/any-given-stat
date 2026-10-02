@@ -48,7 +48,7 @@
 		return [...by]
 			.sort((a, b) => a[0] - b[0])
 			.flatMap(([season, s]) => [
-				{ season, v: s.clear ? s.went / s.clear : 0, what: 'Went for it when the data says go' },
+				{ season, v: s.clear ? s.went / s.clear : 0, what: 'Went for it in clear-go spots' },
 				{ season, v: s.fourth ? s.goes / s.fourth : 0, what: 'Went for it on any 4th down' }
 			]);
 	});
@@ -72,7 +72,7 @@
 				domain: [0, Math.max(0.2, ...trend.map((t) => t.v)) * 1.15]
 			},
 			color: {
-				domain: ['Went for it when the data says go', 'Went for it on any 4th down'],
+				domain: ['Went for it in clear-go spots', 'Went for it on any 4th down'],
 				range: ['var(--series-1)', 'var(--series-2)'],
 				legend: true
 			},
@@ -118,8 +118,9 @@
 			width,
 			height: Math.min(460, Math.max(320, width * 0.6)),
 			style: plotStyle,
+			marginTop: 32,
 			x: { label: 'Went for it in clear-go spots →', tickFormat: '.0%' },
-			y: { label: '↓ EPA left on the field (lower is better)', reverse: true },
+			y: { label: '↑ Less EPA left on the field (better)', reverse: true, nice: true },
 			marks: [
 				gridX(),
 				gridY(),
@@ -163,18 +164,36 @@
 			label: 'EPA lost',
 			fmt: (v) => num(v, 1),
 			better: 'low',
-			title: 'Sum over 4th downs of (best decision’s average EPA − chosen decision’s)'
+			title:
+				'EPA left on the field: sum over 4th downs of (best decision’s average EPA − chosen decision’s)'
 		},
-		{ key: 'lost_per_game', label: 'Per game', fmt: (v) => num(v, 2), better: 'low' },
+		{
+			key: 'lost_per_game',
+			label: 'Per game',
+			fmt: (v) => num(v, 2),
+			better: 'low',
+			title: 'EPA left on the field per game'
+		},
 		{ key: 'fourth_downs', label: '4th downs', fmt: (v) => num(v) },
-		{ key: 'go_rate', label: 'Go rate', fmt: (v) => pct(v) },
+		{
+			key: 'go_rate',
+			label: 'Go rate',
+			fmt: (v) => pct(v),
+			title: 'Share of all 4th downs where they went for it'
+		},
 		{
 			key: 'clear_go',
 			label: 'Clear-go spots',
 			fmt: (v) => num(v),
 			title: 'Situations where going for it was the best call by 0.3+ EPA'
 		},
-		{ key: 'clear_rate', label: 'Went when clear', fmt: (v) => pct(v), better: 'high' }
+		{
+			key: 'clear_rate',
+			label: 'Went for it (clear-go)',
+			fmt: (v) => pct(v),
+			better: 'high',
+			title: 'Share of clear-go spots where they went for it'
+		}
 	];
 </script>
 
@@ -205,15 +224,15 @@
 	<div class="card">
 		<h2>The analytics revolution, measured</h2>
 		<p class="sub">
-			League-wide, how often teams went for it in spots where the data clearly favored going, and on
-			4th downs overall (competitive game states only).
+			League-wide: how often teams went for it on any 4th down, and in spots where the data clearly
+			said go. Competitive games only.
 		</p>
 		<PlotFigure label="League 4th down aggressiveness by season" render={trendChart} />
 	</div>
 	<div class="grid-2">
 		<div class="card">
 			<h2>Who follows the math, {prefs.season}</h2>
-			<p class="sub">Right = aggressive when it's right to be; up = fewer points wasted.</p>
+			<p class="sub">Right = goes for it when the math says go. Up = less EPA left on the field.</p>
 			{#if rows.length}<PlotFigure
 					label="Aggressiveness vs EPA lost by team"
 					render={scatter}
@@ -223,10 +242,10 @@
 			<h2>Read this with care</h2>
 			<p>{res.value.meta.caveat}</p>
 			<p>
-				It's also coarse: buckets are a few yards wide, so a 4th and 1 at the opponent's 34 and at
-				their 40 count as the same spot, and score and clock only enter through the competitive-game
-				filter (win probability between 5% and 95%). Real decision models (like the nflfastR
-				4th-down bot) simulate each option exactly.
+				It's also coarse. Buckets are a few yards wide, so 4th and 1 at the opponent's 34 and at
+				their 40 count as the same spot. Score and clock enter only through the competitive-game
+				filter (win probability 5–95%). Real decision models, like the nflfastR 4th-down bot,
+				simulate each option exactly.
 			</p>
 			<p class="muted">
 				Still, the direction is robust: on short yardage almost everywhere past a team's own 20,

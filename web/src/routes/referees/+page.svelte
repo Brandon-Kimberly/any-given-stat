@@ -151,8 +151,18 @@
 			fmt: (v) => num(v, 1),
 			title: 'Flagged plays per game, both teams (declined included)'
 		},
-		{ key: 'penalty_yards_pg', label: 'Yards/game', fmt: (v) => num(v, 1) },
-		{ key: 'home_penalty_share', label: 'On home team', fmt: (v) => pct(v) },
+		{
+			key: 'penalty_yards_pg',
+			label: 'Yards/game',
+			fmt: (v) => num(v, 1),
+			title: 'Penalty yards per game, both teams'
+		},
+		{
+			key: 'home_penalty_share',
+			label: 'On home team',
+			fmt: (v) => pct(v),
+			title: 'Share of flags called on the home team'
+		},
 		{ key: 'home_win_pct', label: 'Home win %', fmt: (v) => pct(v) },
 		{ key: 'points_pg', label: 'Points/game', fmt: (v) => num(v, 1), title: 'Both teams combined' }
 	];
@@ -162,7 +172,7 @@
 <svelte:head><title>Referees · Any Given Stat</title></svelte:head>
 
 <div class="page-head">
-	<div class="eyebrow">People</div>
+	<div class="eyebrow">History</div>
 	<h1>Referees</h1>
 	<p class="lede">
 		Which crews throw the most flags, and is any of them really tilting games toward the home team?

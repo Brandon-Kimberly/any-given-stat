@@ -49,7 +49,7 @@
 		{ key: 'coach', label: 'Coach', sticky: true },
 		{ key: 'teams', label: 'Teams' },
 		{ key: 'span', label: 'Seasons' },
-		{ key: 'games', label: 'G', fmt: num },
+		{ key: 'games', label: 'G', fmt: num, title: 'Games' },
 		{ key: 'record', label: 'Record' },
 		{ key: 'win_pct', label: 'Win %', fmt: (v) => pct(v), better: 'high' },
 		{
@@ -74,10 +74,10 @@
 		},
 		{
 			key: 'go_rate_clear',
-			label: '4th-down go %',
+			label: 'Went for it (clear-go)',
 			fmt: (v) => pct(v, 0),
 			better: 'high',
-			title: 'Went for it when the 4th-down model says going is clearly right'
+			title: 'Share of clear-go 4th downs where they went for it'
 		},
 		{
 			key: 'proe',
@@ -99,7 +99,13 @@
 		{ key: 'net_epa', label: 'Net EPA', fmt: epa, better: 'high' },
 		{ key: 'ats', label: 'ATS' },
 		{ key: 'clear_go', label: 'Clear-go 4ths', fmt: num },
-		{ key: 'go_rate_clear', label: 'Went for it', fmt: (v) => pct(v, 0), better: 'high' },
+		{
+			key: 'go_rate_clear',
+			label: 'Went for it (clear-go)',
+			fmt: (v) => pct(v, 0),
+			better: 'high',
+			title: 'Share of clear-go 4th downs where they went for it'
+		},
 		{ key: 'proe', label: 'PROE', fmt: (v) => pp(v) }
 	];
 
@@ -221,7 +227,7 @@
 <svelte:head><title>Coaches · Any Given Stat</title></svelte:head>
 
 <div class="page-head">
-	<div class="eyebrow">People</div>
+	<div class="eyebrow">History</div>
 	<h1>Head coaches</h1>
 	<p class="lede">
 		Records, efficiency, how often each coach goes for it when the math says go, and the question
@@ -239,7 +245,7 @@
 			<h2>Who trusts the math on 4th down?</h2>
 			<p class="sub">
 				Careers with {minGames}+ games. Dot size = games. Clear-go = spots where going for it beat
-				kicking by a wide margin in the <a href="{base}/fourth/">4th-down model</a>.
+				kicking by 0.3+ EPA in the <a href="{base}/fourth/">4th-down model</a>.
 			</p>
 			<PlotFigure label="Coach 4th-down aggressiveness vs net EPA" render={aggroChart} />
 		</section>

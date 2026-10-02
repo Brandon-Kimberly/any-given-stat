@@ -10,6 +10,7 @@
 	import type { SeasonStatus } from '$lib/types';
 
 	let { seasons, open = $bindable(false) }: { seasons: SeasonStatus[]; open?: boolean } = $props();
+	const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
 	const jumps: { key: string; label: string; href: string }[] = [
 		{ key: 'h', label: 'Home', href: '/' },
@@ -102,7 +103,7 @@
 				<section>
 					<h3>Anywhere</h3>
 					<dl>
-						<dt><kbd>/</kbd> or <kbd>Ctrl</kbd> <kbd>K</kbd></dt>
+						<dt><kbd>/</kbd> or <kbd>{isMac ? '⌘' : 'Ctrl'}</kbd> <kbd>K</kbd></dt>
 						<dd>Search teams, players, pages</dd>
 						<dt><kbd>[</kbd> <kbd>]</kbd></dt>
 						<dd>Previous / next season</dd>

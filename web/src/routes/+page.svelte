@@ -71,7 +71,14 @@
 
 	// Power ratings now, and a week earlier for movers.
 	const seasonRatings = $derived((ratings.value ?? []).filter((r) => r.season === season));
-	const lastWeek = $derived(Math.max(0, ...seasonRatings.map((r) => r.week)));
+	const lastWeek = $derived(
+		Math.max(
+			0,
+			...seasonRatings
+				.map((r) => r.week)
+				.filter((w) => !inProgress || !latest || w <= latest.last_week)
+		)
+	);
 	const now = $derived(
 		seasonRatings.filter((r) => r.week === lastWeek).sort((a, b) => a.rank - b.rank)
 	);
@@ -246,7 +253,10 @@
 		{/if}
 		{#if test}
 			<p class="foot-note">
-				Model track record on held-out seasons: misses by {num(test.model_mae, 1)} pts per game vs Vegas'
+				Test seasons ({preds.value?.params.test_seasons.join('–')}): the model misses by {num(
+					test.model_mae,
+					1
+				)} pts a game on average; Vegas by
 				{num(test.vegas_mae, 1)}.
 			</p>
 		{/if}
@@ -255,7 +265,7 @@
 	<!-- Power ratings -->
 	<section class="card power">
 		<div class="card-head">
-			<h2>Power top 10</h2>
+			<h2>Power ratings: top 10</h2>
 			<a href="{base}/ratings/">All 32 →</a>
 		</div>
 		<p class="sub">Points better than an average team on a neutral field, after week {lastWeek}.</p>
@@ -269,10 +279,10 @@
 	<!-- Movers -->
 	<section class="card movers">
 		<div class="card-head">
-			<h2>Moving</h2>
+			<h2>Biggest movers</h2>
 			<a href="{base}/ratings/">Trajectories →</a>
 		</div>
-		<p class="sub">Rating change from last week.</p>
+		<p class="sub">Change in power rating since last week, in points.</p>
 		{#if movers.length}
 			<ul class="list">
 				{#each [...movers.slice(0, 3), ...movers.slice(-3)] as m (m.r.team)}
@@ -295,7 +305,7 @@
 			<h2>Regression watch</h2>
 			<a href="{base}/luck/">Luck →</a>
 		</div>
-		<p class="sub">Record vs what their point differential says (Pythagorean wins).</p>
+		<p class="sub">Wins vs what point differential predicts (Pythagorean wins).</p>
 		{#if luckRows.length}
 			<ul class="list">
 				{#each [...luckRows.slice(0, 3), ...luckRows.slice(-3)] as l (l.team)}
@@ -308,7 +318,7 @@
 					</li>
 				{/each}
 			</ul>
-			<p class="foot-note">Red = winning more than they've earned. Expect a correction.</p>
+			<p class="foot-note">Plus = more wins than their points earned. Expect a correction.</p>
 		{:else}
 			<div class="skeleton" style="height: 180px"></div>
 		{/if}
@@ -321,7 +331,8 @@
 			<a href="{base}/stability/">Signal vs noise →</a>
 		</div>
 		<p class="sub">
-			How well each stat predicts itself within a season (1 = perfectly, 0 = coin flip).
+			How well each stat predicts itself within a season (1 = perfectly, 0 = pure noise). The four
+			noisiest, then the two steadiest.
 		</p>
 		{#if noise.length}
 			<ul class="list">
@@ -348,7 +359,9 @@
 			<h2>QB efficiency leaders</h2>
 			<a href="{base}/qbs/">All QBs →</a>
 		</div>
-		<p class="sub">EPA per dropback with a 95% interval (min {Math.round(minDb)} dropbacks).</p>
+		<p class="sub">
+			EPA per dropback, no garbage time, with a 95% interval (min {Math.round(minDb)} dropbacks).
+		</p>
 		{#if topQbs.length}
 			<ul class="list qb-list">
 				{#each topQbs as q (q.player_id)}
@@ -626,5 +639,24 @@
 	.b {
 		color: var(--text-secondary);
 		font-size: 0.875rem;
+	}
+	/* Phones: a compact two-column index (the footer site map repeats it with groups). */
+	@media (max-width: 640px) {
+		.explore .grid-3 {
+			grid-template-columns: 1fr 1fr;
+			gap: 0.5rem;
+		}
+		.tile-link {
+			padding: 0.65rem 0.8rem;
+			min-height: 44px;
+			align-content: center;
+		}
+		.tile-link .eyebrow,
+		.b {
+			display: none;
+		}
+		.t {
+			font-size: 0.95rem;
+		}
 	}
 </style>

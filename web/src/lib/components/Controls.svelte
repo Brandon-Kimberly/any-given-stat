@@ -10,7 +10,9 @@
 		Season
 		<select bind:value={prefs.season} onchange={savePrefs}>
 			{#each [...seasons].reverse() as s (s.season)}
-				<option value={s.season}>{s.season}{s.complete ? '' : ` (thru wk ${s.last_week})`}</option>
+				<option value={s.season}
+					>{s.season}{s.complete ? '' : ` (through wk ${s.last_week})`}</option
+				>
 			{/each}
 		</select>
 	</label>

@@ -96,7 +96,7 @@
 							},
 							{
 								title: 'Worst QB seasons',
-								blurb: 'Someone had to start these games.',
+								blurb: 'Lowest EPA per dropback. Someone had to start these games.',
 								items: playerItems(
 									r.qb_worst,
 									(p) => `${p.team} · ${num(p.dropbacks)} dropbacks · CPOE ${signed(p.cpoe)}`,
@@ -147,7 +147,7 @@
 								items: gameItems(r.excitement, (g) => num(g.excitement, 1))
 							},
 							{
-								title: 'Greatest comebacks',
+								title: 'Biggest comebacks',
 								blurb: "The winner's lowest win probability during the game.",
 								items: gameItems(r.comebacks, (g) =>
 									g.winner_min_wp != null && g.winner_min_wp < 0.01

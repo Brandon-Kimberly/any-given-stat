@@ -47,6 +47,7 @@
 			width,
 			height: Math.min(520, Math.max(340, width * 0.6)),
 			style: plotStyle,
+			r: { type: 'identity' }, // radii below are pixels; Plot would rescale them
 			x: { label: 'Success rate →', tickFormat: '.0%' },
 			y: { label: '↑ EPA per carry', tickFormat: '+.2f' },
 			marks: [
@@ -60,7 +61,7 @@
 				Plot.dot(rows, {
 					x: 'success_rate',
 					y: 'epa_rush',
-					r: (d: Rusher) => Math.sqrt(d.carries) / (narrow ? 3.6 : 2.6),
+					r: (d: Rusher) => Math.max(3.5, Math.sqrt(d.carries) / (narrow ? 3 : 2.2)),
 					fill: (d: Rusher) => teamColor(d.team),
 					fillOpacity: 0.85,
 					stroke: 'var(--surface)',
@@ -101,7 +102,13 @@
 		{ key: 'epa_rush', label: 'EPA/car', fmt: epa, better: 'high' },
 		{ key: 'total_epa', label: 'Total EPA', fmt: (v) => signed(v), better: 'high' },
 		{ key: 'success_rate', label: 'Success', fmt: pct, better: 'high' },
-		{ key: 'explosive_rate', label: '10+ yd%', fmt: pct, better: 'high' },
+		{
+			key: 'explosive_rate',
+			label: '10+ yd%',
+			fmt: pct,
+			better: 'high',
+			title: 'Runs of 10+ yards (explosive)'
+		},
 		{
 			key: 'stuff_rate',
 			label: 'Stuff%',
@@ -119,8 +126,8 @@
 	<h1>Rushers</h1>
 	<p class="lede">
 		Designed runs only (scrambles count as dropbacks). Most runs lose expected points, so a rusher
-		above zero EPA per carry is doing something real. Rusher efficiency is one of the noisiest stats
-		in football, though; check <a href="{base}/stability/">Signal vs noise</a> before you trust it.
+		above zero EPA per carry is doing something real. Rusher efficiency is also one of the noisiest
+		stats in football. Check <a href="{base}/stability/">Signal vs noise</a> before you trust it.
 	</p>
 </section>
 

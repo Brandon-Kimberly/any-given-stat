@@ -21,20 +21,20 @@
 		{ key: 'validate', label: `Validation ${p.validate_seasons.join('–')}` },
 		{ key: 'test', label: `Reused test ${p.test_seasons.join('–')}` },
 		{ key: 'pre_freeze', label: `${p.live_season} before freeze` },
-		{ key: 'sealed', label: `${p.live_season} sealed` }
+		{ key: 'sealed', label: `${p.live_season} after freeze` }
 	] as const);
 	const best = (split: (typeof SPLITS)[number]['key'], metric: 'rmse' | 'log_loss') =>
 		Math.min(...MODELS.map((m) => lab.comparison[split][m.key][metric] ?? Infinity));
 	const cell = (m: ForecastMetrics, metric: 'rmse' | 'log_loss') =>
 		m[metric] == null ? '–' : num(m[metric], metric === 'rmse' ? 2 : 3);
 
-	/** "beats X (t = -1.1, within noise)" from a paired squared-error difference. */
+	/** "X misses less (t = -1.1: could be noise)" from a paired squared-error difference. */
 	function verdict(d: PairedDiff | null, a: string, b: string): string {
 		if (!d || !d.se) return `no games yet to compare ${a} and ${b}`;
 		const t = d.diff / d.se;
 		const who = t < 0 ? a : b;
-		const strength = Math.abs(t) >= 2 ? 'a real difference' : 'within noise';
-		return `${who} is more accurate (t = ${signed(t, 1)}, ${strength})`;
+		const strength = Math.abs(t) >= 2 ? 'likely real' : 'could be noise';
+		return `${who} misses less (t = ${signed(t, 1)}: ${strength})`;
 	}
 	const test = $derived(lab.comparison.test);
 
@@ -52,7 +52,7 @@
 			height: 280,
 			style: plotStyle,
 			x: { label: null, tickFormat: 'd', ticks: thinTicks(seasons, width, 40) },
-			y: { label: '↓ RMSE of the margin (points, lower is better)', zero: false },
+			y: { label: '↓ Typical miss, RMSE (points; lower is better)', zero: false },
 			color: {
 				domain: ['Round 3', 'Vegas closing line', 'Round 1'],
 				range: ['var(--series-1)', 'var(--series-2)', 'var(--series-3)'],
@@ -81,24 +81,49 @@
 	const selCols: Column<SelRow>[] = [
 		{ key: 'variant', label: 'Candidate', sticky: true },
 		{ key: 'features', label: 'Inputs' },
-		{ key: 'fit_rmse', label: 'Fit RMSE', fmt: (v) => num(v, 2) },
-		{ key: 'val_rmse', label: 'Val RMSE', fmt: (v) => num(v, 3), better: 'low' },
-		{ key: 'val_log_loss', label: 'Val log loss', fmt: (v) => num(v, 4), better: 'low' },
-		{ key: 'val_mae', label: 'Val avg miss', fmt: (v) => num(v, 2) }
+		{
+			key: 'fit_rmse',
+			label: 'Fit RMSE',
+			fmt: (v) => num(v, 2),
+			title: 'Typical miss on the fitting seasons, in points'
+		},
+		{
+			key: 'val_rmse',
+			label: 'Val RMSE',
+			fmt: (v) => num(v, 3),
+			better: 'low',
+			title: 'Typical miss on validation, in points (the model was chosen on this)'
+		},
+		{
+			key: 'val_log_loss',
+			label: 'Val log loss',
+			fmt: (v) => num(v, 4),
+			better: 'low',
+			title: 'Win-probability error on validation; lower is better'
+		},
+		{
+			key: 'val_mae',
+			label: 'Val avg miss',
+			fmt: (v) => num(v, 2),
+			title: 'Average miss on validation, in points'
+		}
 	];
 </script>
 
 <section class="card" id="round3">
 	<div class="eyebrow">Round 3 · the forecast this page shows</div>
-	<h2>As accurate as public data gets</h2>
+	<h2>Built for accuracy, not betting</h2>
 	<p class="sub">
 		Rounds 1 and 2 asked whether we can beat the line. Round 3 asks how close a forecast can get to
-		what happens, scored by root-mean-square error of the margin and log loss of the win
-		probability. {lab.selection.length} candidates were fit on {p.fit_seasons.join('–')}; the lowest
-		validation error won and was
+		the actual result. It is scored on margin error (RMSE: the typical miss in points, with big
+		misses counting extra) and win-probability error (log loss; lower is better). {lab.selection
+			.length}
+		candidates were fit on {p.fit_seasons.join('–')}; the one with the lowest validation error was
 		<a href="https://github.com/Brandon-Kimberly/any-given-stat/commit/9589541">frozen</a>
 		on {p.freeze_date}: <b>{lab.chosen.variant}</b>. Points ratings are a second team rating built
-		from final scores, which catch what EPA misses (special teams, the full value of turnovers).
+		from final scores. They catch what EPA misses: special teams and the full value of turnovers.
+		“Reused test” seasons were already seen by earlier rounds; games after the freeze are the clean
+		test.
 	</p>
 
 	<div class="scroll">
@@ -144,8 +169,8 @@
 		<li>Round 3 vs Vegas, reused test: {verdict(test.round3_vs_vegas, 'round 3', 'Vegas')}.</li>
 		<li>
 			Blend vs Vegas, reused test: {verdict(test.blend_vs_vegas, 'the blend', 'Vegas')}. The blend
-			is the line plus {Math.round(lab.blend_k * 100)}% of the model's disagreement, the weight the
-			fit seasons support.
+			moves the line {Math.round(lab.blend_k * 100)}% of the way toward the model, the weight that
+			fit best on {p.fit_seasons.join('–')}.
 		</li>
 	</ul>
 </section>
@@ -154,15 +179,17 @@
 	<section class="card">
 		<h2>Accuracy by season</h2>
 		<p class="sub">
-			Every season predicted walk-forward. {p.fit_seasons.join('–')} is in-sample for the coefficients.
+			Each season is predicted using only earlier games. {p.fit_seasons.join('–')} also set the coefficients,
+			so those years flatter the model.
 		</p>
 		<PlotFigure label="Forecast error by season: round 3, Vegas and round 1" render={seasonChart} />
 	</section>
 	<section class="card">
 		<h2>What the forecast weighs</h2>
 		<p class="sub">
-			Coefficients refit on every completed season before {p.live_season}. "Typical" is how far a
-			factor moves a line (one standard deviation). Win probabilities use σ = {num(lab.sigma, 1)} points.
+			Coefficients refit on every completed season before {p.live_season}. “Per unit” is one unit's
+			effect (± 95% range). “Typical” is how many points it moves a usual game (one standard
+			deviation). Win probabilities assume a typical miss of {num(lab.sigma, 1)} points.
 		</p>
 		<table class="coef">
 			<thead

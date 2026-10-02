@@ -163,9 +163,9 @@
 	<div class="eyebrow">Explore</div>
 	<h1>SQL explorer</h1>
 	<p class="lede">
-		Ask anything. Every play since 2016 runs through DuckDB in your browser; nothing touches a
-		server. Query the <code>pbp</code> view (one row per play, nflfastR columns). Start from a
-		preset or write your own. Press <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Enter</kbd> to run.
+		Ask anything. Every play since 2016, queried with DuckDB in your browser; your queries never
+		leave it. Query the <code>pbp</code> view (one row per play, a subset of nflfastR columns).
+		Start from a preset or write your own. Press <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Enter</kbd> to run.
 	</p>
 </section>
 

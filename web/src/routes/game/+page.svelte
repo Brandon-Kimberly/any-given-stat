@@ -82,6 +82,7 @@
 	const home = $derived(game?.home ?? line?.home ?? '');
 	const away = $derived(game?.away ?? line?.away ?? '');
 	const sideColors = $derived(matchupColors(away, home));
+	const exPct = $derived(game ? excitementPercentile(excitement(game)) : 0);
 	const played = $derived(!!game && game.home_score != null && game.wp.length > 1);
 	const homeWon = $derived((game?.home_score ?? 0) > (game?.away_score ?? 0));
 
@@ -173,7 +174,7 @@
 						x: 't',
 						y: 'wp',
 						title: (d: { t: number; wp: number }) =>
-							`${Math.floor(d.t)}' elapsed\n${g.home} ${pct(d.wp, 0)} · ${g.away} ${pct(1 - d.wp, 0)}`
+							`${Math.floor(d.t)} min elapsed\n${g.home} ${pct(d.wp, 0)} · ${g.away} ${pct(1 - d.wp, 0)}`
 					})
 				)
 			]
@@ -302,9 +303,9 @@
 				<div class="label">Excitement index</div>
 				<div class="value"><CountUp text={excitement(game).toFixed(1)} /></div>
 				<div class="note">
-					Total win-probability swing. More exciting than {Math.round(
-						excitementPercentile(excitement(game)) * 100
-					)}% of games since 2016.
+					Total win-probability swing. {exPct >= 0.99
+						? 'One of the most exciting games since 2016 (top 1%).'
+						: `More exciting than ${Math.round(exPct * 100)}% of games since 2016.`}
 				</div>
 			</div>
 			<div class="card tile">
@@ -398,7 +399,7 @@
 				<div class="card">
 					<div class="card-head">
 						<h2><TeamBadge team={t} name link /></h2>
-						{#if r}<span class="chip">#{r.rank} power</span>{/if}
+						{#if r}<span class="chip">Power rank #{r.rank}</span>{/if}
 					</div>
 					{#if r}
 						<div class="split">
@@ -416,7 +417,7 @@
 				{@const d = unit.get(m.d)}
 				<div class="card">
 					<h2>{m.label}</h2>
-					<p class="sub">Season EPA/play, garbage time excluded, with league rank (1 = best).</p>
+					<p class="sub">Season EPA/play (no garbage time) and league rank (1 = best).</p>
 					{#if o && d}
 						<table class="box">
 							<thead

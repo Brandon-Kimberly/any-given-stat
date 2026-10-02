@@ -31,7 +31,10 @@
 	let busy = $state(false);
 
 	onMount(() => {
-		if (!('IntersectionObserver' in window)) {
+		// Charts already on (or near) screen render before the first paint, so their
+		// placeholder never shows and nothing below them jumps.
+		width = el.clientWidth;
+		if (!('IntersectionObserver' in window) || el.getBoundingClientRect().top < innerHeight + 400) {
 			seen = true;
 			return;
 		}

@@ -84,9 +84,24 @@ def season_status(con: duckdb.DuckDBPyConnection) -> list[dict]:
         group by season order by season
         """,
     )
+    # "Through week N" = the last week whose games are all final (a Thursday game alone
+    # doesn't make a week). Needs the schedule; without it, the last week with any result.
+    done_week = {}
+    if has_relation(con, "schedule"):
+        for r in datasets.records(
+            con,
+            """
+            select season, week, bool_and(result is not null) as done
+            from schedule where game_type = 'REG' group by all order by season, week
+            """,
+        ):
+            if r["done"] and done_week.get(r["season"], r["week"] - 1) == r["week"] - 1:
+                done_week[r["season"]] = r["week"]
     for r in rows:
         # 256 games through 2020, 272 since the 17-game schedule.
         r["complete"] = r["reg_games"] >= (272 if r["season"] >= 2021 else 256)
+        if not r["complete"] and r["season"] in done_week:
+            r["last_week"] = done_week[r["season"]]
     return rows
 
 

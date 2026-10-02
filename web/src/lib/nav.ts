@@ -34,7 +34,7 @@ export const navGroups: NavGroup[] = [
 	{
 		label: 'Players',
 		items: [
-			{ href: '/qbs/', label: 'Quarterbacks', blurb: 'EPA per dropback, CPOE, intervals' },
+			{ href: '/qbs/', label: 'Quarterbacks', blurb: 'EPA per dropback, CPOE, how sure we are' },
 			{ href: '/receivers/', label: 'Receivers', blurb: 'Target share, air yards, WOPR' },
 			{ href: '/rushers/', label: 'Rushers', blurb: 'Efficiency on designed runs' }
 		]
@@ -46,7 +46,7 @@ export const navGroups: NavGroup[] = [
 			{
 				href: '/predictions/',
 				label: 'Predictions vs Vegas',
-				blurb: 'Model lines and the attempt to beat the market'
+				blurb: 'Model lines and attempts to beat Vegas'
 			}
 		]
 	},
@@ -54,7 +54,7 @@ export const navGroups: NavGroup[] = [
 		label: 'History',
 		items: [
 			{ href: '/records/', label: 'Record book', blurb: 'Best and worst seasons, wildest games' },
-			{ href: '/coaches/', label: 'Coaches', blurb: '4th-down nerve, records, ATS' },
+			{ href: '/coaches/', label: 'Coaches', blurb: '4th-down nerve, records, against the spread' },
 			{ href: '/referees/', label: 'Referees', blurb: 'Flags and home-field lean' }
 		]
 	},

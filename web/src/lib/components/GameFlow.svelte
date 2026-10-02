@@ -150,7 +150,9 @@
 					<span class="result" class:score={(d.points ?? 0) > 0}
 						>{RESULT[d.result ?? ''] ?? d.result ?? '–'}</span
 					>
-					<span class="stats">{d.plays} pl · {d.yards ?? '–'} yd · {d.top ?? '–'}</span>
+					<span class="stats" title="Plays · yards · time of possession"
+						>{d.plays} pl · {d.yards ?? '–'} yd · {d.top ?? '–'}</span
+					>
 				</button>
 			</li>
 		{/each}
