@@ -7,7 +7,7 @@
 	import LoadError from '$lib/components/LoadError.svelte';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import { epa, num, pct, signed } from '$lib/format';
-	import { gridX, gridY, isNarrow, Plot, plotStyle } from '$lib/plot';
+	import { gridX, gridY, isNarrow, Plot, plotStyle, signedTick } from '$lib/plot';
 	import { prefs } from '$lib/prefs.svelte';
 	import { resource } from '$lib/resource.svelte';
 	import { median } from '$lib/stats';
@@ -45,7 +45,7 @@
 			height: Math.min(560, Math.max(360, width * 0.6)),
 			style: plotStyle,
 			marginRight: 30,
-			x: { label: 'CPOE (completion % over expected) →', tickFormat: '+.0f' },
+			x: { label: 'CPOE (completion % over expected) →', tickFormat: signedTick },
 			y: { label: '↑ EPA per dropback', tickFormat: '+.2f' },
 			marks: [
 				gridX(),

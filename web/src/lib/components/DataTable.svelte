@@ -16,6 +16,7 @@
 
 <script lang="ts" generics="T extends Record<string, any>">
 	import { goto } from '$app/navigation';
+	import { favorite } from '$lib/favorite.svelte';
 	import TeamBadge from './TeamBadge.svelte';
 
 	let {
@@ -54,6 +55,9 @@
 	// Render a first screenful quickly; long tables reveal the rest on request.
 	const STEP = 75;
 	let limit = $state(STEP);
+
+	const teamKeys = $derived(columns.filter((c) => c.team).map((c) => c.key));
+	const isFav = (row: T) => !!favorite.team && teamKeys.some((k) => row[k] === favorite.team);
 
 	const visible = $derived.by(() => {
 		const q = query.trim().toLowerCase();
@@ -178,6 +182,7 @@
 				<tr
 					class:clickable={!!(href || onrowclick)}
 					class:hl={highlight?.(row)}
+					class:fav={isFav(row)}
 					onclick={(e) => rowClick(e, row)}
 				>
 					{#if showIndex}<td class="rank">{i + 1}</td>{/if}
@@ -333,6 +338,9 @@
 	}
 	tr.hl td {
 		box-shadow: inset 0 -2px 0 var(--accent);
+	}
+	tr.fav td:first-child {
+		box-shadow: inset 3px 0 0 var(--fav);
 	}
 	.cell-link {
 		color: inherit;

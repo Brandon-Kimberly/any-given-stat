@@ -4,7 +4,7 @@
 	import PlotFigure from '$lib/components/Plot.svelte';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import { epa, num, pct } from '$lib/format';
-	import { gridX, gridY, isNarrow, Plot, plotStyle } from '$lib/plot';
+	import { gridX, gridY, isNarrow, Plot, plotStyle, signedTick } from '$lib/plot';
 	import { resource } from '$lib/resource.svelte';
 	import { theme } from '$lib/theme.svelte';
 	import type { Concepts, FourthBucket } from '$lib/types';
@@ -49,7 +49,7 @@
 				tickFormat: (v: number) =>
 					v === 0 ? 'Own goal' : v === 100 ? 'TD' : v <= 50 ? `${v}` : `${100 - v}`
 			},
-			y: { label: '↑ Expected points for the offense', tickFormat: '+.0f', domain: [-2.5, 7] },
+			y: { label: '↑ Expected points for the offense', tickFormat: signedTick, domain: [-2.5, 7] },
 			color: { domain: DOWNS, range: SLOTS, legend: true },
 			marks: [
 				gridY(),

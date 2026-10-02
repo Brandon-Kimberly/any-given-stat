@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { base } from '$app/paths';
+	import CountUp from '$lib/components/CountUp.svelte';
 	import DataTable, { type Column } from '$lib/components/DataTable.svelte';
 	import PlotFigure from '$lib/components/Plot.svelte';
 	import LoadError from '$lib/components/LoadError.svelte';
@@ -322,24 +323,24 @@
 		<div class="tiles">
 			<div class="card tile">
 				<div class="label">Average miss, {t0}–{t1} (held out)</div>
-				<div class="value">{num(test.model_mae, 2)} pts</div>
+				<div class="value"><CountUp text={`${num(test.model_mae, 2)} pts`} /></div>
 				<div class="note">Vegas: {num(test.vegas_mae, 2)} pts ({test.games} games)</div>
 			</div>
 			<div class="card tile">
 				<div class="label">Picked the winner</div>
-				<div class="value">{pct(test.model_su)}</div>
+				<div class="value"><CountUp text={pct(test.model_su)} /></div>
 				<div class="note">Vegas favorite won {pct(test.vegas_su)}</div>
 			</div>
 			<div class="card tile">
 				<div class="label">Against the spread</div>
-				<div class="value">{test.ats_w}–{test.ats_l}</div>
+				<div class="value"><CountUp text={`${test.ats_w}–${test.ats_l}`} /></div>
 				<div class="note">
 					{pct(atsPct(test))}; break-even at −110 is {pct(BREAKEVEN)}
 				</div>
 			</div>
 			<div class="card tile">
 				<div class="label">When it disagrees by 3+ points</div>
-				<div class="value">{test.edge3_w}–{test.edge3_l}</div>
+				<div class="value"><CountUp text={`${test.edge3_w}–${test.edge3_l}`} /></div>
 				<div class="note">
 					{pct(test.edge3_w / (test.edge3_w + test.edge3_l))}: big disagreements aren't an edge
 				</div>
@@ -394,7 +395,9 @@
 					</div>
 					<div class="card tile">
 						<div class="label">Final test, {lab.protocol.test_seasons.join('–')}</div>
-						<div class="value">{lab.test.wins}–{lab.test.bets - lab.test.wins}</div>
+						<div class="value">
+							<CountUp text={`${lab.test.wins}–${lab.test.bets - lab.test.wins}`} />
+						</div>
 						<div class="note">
 							{pct(lab.test.win_rate)}, p = {num(lab.test.p_value, 2)}:
 							{(lab.test.win_rate ?? 0) > lab.protocol.breakeven && (lab.test.p_value ?? 1) < 0.05

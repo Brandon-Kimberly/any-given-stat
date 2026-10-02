@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { base } from '$app/paths';
+	import CountUp from '$lib/components/CountUp.svelte';
 	import { page } from '$app/state';
+	import { favorite } from '$lib/favorite.svelte';
 	import Controls from '$lib/components/Controls.svelte';
 	import DataTable, { type Column } from '$lib/components/DataTable.svelte';
 	import LoadError from '$lib/components/LoadError.svelte';
@@ -11,7 +13,7 @@
 	import TeamBadge from '$lib/components/TeamBadge.svelte';
 	import { epa, num, pct, signed } from '$lib/format';
 	import { loadSeasonGames } from '$lib/games';
-	import { gridY, isNarrow, Plot, plotStyle, thinTicks } from '$lib/plot';
+	import { gridY, isNarrow, Plot, plotStyle, signedTick, thinTicks } from '$lib/plot';
 	import { prefs } from '$lib/prefs.svelte';
 	import { resource } from '$lib/resource.svelte';
 	import { ranks, rolling } from '$lib/stats';
@@ -322,7 +324,7 @@
 					30
 				)
 			},
-			y: { label: '↑ Net rating (points)', tickFormat: '+.0f' },
+			y: { label: '↑ Net rating (points)', tickFormat: signedTick },
 			marks: [
 				gridY(),
 				Plot.ruleY([0], { stroke: 'var(--axis)' }),
@@ -428,6 +430,15 @@
 				{#if style}<span>{style} offense</span>{/if}
 			</div>
 		</div>
+		<button
+			class="fav-btn"
+			aria-pressed={favorite.team === team}
+			onclick={() => favorite.toggle(team)}
+			title="Your team gets a gold ring everywhere on the site and a card on the home page"
+		>
+			<span aria-hidden="true">{favorite.team === team ? '★' : '☆'}</span>
+			{favorite.team === team ? 'My team' : 'Make my team'}
+		</button>
 	</div>
 </section>
 
@@ -455,34 +466,38 @@
 	<div class="tiles">
 		<div class="card tile">
 			<div class="label">Net EPA/play</div>
-			<div class="value">{epa(me.net_epa_play)}</div>
+			<div class="value"><CountUp text={epa(me.net_epa_play)} /></div>
 			<div class="note">#{rankOf('net_epa_play', true)} of {season.length}</div>
 		</div>
 		<div class="card tile">
 			<div class="label">Offense EPA/play</div>
-			<div class="value">{epa(me.off_epa_play)}</div>
+			<div class="value"><CountUp text={epa(me.off_epa_play)} /></div>
 			<div class="note">#{rankOf('off_epa_play', true)} of {season.length}</div>
 		</div>
 		<div class="card tile">
 			<div class="label">Defense EPA/play</div>
-			<div class="value">{epa(me.def_epa_play)}</div>
+			<div class="value"><CountUp text={epa(me.def_epa_play)} /></div>
 			<div class="note">#{rankOf('def_epa_play', false)} of {season.length} (lower is better)</div>
 		</div>
 		<div class="card tile">
 			<div class="label">Power rating</div>
-			<div class="value">{myRating ? `${signed(myRating.points)} pts` : '–'}</div>
+			<div class="value">
+				<CountUp text={myRating ? `${signed(myRating.points)} pts` : '–'} />
+			</div>
 			<div class="note">{myRating ? `#${myRating.rank} after week ${lastWeek}` : ''}</div>
 		</div>
 		<div class="card tile">
 			<div class="label">Schedule so far</div>
-			<div class="value">{sos.value == null ? '–' : `${signed(sos.value)} pts`}</div>
+			<div class="value">
+				<CountUp text={sos.value == null ? '–' : `${signed(sos.value)} pts`} />
+			</div>
 			<div class="note">
 				{sos.rank ? `Avg opponent rating, #${sos.rank} hardest of ${sos.of}` : ''}
 			</div>
 		</div>
 		<div class="card tile">
 			<div class="label">Record vs points</div>
-			<div class="value">{weeks.length ? record(team).text : '–'}</div>
+			<div class="value"><CountUp text={weeks.length ? record(team).text : '–'} /></div>
 			<div class="note">
 				{rec ? `Pythagorean ${num(rec.pythag_wins, 1)} wins (${signed(rec.wins_over_pythag)})` : ''}
 			</div>
@@ -679,7 +694,33 @@
 	.row {
 		display: flex;
 		align-items: center;
+		flex-wrap: wrap;
 		gap: 1rem;
+	}
+	.fav-btn {
+		margin-left: auto;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		border-radius: 999px;
+		border: 1px solid rgba(255, 255, 255, 0.45);
+		background: rgba(0, 0, 0, 0.22);
+		color: #fff;
+		font-weight: 600;
+		font-size: 0.85rem;
+		padding: 0.35rem 0.85rem;
+	}
+	.fav-btn:hover {
+		background: rgba(0, 0, 0, 0.35);
+	}
+	.fav-btn[aria-pressed='true'] span {
+		color: #ffd166;
+		animation: star 0.4s var(--ease);
+	}
+	@keyframes star {
+		40% {
+			transform: scale(1.5) rotate(20deg);
+		}
 	}
 	.facts {
 		display: flex;

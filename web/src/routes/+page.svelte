@@ -1,13 +1,17 @@
 <script lang="ts">
 	import { base } from '$app/paths';
+	import CountUp from '$lib/components/CountUp.svelte';
+	import FavoriteCard from '$lib/components/FavoriteCard.svelte';
 	import PlotFigure from '$lib/components/Plot.svelte';
+	import Ticker, { type TickerItem } from '$lib/components/Ticker.svelte';
 	import TeamBadge from '$lib/components/TeamBadge.svelte';
 	import { corr, epa, num, pct, signed, spread, wlt } from '$lib/format';
 	import { navGroups } from '$lib/nav';
 	import { isNarrow, Plot, plotStyle } from '$lib/plot';
 	import { resource } from '$lib/resource.svelte';
+	import { excitement, excitementPercentile, loadSeasonGames } from '$lib/games';
 	import { teamColor, teamName } from '$lib/teams.svelte';
-	import type { GamePrediction, Rating } from '$lib/types';
+	import type { GameDetail, GamePrediction, Rating } from '$lib/types';
 
 	const meta = resource('meta');
 	const ratings = resource('ratings');
@@ -15,10 +19,51 @@
 	const luck = resource('luck');
 	const qbs = resource('qbs');
 	const stab = resource('stability');
+	const gameIndex = resource('games/index');
 
 	const latest = $derived(meta.value?.seasons.at(-1));
 	const season = $derived(latest?.season ?? 0);
 	const inProgress = $derived(latest ? !latest.complete : false);
+
+	// This season's games, for the ticker's latest finals.
+	let seasonGames = $state.raw<GameDetail[]>([]);
+	$effect(() => {
+		if (!season) return;
+		loadSeasonGames(season)
+			.then((g) => (seasonGames = g))
+			.catch(() => (seasonGames = []));
+	});
+	const totalGames = $derived((gameIndex.value ?? []).reduce((a, s) => a + s.games, 0));
+
+	const ticker = $derived.by<TickerItem[]>(() => {
+		const finals = seasonGames.filter((g) => g.home_score != null && g.season_type === 'REG');
+		const lastWk = Math.max(0, ...finals.map((g) => g.week));
+		const recent = finals
+			.filter((g) => g.week === lastWk)
+			.map((g) => ({ g, ex: excitementPercentile(excitement(g)) }))
+			.sort((a, b) => b.ex - a.ex)
+			.map<TickerItem>(({ g, ex }) => {
+				const homeWon = g.home_score! > g.away_score!;
+				const w = homeWon ? g.home : g.away;
+				const l = homeWon ? g.away : g.home;
+				const ws = Math.max(g.home_score!, g.away_score!);
+				const ls = Math.min(g.home_score!, g.away_score!);
+				return {
+					key: g.game_id,
+					href: `/game/?id=${g.game_id}`,
+					tag: ex >= 0.85 ? `Wk ${g.week} · thriller` : `Wk ${g.week} final`,
+					text: `${w} ${ws}, ${l} ${ls}`,
+					hot: ex >= 0.85
+				};
+			});
+		const next = (preds.value?.upcoming ?? []).map<TickerItem>((g) => ({
+			key: g.game_id,
+			href: `/game/?id=${g.game_id}`,
+			tag: `Wk ${g.week} line`,
+			text: `${g.away} ${g.neutral ? 'vs' : '@'} ${g.home} · ${spread(g.vegas, g.home, g.away)} (model ${spread(g.model, g.home, g.away)})`
+		}));
+		return [...recent, ...next];
+	});
 
 	// Power ratings now, and a week earlier for movers.
 	const seasonRatings = $derived((ratings.value ?? []).filter((r) => r.season === season));
@@ -137,7 +182,30 @@
 		<a class="hero-btn primary" href="{base}/predictions/">This week's lines</a>
 		<a class="hero-btn" href="{base}/learn/">How football works, in numbers</a>
 	</div>
+	<dl class="hero-stats">
+		<div>
+			<dt>Games charted</dt>
+			<dd><CountUp text={totalGames ? num(totalGames) : '0'} duration={1100} /></dd>
+		</div>
+		<div>
+			<dt>Seasons</dt>
+			<dd><CountUp text={String(meta.value?.seasons.length ?? 0)} duration={1100} /></dd>
+		</div>
+		<div>
+			<dt>Ratings, week by week</dt>
+			<dd><CountUp text={num(ratings.value?.length ?? 0)} duration={1100} /></dd>
+		</div>
+	</dl>
+	<svg class="ball" viewBox="0 0 160 100" aria-hidden="true">
+		<path class="hide" d="M8 50C30 8 130 8 152 50 130 92 30 92 8 50Z" />
+		<path class="seam" d="M30 26c8 16 8 32 0 48M130 26c-8 16-8 32 0 48" />
+		<path class="lace" d="M55 50h50M62 43v14M72 43v14M82 43v14M92 43v14M100 44v12" />
+	</svg>
 </section>
+
+<Ticker items={ticker} label="Latest scores and lines" />
+
+<FavoriteCard ratings={now} luck={luckRows} upcoming={preds.value?.upcoming ?? []} />
 
 <div class="dash">
 	<!-- This week -->
@@ -313,6 +381,59 @@
 	.hero h1 {
 		font-size: clamp(2rem, 1.3rem + 3vw, 3.25rem);
 		max-width: 18ch;
+	}
+	.hero-stats {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem 2rem;
+		margin: 1.4rem 0 0;
+	}
+	.hero-stats dt {
+		font-size: 0.72rem;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: rgba(255, 255, 255, 0.75);
+	}
+	.hero-stats dd {
+		margin: 0;
+		font: 800 clamp(1.4rem, 1.1rem + 1.2vw, 2rem) / 1.1 var(--display);
+	}
+	/* A football drifting across the field behind the copy. */
+	.ball {
+		position: absolute;
+		right: 6%;
+		top: 16%;
+		width: clamp(110px, 15vw, 190px);
+		transform: rotate(-28deg);
+		animation: spiral 7s ease-in-out infinite;
+		pointer-events: none;
+		filter: drop-shadow(0 18px 24px rgba(0, 0, 0, 0.25));
+	}
+	.ball .hide {
+		fill: rgba(255, 255, 255, 0.1);
+		stroke: rgba(255, 255, 255, 0.45);
+		stroke-width: 2.5;
+	}
+	.ball .seam {
+		fill: none;
+		stroke: rgba(255, 255, 255, 0.3);
+		stroke-width: 3;
+	}
+	.ball .lace {
+		fill: none;
+		stroke: rgba(255, 255, 255, 0.7);
+		stroke-width: 3;
+		stroke-linecap: round;
+	}
+	@keyframes spiral {
+		50% {
+			transform: translate(-18px, 10px) rotate(-20deg);
+		}
+	}
+	@media (max-width: 640px) {
+		.ball {
+			display: none;
+		}
 	}
 	.hero-actions {
 		display: flex;

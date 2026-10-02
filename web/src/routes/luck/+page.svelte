@@ -4,11 +4,12 @@
 	import PlotFigure from '$lib/components/Plot.svelte';
 	import SampleWarning from '$lib/components/SampleWarning.svelte';
 	import { base } from '$app/paths';
+	import CountUp from '$lib/components/CountUp.svelte';
 	import LoadError from '$lib/components/LoadError.svelte';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import TeamBadge from '$lib/components/TeamBadge.svelte';
 	import { corr, num, pct, signed, wlt } from '$lib/format';
-	import { gridX, gridY, isNarrow, Plot, plotStyle } from '$lib/plot';
+	import { gridX, gridY, isNarrow, Plot, plotStyle, signedTick } from '$lib/plot';
 	import { prefs } from '$lib/prefs.svelte';
 	import { resource } from '$lib/resource.svelte';
 	import { mean, ols } from '$lib/stats';
@@ -148,8 +149,8 @@
 			width,
 			height: 320,
 			style: plotStyle,
-			x: { label: 'Wins over Pythagorean, season N (per 17 games) →', tickFormat: '+.0f' },
-			y: { label: '↑ Change in wins, season N+1', tickFormat: '+.0f' },
+			x: { label: 'Wins over Pythagorean, season N (per 17 games) →', tickFormat: signedTick },
+			y: { label: '↑ Change in wins, season N+1', tickFormat: signedTick },
 			marks: [
 				gridX(),
 				gridY(),
@@ -254,7 +255,9 @@
 		{#if bigOver.length}
 			<div class="card tile">
 				<div class="label">Beat Pythag by 2+ wins → next year</div>
-				<div class="value">{signed(mean(bigOver.map((p) => p.change)))} wins</div>
+				<div class="value">
+					<CountUp text={`${signed(mean(bigOver.map((p) => p.change)))} wins`} />
+				</div>
 				<div class="note">
 					average change, {bigOver.length} teams since {firstPair}
 				</div>
@@ -263,7 +266,9 @@
 		{#if bigUnder.length}
 			<div class="card tile">
 				<div class="label">Missed Pythag by 2+ wins → next year</div>
-				<div class="value">{signed(mean(bigUnder.map((p) => p.change)))} wins</div>
+				<div class="value">
+					<CountUp text={`${signed(mean(bigUnder.map((p) => p.change)))} wins`} />
+				</div>
 				<div class="note">average change, {bigUnder.length} teams</div>
 			</div>
 		{/if}

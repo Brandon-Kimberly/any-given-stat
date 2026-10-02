@@ -47,4 +47,12 @@ export function declutter(root: HTMLElement): void {
 	for (const t of hide) t.style.display = 'none';
 }
 
+/** Signed axis tick with a real minus, trailing zeros trimmed, and a bare 0 (never "+0"):
+ * safe at any tick step, unlike '+.0f', which prints +2 for 2.5. */
+export function signedTick(v: number): string {
+	if (Math.abs(v) < 1e-9) return '0';
+	const s = String(Math.abs(+v.toFixed(3)));
+	return v > 0 ? `+${s}` : `−${s}`;
+}
+
 export { Plot };

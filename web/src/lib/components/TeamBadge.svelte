@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { base } from '$app/paths';
+	import { favorite } from '$lib/favorite.svelte';
 	import { teamMeta } from '$lib/teams.svelte';
 
 	let {
@@ -21,11 +22,15 @@
 
 {#if link}
 	<a class="team {size}" href="{base}/team/?t={team}" title={meta?.name ?? team}>
-		<span class="badge" {style}>{team}</span>{#if name}<span class="name">{label}</span>{/if}
+		<span class="badge" class:fav={favorite.team === team} {style}>{team}</span>{#if name}<span
+				class="name">{label}</span
+			>{/if}
 	</a>
 {:else}
 	<span class="team {size}" title={meta?.name ?? team}>
-		<span class="badge" {style}>{team}</span>{#if name}<span class="name">{label}</span>{/if}
+		<span class="badge" class:fav={favorite.team === team} {style}>{team}</span>{#if name}<span
+				class="name">{label}</span
+			>{/if}
 	</span>
 {/if}
 
@@ -55,6 +60,11 @@
 		font: 800 0.72em/1 var(--display);
 		letter-spacing: 0.02em;
 		box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+	}
+	.badge.fav {
+		box-shadow:
+			0 0 0 1.5px var(--surface),
+			0 0 0 3px var(--fav, #e8b100);
 	}
 	.md .badge {
 		font-size: 0.85em;

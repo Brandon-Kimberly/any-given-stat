@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { base } from '$app/paths';
+	import CountUp from '$lib/components/CountUp.svelte';
 	import { page } from '$app/state';
 	import LoadError from '$lib/components/LoadError.svelte';
 	import PlotFigure from '$lib/components/Plot.svelte';
@@ -269,7 +270,7 @@
 		<div class="tiles">
 			<div class="card tile">
 				<div class="label">Excitement index</div>
-				<div class="value">{excitement(game).toFixed(1)}</div>
+				<div class="value"><CountUp text={excitement(game).toFixed(1)} /></div>
 				<div class="note">
 					Total win-probability swing. More exciting than {Math.round(
 						excitementPercentile(excitement(game)) * 100
@@ -278,7 +279,7 @@
 			</div>
 			<div class="card tile">
 				<div class="label">Winner's lowest win prob</div>
-				<div class="value">{pct(winnerLow(game), 0)}</div>
+				<div class="value"><CountUp text={pct(winnerLow(game), 0)} /></div>
 				<div class="note">How close they came to losing</div>
 			</div>
 			<div class="card tile">

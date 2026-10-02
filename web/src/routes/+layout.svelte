@@ -4,12 +4,15 @@
 	import { base } from '$app/paths';
 	import { page } from '$app/state';
 	import CommandPalette from '$lib/components/CommandPalette.svelte';
+	import Shortcuts from '$lib/components/Shortcuts.svelte';
 	import Skeleton from '$lib/components/Skeleton.svelte';
+	import Toast from '$lib/components/Toast.svelte';
 	import { load } from '$lib/data';
 	import { groupFor, navGroups } from '$lib/nav';
 	import { prefs, prefsUrl, restorePrefs, savePrefs } from '$lib/prefs.svelte';
 	import { loadTeamMeta } from '$lib/teams.svelte';
 	import { initTheme, theme, toggleTheme } from '$lib/theme.svelte';
+	import { copyLink } from '$lib/toast.svelte';
 	import type { Meta } from '$lib/types';
 	import { untrack } from 'svelte';
 
@@ -20,6 +23,7 @@
 	let openGroup = $state<string | null>(null);
 	let drawer = $state(false);
 	let search = $state(false);
+	let keys = $state(false);
 	let ready = $state(false);
 
 	restorePrefs(page.url);
@@ -155,6 +159,30 @@
 				<kbd class="search-kbd">{isMac ? '⌘' : 'Ctrl'} K</kbd>
 			</button>
 			<button
+				class="icon-btn wide-only"
+				onclick={() => copyLink()}
+				aria-label="Copy a link to this view"
+				title="Copy link (c)"
+			>
+				<svg viewBox="0 0 24 24" aria-hidden="true"
+					><path
+						d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"
+					/></svg
+				>
+			</button>
+			<button
+				class="icon-btn wide-only"
+				onclick={() => (keys = true)}
+				aria-label="Keyboard shortcuts"
+				title="Keyboard shortcuts (?)"
+			>
+				<svg viewBox="0 0 24 24" aria-hidden="true"
+					><rect x="2.5" y="6" width="19" height="12" rx="2" /><path
+						d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"
+					/></svg
+				>
+			</button>
+			<button
 				class="icon-btn"
 				onclick={toggleTheme}
 				aria-label={theme.dark ? 'Switch to light mode' : 'Switch to dark mode'}
@@ -206,6 +234,8 @@
 {/if}
 
 <CommandPalette bind:open={search} />
+{#if meta}<Shortcuts seasons={meta.seasons} bind:open={keys} />{/if}
+<Toast />
 
 <main id="main" tabindex="-1">
 	{#if error}
@@ -442,6 +472,9 @@
 		}
 		.search-text,
 		.search-kbd {
+			display: none;
+		}
+		.wide-only {
 			display: none;
 		}
 		.search-btn {
