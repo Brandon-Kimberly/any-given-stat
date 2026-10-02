@@ -178,45 +178,49 @@
 			<button aria-pressed={side === 'home'} onclick={() => (side = 'home')}>{home}</button>
 		</div>
 	</div>
-	<ol class="feed" onmouseleave={() => hover(null)}>
-		{#each rows as { p, i, scoreChange } (i)}
-			<li class:scoring={scoreChange} onmouseenter={() => hover(p)} onfocusin={() => hover(p)}>
-				<div class="clock">
-					<b>{quarter(p[0])}</b>
-					{p[1] ?? ''}
-				</div>
-				<div class="body">
-					<div class="head">
-						<TeamBadge team={p[2]} />
-						<span class="sit">{situation(p)}</span>
-						{#each TAGS as [k, label] (k)}
-							{#if p[12].includes(k)}<span class="tag tag-{k === '4' ? 'four' : k}">{label}</span
-								>{/if}
-						{/each}
+	<!-- A scrolling region must be keyboard-focusable (WCAG 2.1.1; axe scrollable-region-focusable). -->
+	<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+	<div class="feed-wrap" role="region" aria-label="Play by play, scrollable" tabindex="0">
+		<ol class="feed" onmouseleave={() => hover(null)}>
+			{#each rows as { p, i, scoreChange } (i)}
+				<li class:scoring={scoreChange} onmouseenter={() => hover(p)} onfocusin={() => hover(p)}>
+					<div class="clock">
+						<b>{quarter(p[0])}</b>
+						{p[1] ?? ''}
 					</div>
-					<p class="desc">{p[7]}</p>
-				</div>
-				<div class="nums">
-					{#if p[8] != null}
-						<span
-							class="chip {p[8] > 0.05 ? 'good' : p[8] < -0.05 ? 'bad' : ''}"
-							title="Expected points added for {p[2]}">{fmtEpa(p[8], 2)} EPA</span
-						>
-					{/if}
-					{#if scoreChange}
-						<span class="score-now">{away} {p[11]}, {home} {p[10]}</span>
-					{:else if p[9] != null}
-						<span class="wp muted"
-							>{p[9] >= 0.5 ? home : away}
-							{Math.round((p[9] >= 0.5 ? p[9] : 1 - p[9]) * 100)}%</span
-						>
-					{/if}
-				</div>
-			</li>
-		{:else}
-			<li class="empty muted">No plays match.</li>
-		{/each}
-	</ol>
+					<div class="body">
+						<div class="head">
+							<TeamBadge team={p[2]} />
+							<span class="sit">{situation(p)}</span>
+							{#each TAGS as [k, label] (k)}
+								{#if p[12].includes(k)}<span class="tag tag-{k === '4' ? 'four' : k}">{label}</span
+									>{/if}
+							{/each}
+						</div>
+						<p class="desc">{p[7]}</p>
+					</div>
+					<div class="nums">
+						{#if p[8] != null}
+							<span
+								class="chip {p[8] > 0.05 ? 'good' : p[8] < -0.05 ? 'bad' : ''}"
+								title="Expected points added for {p[2]}">{fmtEpa(p[8], 2)} EPA</span
+							>
+						{/if}
+						{#if scoreChange}
+							<span class="score-now">{away} {p[11]}, {home} {p[10]}</span>
+						{:else if p[9] != null}
+							<span class="wp muted"
+								>{p[9] >= 0.5 ? home : away}
+								{Math.round((p[9] >= 0.5 ? p[9] : 1 - p[9]) * 100)}%</span
+							>
+						{/if}
+					</div>
+				</li>
+			{:else}
+				<li class="empty muted">No plays match.</li>
+			{/each}
+		</ol>
+	</div>
 </section>
 
 <style>
@@ -328,14 +332,16 @@
 		cursor: pointer;
 		min-height: 0;
 	}
-	.feed {
-		list-style: none;
-		margin: 0;
-		padding: 0;
+	.feed-wrap {
 		max-height: 75vh;
 		overflow-y: auto;
 		border: 1px solid var(--border);
 		border-radius: 10px;
+	}
+	.feed {
+		list-style: none;
+		margin: 0;
+		padding: 0;
 	}
 	.feed li {
 		display: grid;

@@ -10,12 +10,12 @@
 	import { signed } from '$lib/format';
 	import { gridY, isNarrow, Plot, plotStyle, thinTicks } from '$lib/plot';
 	import { prefs } from '$lib/prefs.svelte';
-	import { resource } from '$lib/resource.svelte';
+	import { resource, seasonResource } from '$lib/resource.svelte';
 	import { teamName } from '$lib/teams.svelte';
 	import type { Rating } from '$lib/types';
 
 	const metaRes = resource('meta');
-	const ratingsRes = resource('ratings');
+	const ratingsRes = seasonResource<Rating>('ratings', () => prefs.season);
 	const meta = $derived(metaRes.value);
 	const all = $derived(ratingsRes.value ?? []);
 

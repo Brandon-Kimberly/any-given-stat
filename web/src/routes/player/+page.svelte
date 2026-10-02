@@ -7,7 +7,7 @@
 	import TeamBadge from '$lib/components/TeamBadge.svelte';
 	import { epa, num, pct, signed } from '$lib/format';
 	import { gridY, isNarrow, Plot, plotStyle, thinTicks } from '$lib/plot';
-	import { resource } from '$lib/resource.svelte';
+	import { resource, seasonResource } from '$lib/resource.svelte';
 	import { teamColor, teamName } from '$lib/teams.svelte';
 	import type { QB, QBGame, Receiver, Rusher } from '$lib/types';
 
@@ -16,7 +16,8 @@
 	const qbsRes = resource('qbs');
 	const recRes = resource('receivers');
 	const rushRes = resource('rushers');
-	const qbGamesRes = resource('qb_games');
+	// Game logs load one season at a time (the season picked below).
+	const qbGamesRes = seasonResource<QBGame>('qb_games', () => logSeason);
 
 	const info = $derived(players.value?.find((p) => p.player_id === id));
 	const qb = $derived(

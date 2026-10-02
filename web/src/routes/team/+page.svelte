@@ -15,17 +15,17 @@
 	import { loadSeasonGames } from '$lib/games';
 	import { gridY, isNarrow, Plot, plotStyle, signedTick, thinTicks } from '$lib/plot';
 	import { prefs } from '$lib/prefs.svelte';
-	import { resource } from '$lib/resource.svelte';
+	import { resource, seasonResource } from '$lib/resource.svelte';
 	import { ranks, rolling } from '$lib/stats';
 	import { teamMeta, teamName } from '$lib/teams.svelte';
-	import type { GameDetail, Rating, TeamSeason, TeamWeek } from '$lib/types';
+	import type { GameDetail, Rating, TeamSeason, TeamSplit, TeamWeek } from '$lib/types';
 
 	const metaRes = resource('meta');
 	const teamsRes = resource('teams');
-	const weeksRes = resource('team_weeks');
+	const weeksRes = seasonResource<TeamWeek>('team_weeks', () => prefs.season);
 	const luckRes = resource('luck');
-	const ratingsRes = resource('ratings');
-	const splitsRes = resource('team_splits');
+	const ratingsRes = seasonResource<Rating>('ratings', () => prefs.season);
+	const splitsRes = seasonResource<TeamSplit>('team_splits', () => prefs.season);
 
 	const meta = $derived(metaRes.value);
 	const teams = $derived(teamsRes.value ?? []);

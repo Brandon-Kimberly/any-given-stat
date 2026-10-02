@@ -1,3 +1,3 @@
-import { prefetch } from '$lib/prefetch';
+import { prefetchSeason } from '$lib/prefetch';
 
-export const load = () => prefetch('ratings');
+export const load = ({ url }: { url: URL }) => prefetchSeason(url, 'ratings');

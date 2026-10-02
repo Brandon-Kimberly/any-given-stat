@@ -94,7 +94,8 @@
 					y1: 'lo',
 					y2: 'hi',
 					fill: 'var(--neutral-mark)',
-					fillOpacity: 0.15
+					fillOpacity: 0.15,
+					clip: true
 				}),
 				Plot.ruleY([opts.p], { stroke: 'var(--axis)', strokeDasharray: '4,3' }),
 				Plot.dot(careers, {

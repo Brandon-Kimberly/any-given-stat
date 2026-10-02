@@ -8,13 +8,13 @@
 	import { corr, epa, num, pct, signed, spread, wlt } from '$lib/format';
 	import { navGroups } from '$lib/nav';
 	import { isNarrow, Plot, plotStyle } from '$lib/plot';
-	import { resource } from '$lib/resource.svelte';
+	import { resource, seasonResource } from '$lib/resource.svelte';
 	import { excitement, excitementPercentile, loadSeasonGames } from '$lib/games';
 	import { teamColor, teamName } from '$lib/teams.svelte';
 	import type { GameDetail, GamePrediction, Rating } from '$lib/types';
 
 	const meta = resource('meta');
-	const ratings = resource('ratings');
+	const oddsIndex = resource('playoff_odds/index');
 	const preds = resource('predictions');
 	const luck = resource('luck');
 	const qbs = resource('qbs');
@@ -24,6 +24,10 @@
 	const latest = $derived(meta.value?.seasons.at(-1));
 	const season = $derived(latest?.season ?? 0);
 	const inProgress = $derived(latest ? !latest.complete : false);
+	const ratings = seasonResource<Rating>('ratings', () => season || null);
+	const simulated = $derived(
+		(oddsIndex.value ?? []).reduce((a, s) => a + s.weeks.length, 0) * 10000
+	);
 
 	// This season's games, for the ticker's latest finals.
 	let seasonGames = $state.raw<GameDetail[]>([]);
@@ -192,8 +196,8 @@
 			<dd><CountUp text={String(meta.value?.seasons.length ?? 0)} duration={1100} /></dd>
 		</div>
 		<div>
-			<dt>Ratings, week by week</dt>
-			<dd><CountUp text={num(ratings.value?.length ?? 0)} duration={1100} /></dd>
+			<dt>Seasons simulated</dt>
+			<dd><CountUp text={num(simulated)} duration={1100} /></dd>
 		</div>
 	</dl>
 	<svg class="ball" viewBox="0 0 160 100" aria-hidden="true">

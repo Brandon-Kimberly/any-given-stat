@@ -19,7 +19,7 @@
 		wpAt
 	} from '$lib/games';
 	import { gridY, isNarrow, Plot, plotStyle } from '$lib/plot';
-	import { resource } from '$lib/resource.svelte';
+	import { resource, seasonResource } from '$lib/resource.svelte';
 	import { matchupColors, teamName } from '$lib/teams.svelte';
 	import type {
 		BoxSide,
@@ -33,7 +33,7 @@
 	const id = $derived(page.url.searchParams.get('id') ?? '');
 	const season = $derived(seasonFromGameId(id));
 	const preds = resource('predictions');
-	const ratings = resource('ratings');
+	const ratings = seasonResource<Rating>('ratings', () => season);
 	const teams = resource('teams');
 
 	let game = $state.raw<GameDetail | null>(null);

@@ -12,7 +12,7 @@
 	import { epa, num, pct, pp, signed } from '$lib/format';
 	import { gridY, isNarrow, Plot, plotStyle, signedTick, thinTicks } from '$lib/plot';
 	import { prefs } from '$lib/prefs.svelte';
-	import { resource } from '$lib/resource.svelte';
+	import { resource, seasonResource } from '$lib/resource.svelte';
 	import { normCdf, percentileOf } from '$lib/stats';
 	import { teamName } from '$lib/teams.svelte';
 	import type { QB, Rating, Receiver, Rusher, TeamSeason } from '$lib/types';
@@ -125,7 +125,6 @@
 
 	const metaRes = resource('meta');
 	const teamsRes = resource('teams');
-	const ratingsRes = resource('ratings');
 	const predsRes = resource('predictions');
 	// Player datasets load only when their mode is opened.
 	let qbs = $state.raw<QB[] | null>(null);
@@ -249,6 +248,14 @@
 	const a = $derived(resolve(A));
 	const b = $derived(resolve(B));
 
+	// Ratings for each side's season (often the same file, cached once).
+	const ratingsA = seasonResource<Rating>('ratings', () => (mode === 'teams' ? A.season : null));
+	const ratingsB = seasonResource<Rating>('ratings', () => (mode === 'teams' ? B.season : null));
+	const ratingRows = $derived([
+		...(ratingsA.value ?? []),
+		...(B.season !== A.season ? (ratingsB.value ?? []) : [])
+	]);
+
 	function label(s: { id: string; row: Row | null; season: number }): string {
 		if (mode === 'teams') return `${s.season} ${teamName(s.id)}`;
 		return `${s.row?.full_name ?? s.row?.name ?? s.id} (${s.season})`;
@@ -295,7 +302,7 @@
 
 	// Teams: neutral-field projection from each side's latest power rating in its season.
 	function lastRating(team: string, season: number): Rating | undefined {
-		const rs = (ratingsRes.value ?? []).filter((r) => r.team === team && r.season === season);
+		const rs = ratingRows.filter((r) => r.team === team && r.season === season);
 		return rs.reduce<Rating | undefined>(
 			(best, r) => (!best || r.week > best.week ? r : best),
 			undefined
@@ -313,10 +320,10 @@
 
 	function pathChart(width: number) {
 		const rows = [
-			...(ratingsRes.value ?? [])
+			...ratingRows
 				.filter((r) => r.team === a.id && r.season === a.season)
 				.map((r) => ({ ...r, who: shortLabel(a) })),
-			...(ratingsRes.value ?? [])
+			...ratingRows
 				.filter((r) => r.team === b.id && r.season === b.season)
 				.map((r) => ({ ...r, who: shortLabel(b) }))
 		];

@@ -185,7 +185,8 @@
 					y1: 'lo',
 					y2: 'hi',
 					fill: 'var(--neutral-mark)',
-					fillOpacity: 0.15
+					fillOpacity: 0.15,
+					clip: true
 				}),
 				Plot.ruleY([0.5], { stroke: 'var(--axis)' }),
 				Plot.dot(atsRows, {
