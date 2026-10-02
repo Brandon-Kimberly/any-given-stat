@@ -4,6 +4,7 @@
 	import DataTable, { type Column } from '$lib/components/DataTable.svelte';
 	import PlotFigure from '$lib/components/Plot.svelte';
 	import LoadError from '$lib/components/LoadError.svelte';
+	import PageToc from '$lib/components/PageToc.svelte';
 	import Round2 from '$lib/components/Round2.svelte';
 	import Round3 from '$lib/components/Round3.svelte';
 	import Skeleton from '$lib/components/Skeleton.svelte';
@@ -83,6 +84,17 @@
 		}))
 	);
 	const nextWeek = $derived(data?.upcoming[0]);
+	const tocItems = $derived(
+		[
+			nextWeek && { id: 'this-week', label: `Week ${nextWeek.week}` },
+			lab3 && { id: 'round3', label: 'The forecast' },
+			test && { id: 'accuracy', label: 'Accuracy' },
+			lab && { id: 'lab', label: 'Round 1' },
+			lab2 && { id: 'round2', label: 'Round 2' },
+			{ id: 'every', label: 'Every pick' },
+			{ id: 'how', label: 'How it works' }
+		].filter((i): i is { id: string; label: string } => !!i)
+	);
 
 	const pickColumns: Column<Pick>[] = [
 		{ key: 'matchup', label: 'Game', sticky: true },
@@ -336,8 +348,10 @@
 {:else if !data}
 	<Skeleton height={360} />
 {:else}
+	<PageToc items={tocItems} />
+
 	{#if nextWeek}
-		<div class="card">
+		<div class="card" id="this-week">
 			<h2>Week {nextWeek.week}, {nextWeek.season}</h2>
 			<p class="sub">
 				Sorted by disagreement with Vegas. Win probabilities assume the real margin misses the
@@ -357,7 +371,7 @@
 	{#if lab3}<Round3 lab={lab3} />{/if}
 
 	{#if test}
-		<div class="tiles">
+		<div class="tiles" id="accuracy">
 			<div class="card tile">
 				<div class="label">Average miss, {t0}–{t1} test seasons</div>
 				<div class="value"><CountUp text={`${num(test.model_mae, 2)} pts`} /></div>
@@ -463,7 +477,7 @@
 
 	{#if lab2}<Round2 lab={lab2} />{/if}
 
-	<div class="card">
+	<div class="card" id="every">
 		<div class="toolbar" style="margin-bottom: 0.5rem">
 			<h2 style="margin: 0">Every prediction</h2>
 			<label class="field">
@@ -490,7 +504,7 @@
 		{/key}
 	</div>
 
-	<div class="card">
+	<div class="card" id="how">
 		<h2>How the model works</h2>
 		<p>
 			<strong>EPA ratings.</strong> Each team-game becomes a row: the offense's EPA/play, explained

@@ -287,7 +287,9 @@
 	}
 	.anchor {
 		position: absolute;
-		left: -1.1rem;
+		left: -1.5rem;
+		min-width: 24px;
+		text-align: center;
 		opacity: 0;
 		text-decoration: none;
 		color: var(--text-muted);

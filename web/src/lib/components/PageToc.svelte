@@ -1,34 +1,71 @@
 <script lang="ts">
 	// "On this page" jump links for long pages. Sticks under the header while scrolling and
 	// marks the section in view. Sections need matching ids.
-	import { onMount } from 'svelte';
-
 	let { items }: { items: { id: string; label: string }[] } = $props();
 	let active = $state<string | null>(null);
+	let nav: HTMLElement;
 
-	onMount(() => {
-		const els = items
-			.map((i) => document.getElementById(i.id))
-			.filter((e): e is HTMLElement => !!e);
-		const io = new IntersectionObserver(
-			(entries) => {
-				const top = entries
-					.filter((e) => e.isIntersecting)
-					.sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
-				if (top) active = top.target.id;
-			},
-			{ rootMargin: '-80px 0px -60% 0px' }
-		);
-		for (const e of els) io.observe(e);
-		return () => io.disconnect();
+	// Keep the active pill visible when the bar overflows (phones); scroll only the bar.
+	$effect(() => {
+		const a = active && nav?.querySelector<HTMLElement>(`a[href="#${active}"]`);
+		if (a)
+			nav.scrollTo({
+				left: a.offsetLeft - nav.clientWidth / 2 + a.offsetWidth / 2,
+				behavior: 'smooth'
+			});
 	});
+
+	// The active section is the last one whose top has passed under the bar. A clicked link stays
+	// active while its section is on screen (sections near the bottom can't scroll to the top)
+	// until the user scrolls by hand. Items can arrive late, so this is an effect, not onMount.
+	let pinned: string | null = null;
+	let reached = false;
+	$effect(() => {
+		const ids = items.map((i) => i.id);
+		let frame = 0;
+		const compute = () => {
+			frame = 0;
+			if (pinned) {
+				// Held through the smooth scroll; released once reached and then scrolled away.
+				const r = document.getElementById(pinned)?.getBoundingClientRect();
+				const onScreen = !!r && r.top < innerHeight && r.bottom > 120;
+				if (onScreen) reached = true;
+				if (onScreen || (r && !reached)) return void (active = pinned);
+				pinned = null;
+			}
+			let cur: string | null = null;
+			for (const id of ids) {
+				const e = document.getElementById(id);
+				if (e && e.getBoundingClientRect().top <= 140) cur = id;
+			}
+			active = cur;
+		};
+		const onScroll = () => (frame ||= requestAnimationFrame(compute));
+		const unpin = () => (pinned = null);
+		compute();
+		addEventListener('scroll', onScroll, { passive: true });
+		for (const t of ['wheel', 'touchstart', 'keydown'])
+			addEventListener(t, unpin, { passive: true });
+		return () => {
+			cancelAnimationFrame(frame);
+			removeEventListener('scroll', onScroll);
+			for (const t of ['wheel', 'touchstart', 'keydown']) removeEventListener(t, unpin);
+		};
+	});
+
+	function pick(id: string) {
+		pinned = id;
+		reached = false;
+		active = id;
+	}
 </script>
 
-<nav class="toc" aria-label="On this page">
+<nav class="toc" aria-label="On this page" bind:this={nav}>
 	<span class="lbl">On this page</span>
 	{#each items as i (i.id)}
 		<a
 			href="#{i.id}"
+			onclick={() => pick(i.id)}
 			class:on={active === i.id}
 			aria-current={active === i.id ? 'location' : undefined}>{i.label}</a
 		>

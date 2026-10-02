@@ -674,3 +674,8 @@ html.theming *::after {
 		inset 0 1px 0 rgba(255, 255, 255, 0.04),
 		var(--shadow-sm);
 }
+
+/* Jump links (PageToc) land below the sticky header and the jump bar itself. */
+:where(section, div)[id] {
+	scroll-margin-top: 7.5rem;
+}

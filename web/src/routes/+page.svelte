@@ -640,4 +640,23 @@
 		color: var(--text-secondary);
 		font-size: 0.875rem;
 	}
+	/* Phones: a compact two-column index (the footer site map repeats it with groups). */
+	@media (max-width: 640px) {
+		.explore .grid-3 {
+			grid-template-columns: 1fr 1fr;
+			gap: 0.5rem;
+		}
+		.tile-link {
+			padding: 0.65rem 0.8rem;
+			min-height: 44px;
+			align-content: center;
+		}
+		.tile-link .eyebrow,
+		.b {
+			display: none;
+		}
+		.t {
+			font-size: 0.95rem;
+		}
+	}
 </style>

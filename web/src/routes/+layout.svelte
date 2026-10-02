@@ -669,6 +669,7 @@
 	}
 	.foot-meta a {
 		color: var(--text-secondary);
+		padding-block: 0.2rem;
 	}
 	.dot {
 		width: 7px;

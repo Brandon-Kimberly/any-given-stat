@@ -3,6 +3,7 @@
 	// replay through the season and an honest check of how calibrated past odds were.
 	import { base } from '$app/paths';
 	import LoadError from '$lib/components/LoadError.svelte';
+	import PageToc from '$lib/components/PageToc.svelte';
 	import PlotFigure from '$lib/components/Plot.svelte';
 	import SampleWarning from '$lib/components/SampleWarning.svelte';
 	import Skeleton from '$lib/components/Skeleton.svelte';
@@ -251,6 +252,14 @@
 	const v1Mean = $derived(
 		versions.reduce((a, s) => a + s.v1_brier_playoffs!, 0) / (versions.length || 1)
 	);
+	const tocItems = $derived([
+		{ id: 'afc', label: 'AFC' },
+		{ id: 'nfc', label: 'NFC' },
+		{ id: 'title', label: 'Title odds' },
+		{ id: 'divisions', label: 'Divisions' },
+		{ id: 'trust', label: 'Track record' },
+		...(versions.length ? [{ id: 'versions', label: 'Old vs new' }] : [])
+	]);
 	function versionChart(width: number) {
 		const rows = versions.flatMap((s) => [
 			{ season: s.season, brier: s.v1_brier_playoffs!, who: 'Old simulator' },
@@ -393,6 +402,7 @@
 		>
 	</div>
 	<SampleWarning {status} />
+	<PageToc items={tocItems} />
 	{#if isFinal}
 		<div class="callout info" role="note">
 			Regular season over: the Playoffs and Division columns show what actually happened (✓). Bye
@@ -403,7 +413,7 @@
 
 	<div class="grid-2">
 		{#each confs as { c, rows } (c)}
-			<section class="card">
+			<section class="card" id={c.toLowerCase()}>
 				<div class="card-head">
 					<h2>{c}</h2>
 					<span class="muted small"
@@ -461,12 +471,12 @@
 	</div>
 
 	<div class="grid-2">
-		<section class="card">
+		<section class="card" id="title">
 			<h2>Title odds</h2>
 			<p class="sub">Chance to win the Super Bowl, {weekLabel(week).toLowerCase()}.</p>
 			<PlotFigure label="Super Bowl odds, top 10" render={titleChart} />
 		</section>
-		<section class="card">
+		<section class="card" id="moves">
 			<h2>Biggest moves</h2>
 			{#if movers.length}
 				<p class="sub">Change in playoff odds from the previous week, in percentage points.</p>
@@ -487,7 +497,7 @@
 		</section>
 	</div>
 
-	<section class="card">
+	<section class="card" id="divisions">
 		<div class="card-head">
 			<h2>The division race</h2>
 		</div>
@@ -500,7 +510,7 @@
 		<PlotFigure label="Playoff odds over the season, {activeDivision}" render={pathChart} />
 	</section>
 
-	<section class="card">
+	<section class="card" id="trust">
 		<h2>Should you trust these odds?</h2>
 		{#if skill.length}
 			<p class="sub">
@@ -537,7 +547,7 @@
 	</section>
 
 	{#if versions.length}
-		<section class="card">
+		<section class="card" id="versions">
 			<h2>Old simulator vs current</h2>
 			<p class="sub">
 				Average Brier score {versions[0].season}–{versions.at(-1)?.season}: {v2Mean.toFixed(4)} now vs
