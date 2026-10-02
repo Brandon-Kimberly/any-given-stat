@@ -285,6 +285,7 @@
 			width,
 			height: 260,
 			style: plotStyle,
+			r: { type: 'identity' }, // radii below are pixels; Plot would rescale them
 			x: { label: 'Kick distance (yards) →' },
 			y: { label: '↑ Made', domain: [0, 1], tickFormat: '.0%' },
 			marks: [

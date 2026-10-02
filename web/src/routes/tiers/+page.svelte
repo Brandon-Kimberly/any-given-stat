@@ -58,17 +58,19 @@
 			width,
 			height,
 			style: plotStyle,
+			r: { type: 'identity' }, // radii below are pixels; Plot would rescale them
 			marginRight: 20,
 			x: {
 				domain: [x0, x1],
-				label: `${adjusted ? 'Adjusted offense' : 'Offense'} EPA/play →`,
+				label: `${adjusted ? 'Adjusted offense' : 'Offense'} EPA/play (better →)`,
 				tickFormat: '+.2f'
 			},
 			y: {
 				domain: [y0, y1],
 				reverse: true,
 				label: `↑ ${adjusted ? 'Adjusted defense' : 'Defense'} EPA/play allowed (better up)`,
-				tickFormat: '+.2f'
+				tickFormat: '+.2f',
+				ticks: 8
 			},
 			marks: [
 				gridX(),

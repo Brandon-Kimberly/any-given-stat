@@ -21,8 +21,14 @@
 
 	const season = $derived(all.filter((r) => r.season === prefs.season));
 	const weeks = $derived([...new Set(season.map((r) => r.week))].sort((a, b) => a - b));
-	const lastWeek = $derived(weeks.at(-1) ?? 0);
 	const status = $derived(meta?.seasons.find((s) => s.season === prefs.season));
+	// In-progress seasons stop at the last fully played week (a lone Thursday game
+	// doesn't move ratings); the slider can still reach the week under way.
+	const lastWeek = $derived(
+		status && !status.complete
+			? (weeks.filter((w) => w <= status.last_week).at(-1) ?? weeks.at(-1) ?? 0)
+			: (weeks.at(-1) ?? 0)
+	);
 	// Scrub the table back through the season; null = latest.
 	let scrub = $state<number | null>(null);
 	const shownWeek = $derived(scrub != null && weeks.includes(scrub) ? scrub : lastWeek);

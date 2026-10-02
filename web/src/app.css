@@ -261,6 +261,17 @@ a.card:hover,
 .card-head h2 {
 	margin: 0;
 }
+/* "See all →" links in card headers: a comfortable tap target. */
+.card-head > a {
+	display: inline-flex;
+	align-items: center;
+	min-height: 28px;
+}
+input[type='range'] {
+	min-height: 28px;
+	accent-color: var(--accent);
+	cursor: pointer;
+}
 
 /* ---------- Page header ---------- */
 .page-head {

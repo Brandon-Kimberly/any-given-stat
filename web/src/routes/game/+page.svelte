@@ -82,6 +82,7 @@
 	const home = $derived(game?.home ?? line?.home ?? '');
 	const away = $derived(game?.away ?? line?.away ?? '');
 	const sideColors = $derived(matchupColors(away, home));
+	const exPct = $derived(game ? excitementPercentile(excitement(game)) : 0);
 	const played = $derived(!!game && game.home_score != null && game.wp.length > 1);
 	const homeWon = $derived((game?.home_score ?? 0) > (game?.away_score ?? 0));
 
@@ -302,9 +303,9 @@
 				<div class="label">Excitement index</div>
 				<div class="value"><CountUp text={excitement(game).toFixed(1)} /></div>
 				<div class="note">
-					Total win-probability swing. More exciting than {Math.round(
-						excitementPercentile(excitement(game)) * 100
-					)}% of games since 2016.
+					Total win-probability swing. {exPct >= 0.99
+						? 'One of the most exciting games since 2016 (top 1%).'
+						: `More exciting than ${Math.round(exPct * 100)}% of games since 2016.`}
 				</div>
 			</div>
 			<div class="card tile">

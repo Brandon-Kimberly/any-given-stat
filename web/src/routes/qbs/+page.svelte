@@ -44,6 +44,7 @@
 			width,
 			height: Math.min(560, Math.max(360, width * 0.6)),
 			style: plotStyle,
+			r: { type: 'identity' }, // radii below are pixels; Plot would rescale them
 			marginRight: 30,
 			x: { label: 'CPOE (completion % over expected) →', tickFormat: signedTick },
 			y: { label: '↑ EPA per dropback', tickFormat: '+.2f' },
@@ -58,7 +59,7 @@
 				Plot.dot(data, {
 					x: 'cpoe',
 					y: 'epa_db',
-					r: (d: QB) => Math.sqrt(d.dropbacks) / (narrow ? 4.5 : 3.2),
+					r: (d: QB) => Math.max(3.5, Math.sqrt(d.dropbacks) / (narrow ? 3.4 : 2.6)),
 					fill: (d: QB) => teamColor(d.team),
 					fillOpacity: 0.9,
 					stroke: 'var(--surface)',

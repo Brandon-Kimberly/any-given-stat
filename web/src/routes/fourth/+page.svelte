@@ -118,8 +118,9 @@
 			width,
 			height: Math.min(460, Math.max(320, width * 0.6)),
 			style: plotStyle,
+			marginTop: 32,
 			x: { label: 'Went for it in clear-go spots →', tickFormat: '.0%' },
-			y: { label: '↓ EPA left on the field (lower is better)', reverse: true },
+			y: { label: '↑ Less EPA left on the field (better)', reverse: true, nice: true },
 			marks: [
 				gridX(),
 				gridY(),

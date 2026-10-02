@@ -481,6 +481,21 @@
 	.hamburger {
 		display: none;
 	}
+	/* Mid widths: full menus, but a compact search and no secondary buttons. */
+	@media (max-width: 1180px) {
+		.search-btn {
+			min-width: 0;
+		}
+		.search-text {
+			display: none;
+		}
+		.wide-only {
+			display: none;
+		}
+		.menu-btn {
+			padding-inline: 0.5rem;
+		}
+	}
 	@media (max-width: 960px) {
 		.menus {
 			display: none;
@@ -559,6 +574,8 @@
 		margin: 0 auto;
 		padding: 1.5rem 16px 2.5rem;
 		outline: none;
+		/* Keep the footer below the fold while data loads, so it doesn't jump. */
+		min-height: calc(100vh - 60px);
 	}
 	.page {
 		display: grid;

@@ -4,7 +4,7 @@
 	import LoadError from '$lib/components/LoadError.svelte';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import TeamBadge from '$lib/components/TeamBadge.svelte';
-	import { pct } from '$lib/format';
+	import { pct, spread } from '$lib/format';
 	import {
 		excitement,
 		excitementPercentile,
@@ -18,6 +18,7 @@
 	import type { GameDetail } from '$lib/types';
 
 	const meta = resource('meta');
+	const preds = resource('predictions');
 	let games = $state.raw<GameDetail[] | null>(null);
 	let error = $state<string | null>(null);
 
@@ -44,7 +45,12 @@
 			label: g.season_type === 'POST' ? 'Playoffs' : `Week ${g.week}`
 		}))
 	);
-	const weeks = $derived([...new Set(rows.map((r) => r.label))]);
+	// Games not played yet this week come from the forecast (line, model, kickoff date).
+	const upcoming = $derived((preds.value?.upcoming ?? []).filter((u) => u.season === prefs.season));
+	const weeks = $derived([
+		...new Set([...rows.map((r) => r.label), ...upcoming.map((u) => `Week ${u.week}`)])
+	]);
+	const shownUpcoming = $derived(upcoming.filter((u) => `Week ${u.week}` === week));
 	let pickedWeek = $state<string | null>(null);
 	const week = $derived(
 		pickedWeek && weeks.includes(pickedWeek) ? pickedWeek : (weeks.at(-1) ?? '')
@@ -116,6 +122,25 @@
 				<div class="foot">
 					<span>{g.gameday ?? ''}</span>
 					{#if tag}<span class="chip good">{tag}</span>{/if}
+				</div>
+			</a>
+		{/each}
+		{#each shownUpcoming as u (u.game_id)}
+			{@const fav = u.home_wp >= 0.5 ? u.home : u.away}
+			<a class="card game interactive upcoming" href="{base}/game/?id={u.game_id}">
+				<div class="row"><TeamBadge team={u.away} name="nick" /></div>
+				<div class="row"><TeamBadge team={u.home} name="nick" /></div>
+				<div class="preview">
+					<span><span class="k">Vegas</span> {spread(u.vegas, u.home, u.away)}</span>
+					<span
+						><span class="k">Model</span>
+						{fav}
+						{pct(u.home_wp >= 0.5 ? u.home_wp : 1 - u.home_wp, 0)}</span
+					>
+				</div>
+				<div class="foot">
+					<span>{u.gameday}</span>
+					<span class="chip">Upcoming</span>
 				</div>
 			</a>
 		{/each}
@@ -261,5 +286,19 @@
 	}
 	.strong {
 		font-weight: 700;
+	}
+	.upcoming {
+		border-style: dashed;
+	}
+	.preview {
+		display: grid;
+		gap: 0.15rem;
+		margin: 0.45rem 0 0.2rem;
+		font-size: 0.82rem;
+		font-variant-numeric: tabular-nums;
+	}
+	.preview .k {
+		color: var(--text-muted);
+		margin-right: 0.25rem;
 	}
 </style>

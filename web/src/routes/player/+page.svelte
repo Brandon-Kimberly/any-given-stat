@@ -6,7 +6,7 @@
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import TeamBadge from '$lib/components/TeamBadge.svelte';
 	import { epa, num, pct, signed } from '$lib/format';
-	import { gridY, isNarrow, Plot, plotStyle, thinTicks } from '$lib/plot';
+	import { gridY, isNarrow, Plot, plotStyle, signedTick, thinTicks } from '$lib/plot';
 	import { resource, seasonResource } from '$lib/resource.svelte';
 	import { teamColor, teamName } from '$lib/teams.svelte';
 	import type { QB, QBGame, Receiver, Rusher } from '$lib/types';
@@ -343,10 +343,11 @@
 			x: {
 				label: 'Week',
 				type: 'band',
-				domain: Array.from({ length: Math.max(18, ...log.map((g) => g.week)) }, (_, i) => i + 1),
+				// Weeks played so far (at least 4), not an empty 18-week axis early in a season.
+				domain: Array.from({ length: Math.max(4, ...log.map((g) => g.week)) }, (_, i) => i + 1),
 				ticks: isNarrow(width) ? [1, 4, 7, 10, 13, 16] : undefined
 			},
-			y: { label: '↑ EPA per dropback', tickFormat: '+.1f' },
+			y: { label: '↑ EPA per dropback', tickFormat: signedTick },
 			marks: [
 				gridY(),
 				Plot.ruleY([0], { stroke: 'var(--axis)' }),

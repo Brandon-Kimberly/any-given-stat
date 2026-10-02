@@ -728,6 +728,13 @@
 		gap: 0.3rem 1rem;
 		opacity: 0.92;
 		font-size: 0.92rem;
+		/* Room for the record and rank before they load (two lines on phones). */
+		min-height: 1.4em;
+	}
+	@media (max-width: 560px) {
+		.facts {
+			min-height: 3em;
+		}
 	}
 	.ident {
 		display: grid;

@@ -71,7 +71,14 @@
 
 	// Power ratings now, and a week earlier for movers.
 	const seasonRatings = $derived((ratings.value ?? []).filter((r) => r.season === season));
-	const lastWeek = $derived(Math.max(0, ...seasonRatings.map((r) => r.week)));
+	const lastWeek = $derived(
+		Math.max(
+			0,
+			...seasonRatings
+				.map((r) => r.week)
+				.filter((w) => !inProgress || !latest || w <= latest.last_week)
+		)
+	);
 	const now = $derived(
 		seasonRatings.filter((r) => r.week === lastWeek).sort((a, b) => a.rank - b.rank)
 	);

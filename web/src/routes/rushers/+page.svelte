@@ -47,6 +47,7 @@
 			width,
 			height: Math.min(520, Math.max(340, width * 0.6)),
 			style: plotStyle,
+			r: { type: 'identity' }, // radii below are pixels; Plot would rescale them
 			x: { label: 'Success rate →', tickFormat: '.0%' },
 			y: { label: '↑ EPA per carry', tickFormat: '+.2f' },
 			marks: [
@@ -60,7 +61,7 @@
 				Plot.dot(rows, {
 					x: 'success_rate',
 					y: 'epa_rush',
-					r: (d: Rusher) => Math.sqrt(d.carries) / (narrow ? 3.6 : 2.6),
+					r: (d: Rusher) => Math.max(3.5, Math.sqrt(d.carries) / (narrow ? 3 : 2.2)),
 					fill: (d: Rusher) => teamColor(d.team),
 					fillOpacity: 0.85,
 					stroke: 'var(--surface)',

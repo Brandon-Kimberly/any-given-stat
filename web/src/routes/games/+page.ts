@@ -1,3 +1,3 @@
 import { prefetch } from '$lib/prefetch';
 
-export const load = () => prefetch('meta');
+export const load = () => prefetch('predictions', 'meta');
