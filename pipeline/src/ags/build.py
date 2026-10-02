@@ -13,7 +13,19 @@ from pathlib import Path
 
 import duckdb
 
-from . import datasets, fourth, games, market, people, playbyplay, players, ratings, records, sim
+from . import (
+    datasets,
+    fourth,
+    games,
+    lab2,
+    market,
+    people,
+    playbyplay,
+    players,
+    ratings,
+    records,
+    sim,
+)
 from .config import OUT_DIR
 from .db import has_relation
 from .teams import teams_meta
@@ -104,7 +116,9 @@ def build_all(con: duckdb.DuckDBPyConnection, out_dir: Path = OUT_DIR, explorer:
             # --- playoff odds (sim.py) ---
             with timed("playoff odds"):
                 odds_index = []
+                odds_payloads = {}
                 for season, payload in sim.playoff_odds(con, params):
+                    odds_payloads[season] = payload
                     dest = out_dir / "playoff_odds" / f"{season}.json"
                     write_json(dest, payload)
                     odds_index.append(
@@ -119,6 +133,10 @@ def build_all(con: duckdb.DuckDBPyConnection, out_dir: Path = OUT_DIR, explorer:
             experiment = market.lab(con, params["lambda"], half_life)
             if experiment is not None:
                 write_json(out_dir / "lab.json", experiment)
+            with timed("beat-the-line round 2"):
+                round2 = lab2.lab(con, params["lambda"], half_life, odds_payloads)
+            if round2 is not None:
+                write_json(out_dir / "lab2.json", round2)
     write_json(out_dir / "teams.json", teams)
     splits = datasets.team_splits(con)
     write_json(out_dir / "team_splits.json", splits)

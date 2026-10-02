@@ -7,7 +7,15 @@ import sys
 import urllib.request
 from pathlib import Path
 
-from .config import PBP_URL, PLAYERS_URL, RAW_DIR, SCHEDULE_URL, TEAMS_URL
+from .config import (
+    INJURIES_URL,
+    PBP_URL,
+    PLAYERS_URL,
+    RAW_DIR,
+    SCHEDULE_URL,
+    SNAPS_URL,
+    TEAMS_URL,
+)
 
 
 def pbp_path(season: int, raw_dir: Path = RAW_DIR) -> Path:
@@ -53,6 +61,24 @@ def fetch_teams(*, force: bool = False, raw_dir: Path = RAW_DIR) -> Path | None:
 def fetch_players(*, force: bool = False, raw_dir: Path = RAW_DIR) -> Path | None:
     """nflverse player directory (positions, draft, college), keyed by gsis_id."""
     return fetch_optional(PLAYERS_URL, "players.parquet", force=force, raw_dir=raw_dir)
+
+
+def fetch_context(
+    seasons: list[int], *, refresh_latest: bool = True, raw_dir: Path = RAW_DIR
+) -> tuple[list[Path], list[Path]]:
+    """Weekly injury reports and snap counts (optional: the model runs without them).
+
+    The latest season is refreshed (new reports post through the week); older ones are cached.
+    """
+    latest = max(seasons)
+    injuries, snaps = [], []
+    for s in seasons:
+        force = refresh_latest and s == latest
+        inj = fetch_optional(INJURIES_URL.format(season=s), f"injuries_{s}.parquet", force=force)
+        snp = fetch_optional(SNAPS_URL.format(season=s), f"snap_counts_{s}.parquet", force=force)
+        injuries += [inj] if inj else []
+        snaps += [snp] if snp else []
+    return injuries, snaps
 
 
 def _download(url: str, dest: Path) -> None:

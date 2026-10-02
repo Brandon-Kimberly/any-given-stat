@@ -86,7 +86,8 @@ from games;
 SCHEDULE_COLUMNS = """
     game_id, season, game_type, week, gameday, home_team, away_team, home_score, away_score,
     result, spread_line, total_line, location, home_qb_id, away_qb_id, home_qb_name,
-    away_qb_name, home_rest, away_rest, div_game, home_coach, away_coach, referee
+    away_qb_name, home_rest, away_rest, div_game, home_coach, away_coach, referee,
+    roof, temp, wind, gametime, stadium
 """
 
 # nflverse schedules keep historical abbreviations; play-by-play uses current ones.
@@ -98,12 +99,15 @@ def connect(
     schedule_file: Path | None = None,
     teams_file: Path | None = None,
     players_file: Path | None = None,
+    injury_files: Sequence[Path] = (),
+    snap_files: Sequence[Path] = (),
 ) -> duckdb.DuckDBPyConnection:
     """Open an in-memory DuckDB with ``pbp`` plus derived views.
 
     Optional reference views, created only when their file is given: ``schedule``
     (nflverse games.csv), ``team_colors`` (teams_colors_logos.csv) and ``players``
-    (players.parquet, keyed by ``gsis_id``).
+    (players.parquet, keyed by ``gsis_id``), ``injuries`` (weekly injury reports, gsis ids)
+    and ``snaps`` (per-game snap shares, pfr ids; team codes aliased like the schedule).
     """
     con = duckdb.connect()
     files = ", ".join(f"'{p.as_posix()}'" for p in pbp_files)
@@ -130,6 +134,24 @@ def connect(
         con.execute(
             f"create view players as select * from read_parquet('{players_file.as_posix()}')"
         )
+    alias = " ".join(f"when '{a}' then '{b}'" for a, b in TEAM_ALIASES.items())
+    if injury_files:
+        files = ", ".join(f"'{p.as_posix()}'" for p in injury_files)
+        con.execute(f"""
+            create view injuries as
+            select season, game_type, case team {alias} else team end as team, week, gsis_id,
+                   trim(position) as position, full_name, report_status, practice_status
+            from read_parquet([{files}], union_by_name = true)
+        """)
+    if snap_files:
+        files = ", ".join(f"'{p.as_posix()}'" for p in snap_files)
+        con.execute(f"""
+            create view snaps as
+            select game_id, season, game_type, week, player, pfr_player_id, position,
+                   case team {alias} else team end as team,
+                   offense_pct, defense_pct
+            from read_parquet([{files}], union_by_name = true)
+        """)
     install_views(con)
     return con
 
