@@ -67,3 +67,11 @@ export function percentileOf(x: number, pool: number[]): number {
 	}
 	return (100 * (below + ties / 2)) / pool.length;
 }
+
+/** 95% band for an observed rate around `p` at sample sizes `ns` (binomial, normal approx). */
+export function funnelBand(p: number, ns: number[]): { n: number; lo: number; hi: number }[] {
+	return ns.map((n) => {
+		const half = 1.96 * Math.sqrt((p * (1 - p)) / n);
+		return { n, lo: p - half, hi: p + half };
+	});
+}

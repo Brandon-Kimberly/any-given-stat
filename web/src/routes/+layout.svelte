@@ -9,7 +9,7 @@
 	import Toast from '$lib/components/Toast.svelte';
 	import { load } from '$lib/data';
 	import { groupFor, navGroups } from '$lib/nav';
-	import { prefs, prefsUrl, restorePrefs, savePrefs } from '$lib/prefs.svelte';
+	import { prefs, prefsFromUrl, prefsUrl, restorePrefs, savePrefs } from '$lib/prefs.svelte';
 	import { loadTeamMeta } from '$lib/teams.svelte';
 	import { initTheme, theme, toggleTheme } from '$lib/theme.svelte';
 	import { copyLink } from '$lib/toast.svelte';
@@ -54,7 +54,8 @@
 		savePrefs();
 		untrack(syncUrl);
 	});
-	afterNavigate(() => {
+	afterNavigate((nav) => {
+		if (ready && nav.type !== 'enter') prefsFromUrl(page.url);
 		ready = true;
 		openGroup = null;
 		drawer = false;

@@ -499,3 +499,134 @@ export interface PlayoffIndexEntry {
 	file: string;
 	weeks: number[];
 }
+
+export interface RecordTeam {
+	season: number;
+	team: string;
+	games: number;
+	wins: number;
+	losses: number;
+	ties: number;
+	net_epa: number;
+	off_epa: number;
+	def_epa: number;
+}
+export interface RecordPlayer {
+	season: number;
+	player_id: string;
+	name: string;
+	full_name?: string | null;
+	position?: string | null;
+	team: string;
+	dropbacks?: number;
+	targets?: number;
+	carries?: number;
+	yards?: number;
+	epa_db?: number;
+	epa_target?: number;
+	epa_rush?: number;
+	cpoe?: number | null;
+	total_epa: number;
+}
+export interface RecordUpset {
+	game_id: string;
+	season: number;
+	week: number;
+	game_type: string;
+	home: string;
+	away: string;
+	home_score: number;
+	away_score: number;
+	spread: number;
+	underdog: string;
+	favorite: string;
+}
+export interface RecordGame {
+	game_id: string;
+	season: number;
+	week: number;
+	season_type: string;
+	home: string;
+	away: string;
+	home_score: number;
+	away_score: number;
+	winner: string | null;
+	excitement: number;
+	winner_min_wp: number | null;
+}
+export interface RecordPlay {
+	game_id: string;
+	season: number;
+	week: number;
+	season_type: string;
+	posteam: string;
+	defteam: string;
+	qtr: number;
+	time: string | null;
+	wpa: number;
+	epa: number | null;
+	desc: string;
+}
+export interface Records {
+	seasons: [number, number];
+	thresholds: { min_team_games: number; min_qb_dropbacks: number; min_rush_carries: number };
+	wp_note: string;
+	team_best: RecordTeam[];
+	team_worst: RecordTeam[];
+	offense_best: RecordTeam[];
+	defense_best: RecordTeam[];
+	qb_best: RecordPlayer[];
+	qb_worst: RecordPlayer[];
+	receiver_best: RecordPlayer[];
+	rusher_best: RecordPlayer[];
+	upsets: RecordUpset[];
+	excitement: RecordGame[];
+	comebacks: RecordGame[];
+	biggest_plays: RecordPlay[];
+}
+
+interface CoachStats {
+	coach: string;
+	games: number;
+	wins: number;
+	losses: number;
+	ties: number;
+	ats_w: number;
+	ats_l: number;
+	ats_push: number;
+	point_diff: number;
+	/** Fourth downs where going for it was clearly right (the 4th-down model's "clear go"). */
+	clear_go: number;
+	net_epa: number;
+	go_rate_clear: number | null;
+	proe: number | null;
+}
+export type CoachSeason = CoachStats & { season: number; team: string };
+export type CoachCareer = CoachStats & {
+	seasons: number;
+	teams: string;
+	win_pct: number;
+	ats_pct: number | null;
+	first: number;
+	last: number;
+};
+export interface Coaches {
+	seasons: CoachSeason[];
+	careers: CoachCareer[];
+}
+
+interface RefStats {
+	referee: string;
+	games: number;
+	penalties_pg: number;
+	penalty_yards_pg: number;
+	home_penalty_share: number;
+	home_win_pct: number;
+	points_pg: number;
+}
+export type RefSeason = RefStats & { season: number };
+export type RefCareer = RefStats & { seasons: number; first: number; last: number };
+export interface Referees {
+	seasons: RefSeason[];
+	careers: RefCareer[];
+}

@@ -1,5 +1,6 @@
 import { base } from '$app/paths';
 import type {
+	Coaches,
 	Concepts,
 	FourthDowns,
 	GameIndexEntry,
@@ -13,6 +14,8 @@ import type {
 	Predictions,
 	QB,
 	Rating,
+	Records,
+	Referees,
 	Receiver,
 	Rusher,
 	Stability,
@@ -41,6 +44,9 @@ export interface Datasets {
 	qb_games: QBGame[];
 	'games/index': GameIndexEntry[];
 	'playoff_odds/index': PlayoffIndexEntry[];
+	records: Records;
+	coaches: Coaches;
+	referees: Referees;
 }
 
 const cache = new Map<string, Promise<unknown>>();

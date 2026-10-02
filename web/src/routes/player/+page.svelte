@@ -71,7 +71,8 @@
 		const lead = Math.max(0, ...rows.map(vol));
 		return (r: T) => vol(r) >= lead * 0.4;
 	}
-	let pickProfile = $state<number | null>(null);
+	// A link to a specific season (?season=, e.g. from the record book) opens that profile.
+	let pickProfile = $state<number | null>(Number(page.url.searchParams.get('season')) || null);
 	const profileSeasons = $derived.by(() => {
 		if (role === 'QB') {
 			const all = (qbsRes.value ?? []).filter((q) => q.scope === 'all');
@@ -106,7 +107,10 @@
 			.map((m) => m.season);
 	});
 	const profileSeason = $derived(
-		pickProfile ?? profileSeasons.at(-1) ?? (qb.at(-1) ?? rec.at(-1) ?? rush.at(-1))?.season ?? 0
+		(pickProfile != null && profileSeasons.includes(pickProfile) ? pickProfile : null) ??
+			profileSeasons.at(-1) ??
+			(qb.at(-1) ?? rec.at(-1) ?? rush.at(-1))?.season ??
+			0
 	);
 
 	// League percentiles for one season, against qualified players at the position.

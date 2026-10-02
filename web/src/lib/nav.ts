@@ -51,6 +51,14 @@ export const navGroups: NavGroup[] = [
 		]
 	},
 	{
+		label: 'History',
+		items: [
+			{ href: '/records/', label: 'Record book', blurb: 'Best and worst seasons, wildest games' },
+			{ href: '/coaches/', label: 'Coaches', blurb: '4th-down nerve, records, ATS' },
+			{ href: '/referees/', label: 'Referees', blurb: 'Flags and home-field lean' }
+		]
+	},
+	{
 		label: 'Learn',
 		items: [
 			{
@@ -81,6 +89,7 @@ export function groupFor(path: string): string | null {
 	if (path.startsWith('/team/')) return 'Teams';
 	if (path.startsWith('/player/')) return 'Players';
 	if (path.startsWith('/game/')) return 'Games';
+	if (path.startsWith('/odds/')) return 'Teams';
 	for (const g of navGroups) if (g.items.some((i) => path.startsWith(i.href))) return g.label;
 	return null;
 }

@@ -17,6 +17,11 @@ export function restorePrefs(url: URL): void {
 	} catch {
 		/* storage unavailable: defaults are fine */
 	}
+	prefsFromUrl(url);
+}
+
+/** Apply ?season=&scope= from a URL (an in-app link to a specific season wins). */
+export function prefsFromUrl(url: URL): void {
 	const season = Number(url.searchParams.get('season'));
 	if (Number.isInteger(season) && season > 1990) prefs.season = season;
 	const scope = url.searchParams.get('scope');

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { median, normCdf, ols, percentileOf, ranks, rolling, sd } from './stats';
+import { funnelBand, median, normCdf, ols, percentileOf, ranks, rolling, sd } from './stats';
 
 describe('stats', () => {
 	it('median handles even and odd lengths', () => {
@@ -41,5 +41,13 @@ describe('percentileOf', () => {
 		expect(percentileOf(3, [1, 2, 3, 4])).toBe(62.5);
 		expect(percentileOf(0, [1, 2])).toBe(0);
 		expect(percentileOf(9, [1, 2])).toBe(100);
+	});
+});
+
+describe('funnelBand', () => {
+	it('narrows with sample size', () => {
+		const [a, b] = funnelBand(0.5, [100, 400]);
+		expect(a.hi - a.lo).toBeCloseTo(2 * 1.96 * 0.05);
+		expect(b.hi - b.lo).toBeCloseTo((a.hi - a.lo) / 2);
 	});
 });
