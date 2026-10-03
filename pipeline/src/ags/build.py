@@ -28,7 +28,7 @@ from . import (
     sim,
     statlines,
 )
-from .config import CACHE_DIR, OUT_DIR
+from .config import CACHE_DIR, DATA_VERSION, OUT_DIR
 from .db import has_relation
 from .teams import teams_meta
 
@@ -289,6 +289,7 @@ def build_all(con: duckdb.DuckDBPyConnection, out_dir: Path = OUT_DIR, explorer:
         out_dir / "meta.json",
         {
             "generated_at": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
+            "data_version": DATA_VERSION,
             "seasons": status,
             "explorer_files": explorer_files,
             "source": "nflverse play-by-play (nflfastR models)",

@@ -168,3 +168,16 @@ def test_server_proxy(espn, tmp_path, capsys):
         server.server_close()
     out = capsys.readouterr()
     assert "secret" not in out.out + out.err
+
+
+def test_data_status_rebuilds_older_data(tmp_path):
+    import json
+
+    from ags.config import DATA_VERSION
+    from ags.serve import data_status
+
+    assert data_status(tmp_path) == "missing"
+    (tmp_path / "meta.json").write_text(json.dumps({"seasons": []}))
+    assert data_status(tmp_path) == "outdated"  # built before data_version existed
+    (tmp_path / "meta.json").write_text(json.dumps({"data_version": DATA_VERSION}))
+    assert data_status(tmp_path) == "ok"

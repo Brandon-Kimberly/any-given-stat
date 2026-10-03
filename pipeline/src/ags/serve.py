@@ -33,7 +33,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from .cli import default_seasons, parse_seasons, run_build
-from .config import OUT_DIR, REPO_ROOT
+from .config import DATA_VERSION, OUT_DIR, REPO_ROOT
 from .sync import SyncManager
 
 WEB_DIR = REPO_ROOT / "web"
@@ -578,6 +578,18 @@ def _run(cmd: list[str], cwd: Path, env: dict[str, str]) -> None:
 # ---------- Entry point ----------
 
 
+def data_status(data_dir: Path = DATA_DIR) -> str:
+    """'missing' (no build yet), 'outdated' (built by an older DATA_VERSION) or 'ok'."""
+    meta = data_dir / "meta.json"
+    if not meta.exists():
+        return "missing"
+    try:
+        version = json.loads(meta.read_text(encoding="utf-8")).get("data_version", 1)
+    except (OSError, ValueError):
+        return "outdated"
+    return "ok" if version >= DATA_VERSION else "outdated"
+
+
 def up(
     port: int = 4173,
     open_browser: bool = True,
@@ -587,9 +599,13 @@ def up(
     spec = seasons or default_seasons()
     manager = SyncManager(spec)
 
-    if not (DATA_DIR / "meta.json").exists():
-        print("No site data yet: downloading nflverse play-by-play and building the datasets.")
-        print("The first run takes a while (about 200 MB, cached in data/raw).", flush=True)
+    status = data_status()
+    if status != "ok":
+        if status == "missing":
+            print("No site data yet: downloading nflverse play-by-play and building the datasets.")
+            print("The first run takes a while (about 200 MB, cached in data/raw).", flush=True)
+        else:
+            print("The site data is from an older version: rebuilding it (downloads are cached).")
         start = time.perf_counter()
         run_build(parse_seasons(spec))
         print(f"Data built in {time.perf_counter() - start:.0f}s.", flush=True)

@@ -23,6 +23,10 @@ PLAYER_IDS_URL = (
     "https://raw.githubusercontent.com/dynastyprocess/data/master/files/db_playerids.csv"
 )
 
+# Bump when the build writes new datasets the site needs: `ags up` rebuilds older data.
+# 2: box scores in per-game files, fantasy/<season>.json, fantasy_ids.json.
+DATA_VERSION = 2
+
 # CPOE / xYAC / xpass exist from 2006 on; 2016+ keeps downloads (~20MB/season) reasonable.
 DEFAULT_FIRST_SEASON = 2016
 
