@@ -1005,3 +1005,15 @@ button.primary::after {
 :root[data-theme='dark'] .seg[data-pill]::before {
 	background: var(--surface-3);
 }
+
+/* Chart dots swell a little under the pointer (fine pointers only; reduced motion: none). */
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+	.plot g[aria-label='dot'] circle {
+		transform-box: fill-box;
+		transform-origin: center;
+		transition: transform 0.18s cubic-bezier(0.3, 1.4, 0.5, 1);
+	}
+	.plot g[aria-label='dot'] circle:hover {
+		transform: scale(1.45);
+	}
+}
