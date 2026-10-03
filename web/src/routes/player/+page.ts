@@ -1,3 +1,6 @@
-import { prefetch } from '$lib/prefetch';
+import { prefetch, prefetchSeason } from '$lib/prefetch';
 
-export const load = () => prefetch('players', 'qbs', 'receivers', 'rushers');
+export const load = ({ url }: { url: URL }) => {
+	prefetchSeason(url, 'qb_games');
+	return prefetch('players', 'qbs', 'receivers', 'rushers');
+};

@@ -263,6 +263,9 @@ export interface Predictions {
 	next_games?: GamePrediction[];
 }
 
+/** upcoming.json: the slice of predictions.json the home page needs. */
+export type Upcoming = Pick<Predictions, 'upcoming' | 'next_games' | 'summary'>;
+
 export interface Rating {
 	season: number;
 	week: number;

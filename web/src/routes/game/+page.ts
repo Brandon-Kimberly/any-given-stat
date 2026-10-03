@@ -4,6 +4,8 @@ import { browser } from '$app/environment';
 
 export const load = ({ url }: { url: URL }) => {
 	const season = Number(url.searchParams.get('id')?.slice(0, 4));
-	if (browser && season) loadPath(`ratings/${season}`).catch(() => {});
-	return prefetch('predictions', 'teams');
+	if (browser && season) {
+		for (const d of ['ratings', 'schedule']) loadPath(`${d}/${season}`).catch(() => {});
+	}
+	return prefetch('upcoming', 'teams', 'meta');
 };

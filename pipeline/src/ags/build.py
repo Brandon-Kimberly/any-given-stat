@@ -145,6 +145,11 @@ def build_all(con: duckdb.DuckDBPyConnection, out_dir: Path = OUT_DIR, explorer:
                 sim_model, overrides = lab3.sim_inputs(fc, games3, f3, mov, params)
             preds = lab3.apply_to_predictions(preds, games3, f3, fc)
             write_json(out_dir / "predictions.json", preds)
+            # The home page needs only the coming games, not every past prediction.
+            write_json(
+                out_dir / "upcoming.json",
+                {k: preds.get(k, []) for k in ("upcoming", "next_games", "summary")},
+            )
             # --- playoff odds (sim.py) ---
             with timed("playoff odds"):
                 odds_index = []

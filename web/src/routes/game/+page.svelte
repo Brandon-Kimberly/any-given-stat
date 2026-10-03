@@ -28,22 +28,35 @@
 	import { theme } from '$lib/theme.svelte';
 	import { resource, seasonResource } from '$lib/resource.svelte';
 	import { matchupColors, teamName, teamNick } from '$lib/teams.svelte';
+	import { load, loadPath } from '$lib/data';
+	import { kickoffLabel, played as isPlayed, records, weekLabel } from '$lib/standings';
+	import { wlt } from '$lib/format';
 	import type {
 		BoxSide,
 		GameDetail,
 		GamePlays,
 		GamePrediction,
+		PlayoffOdds,
+		Predictions,
 		Rating,
+		ScheduleGame,
 		TeamSeason
 	} from '$lib/types';
 
 	const id = $derived(page.url.searchParams.get('id') ?? '');
 	const season = $derived(seasonFromGameId(id));
-	const preds = resource('predictions');
+	// Forecasts for coming games come from the slim upcoming.json; the 800 KB backtest file
+	// (model lines for played games) loads only for a finished game.
+	const up = resource('upcoming');
+	let backtest = $state.raw<Predictions | null>(null);
+	let backtestDone = $state(false);
 	const ratings = seasonResource<Rating>('ratings', () => season);
 	const teams = resource('teams');
 	const meta = resource('meta');
+	const schedule = seasonResource<ScheduleGame>('schedule', () => season);
 	const ids = fantasyIds();
+	// The schedule row: kickoff, stadium, coaches, referee, and whether it's been played.
+	const row = $derived(schedule.value?.find((g) => g.game_id === id));
 
 	let game = $state.raw<GameDetail | null>(null);
 	let loading = $state(true);
@@ -65,12 +78,15 @@
 			.finally(() => (loading = false));
 	});
 
-	// Full play-by-play (optional: older builds don't have it; the page works without).
+	// Full play-by-play (optional: older builds don't have it; the page works without). Waits for
+	// the schedule so an unplayed game doesn't request a file that can't exist yet.
 	let plays = $state.raw<GamePlays | null>(null);
 	$effect(() => {
 		const want = id;
 		plays = null;
-		if (!want) return;
+		if (!want || !schedule.value) return;
+		const r = schedule.value.find((g) => g.game_id === want);
+		if (r && !isPlayed(r)) return;
 		loadGamePlays(want)
 			.then((p) => {
 				if (want === id) plays = p;
@@ -85,15 +101,61 @@
 
 	// The model/Vegas line for this game: a backtest row if played, a forecast if upcoming.
 	const line = $derived<GamePrediction | undefined>(
-		preds.value?.games.find((g) => g.game_id === id) ??
-			preds.value?.upcoming.find((g) => g.game_id === id)
+		backtest?.games.find((g) => g.game_id === id) ??
+			up.value?.upcoming.find((g) => g.game_id === id) ??
+			up.value?.next_games?.find((g) => g.game_id === id)
 	);
-	const home = $derived(game?.home ?? line?.home ?? '');
-	const away = $derived(game?.away ?? line?.away ?? '');
+	const home = $derived(game?.home ?? row?.home ?? line?.home ?? '');
+	const away = $derived(game?.away ?? row?.away ?? line?.away ?? '');
+	const week = $derived(game?.week ?? row?.week ?? line?.week);
+	const when = $derived(row ?? line);
+	const roundLabel = $derived(
+		row ? weekLabel(row) : game?.season_type === 'POST' ? 'Playoffs' : `Week ${week}`
+	);
+	const tq = $derived(`season=${season}`);
+	// Other games the same week, for moving on.
+	const sameWeek = $derived(
+		(schedule.value ?? []).filter(
+			(g) => g.week === week && g.game_type === (row?.game_type ?? 'REG') && g.game_id !== id
+		)
+	);
+	const recs = $derived(records(schedule.value ?? []));
+	// Playoff odds after the latest simulated week, for the preview.
+	let odds = $state.raw<PlayoffOdds | null>(null);
+	$effect(() => {
+		const s = season;
+		odds = null;
+		if (!Number.isFinite(s)) return;
+		loadPath<PlayoffOdds>(`playoff_odds/${s}`)
+			.then((o) => (odds = o))
+			.catch(() => {});
+	});
+	const oddsNow = $derived.by(() => {
+		if (!odds) return new Map();
+		const wk = Math.max(...odds.weeks.filter((w) => week == null || w < week));
+		return new Map(odds.rows.filter((r) => r.week === wk).map((r) => [r.team, r]));
+	});
+	/** Best estimate (market blend) if there is one, else the model: "NYG 55%". */
+	function favored(l: GamePrediction): string {
+		const wp = l.blend_wp ?? l.home_wp;
+		return wp >= 0.5 ? `${l.home} ${pct(wp, 0)}` : `${l.away} ${pct(1 - wp, 0)}`;
+	}
+	const people = (name: string) => encodeURIComponent(name);
 	const sideColors = $derived(matchupColors(away, home));
 	const exPct = $derived(game ? excitementPercentile(excitement(game)) : 0);
 	const played = $derived(!!game && game.home_score != null && game.wp.length > 1);
-	const homeWon = $derived((game?.home_score ?? 0) > (game?.away_score ?? 0));
+	// The header can show the final from the schedule before the game file arrives.
+	const final = $derived(played || (!!row && isPlayed(row)));
+	const awayPts = $derived(game?.away_score ?? row?.away_score ?? null);
+	const homePts = $derived(game?.home_score ?? row?.home_score ?? null);
+	const homeWon = $derived((homePts ?? 0) > (awayPts ?? 0));
+	$effect(() => {
+		if (!final || backtest) return;
+		load('predictions')
+			.then((p) => (backtest = p))
+			.catch(() => {})
+			.finally(() => (backtestDone = true));
+	});
 
 	type Marked = GameDetail['top_plays'][number] & { n: number; t: number; wp: number };
 	const marked = $derived<Marked[]>(
@@ -354,9 +416,12 @@
 		{ key: 'pass_epa', label: 'Pass EPA/play', fmt: (v) => epa(v), better: 'high' },
 		{ key: 'rush_epa', label: 'Rush EPA/play', fmt: (v) => epa(v), better: 'high' },
 		{ key: 'yards', label: 'Yards', fmt: (v) => num(v), better: 'high' },
-		{ key: 'plays', label: 'Plays', fmt: (v) => num(v), better: 'high' },
 		{ key: 'turnovers', label: 'Turnovers', fmt: (v) => num(v), better: 'low' }
 	];
+	// The box score's team table already has yards and turnovers.
+	const effRows = $derived(
+		boxRows.filter((r) => !plays?.box || !['yards', 'turnovers'].includes(r.key))
+	);
 	function edge(r: (typeof boxRows)[number], side: 'home' | 'away'): boolean {
 		const a = game?.box.home?.[r.key];
 		const b = game?.box.away?.[r.key];
@@ -397,71 +462,95 @@
 	><title>{away && home ? `${away} @ ${home}` : 'Game'} · Any Given Stat</title></svelte:head
 >
 
-{#if loading && !line}
-	<Skeleton height={360} />
+{#if (!schedule.value && !game) || (loading && !line && !row)}
+	<!-- Wait for the (small) schedule so the scoreboard renders final or upcoming once. -->
+	<Skeleton height={190} rows={0} />
 {:else if error}
 	<LoadError message={error} />
-{:else if !game && !line}
+{:else if !game && !line && !row}
 	<div class="callout">
 		No game with id <code>{id}</code>. <a href="{base}/games/">Browse games</a>.
 	</div>
 {:else}
 	<section class="scoreboard card" style:--away={sideColors.away} style:--home={sideColors.home}>
-		<div class="meta-line">
-			<a href="{base}/games/?season={season}">{season}</a> ·
-			{game?.season_type === 'POST' ? 'Playoffs' : `Week ${game?.week ?? line?.week}`}
-			{#if game?.gameday ?? line?.gameday}· {game?.gameday ?? line?.gameday}{/if}
-			{#if line?.neutral}· neutral site{/if}
-		</div>
+		<nav class="crumbs" aria-label="Breadcrumb">
+			<a href="{base}/games/?{tq}">Games</a>
+			<span aria-hidden="true">›</span>
+			<a href="{base}/games/?{tq}{week != null ? `&week=${week}` : ''}">{season} {roundLabel}</a>
+			{#if when?.gameday}<span class="when"
+					>· {new Date(`${when.gameday}T12:00:00`).toLocaleDateString('en-US', {
+						month: 'short',
+						day: 'numeric'
+					})}, {kickoffLabel(when.gameday, when.gametime)}</span
+				>{/if}
+			{#if row?.neutral ?? line?.neutral}<span>· neutral site</span>{/if}
+		</nav>
+		<h1 class="sr-only">{teamName(away)} at {teamName(home)}, {season} {roundLabel}</h1>
 		<div class="teams">
-			<div class="side" class:dim={played && homeWon}>
-				<a class="logo-link" href="{base}/team/?t={away}" aria-label={teamName(away)}
+			<div class="side" class:dim={final && homeWon}>
+				<a class="logo-link" href="{base}/team/?t={away}&{tq}" aria-label={teamName(away)}
 					><TeamLogo team={away} size={64} /></a
 				>
 				<div>
-					<div class="name">{teamName(away)}</div>
+					<a class="name" href="{base}/team/?t={away}&{tq}">{teamName(away)}</a>
 					<div class="muted small">Away</div>
 				</div>
-				{#if played}<div class="pts">
-						<CountUp text={String(game?.away_score ?? '')} duration={900} />
+				{#if final}<div class="pts">
+						<CountUp text={String(awayPts ?? '')} duration={900} />
 					</div>{/if}
 			</div>
-			<div class="vs">{played ? 'Final' : '@'}</div>
-			<div class="side right" class:dim={played && !homeWon}>
-				{#if played}<div class="pts">
-						<CountUp text={String(game?.home_score ?? '')} duration={900} />
+			<div class="vs">{final ? 'Final' : '@'}</div>
+			<div class="side right" class:dim={final && !homeWon}>
+				{#if final}<div class="pts">
+						<CountUp text={String(homePts ?? '')} duration={900} />
 					</div>{/if}
 				<div>
-					<div class="name">{teamName(home)}</div>
+					<a class="name" href="{base}/team/?t={home}&{tq}">{teamName(home)}</a>
 					<div class="muted small">Home</div>
 				</div>
-				<a class="logo-link" href="{base}/team/?t={home}" aria-label={teamName(home)}
+				<a class="logo-link" href="{base}/team/?t={home}&{tq}" aria-label={teamName(home)}
 					><TeamLogo team={home} size={64} /></a
 				>
 			</div>
 		</div>
-		{#if line}
+		{#if line || row}
+			{@const vegas = line?.vegas ?? row?.vegas ?? null}
+			{@const pending = backtestDone ? '–' : '…'}
+			<!-- Rendered from the schedule first so the row doesn't pop in when the forecast loads. -->
 			<div class="lines">
-				<div><span class="k">Model</span> <b>{spread(line.model, line.home, line.away)}</b></div>
-				<div><span class="k">Vegas</span> <b>{spread(line.vegas, line.home, line.away)}</b></div>
-				<div>
-					<span class="k">Model win prob</span>
-					<b
-						>{line.home_wp >= 0.5
-							? `${line.home} ${pct(line.home_wp, 0)}`
-							: `${line.away} ${pct(1 - line.home_wp, 0)}`}</b
-					>
-				</div>
-				{#if played && line.vegas != null}
-					{@const r = (game?.home_score ?? 0) - (game?.away_score ?? 0)}
+				{#if !final && line?.blend_wp != null}
 					<div>
-						<span class="k">Against the spread</span>
+						<span class="k" title="Our model blended with the Vegas line">Best estimate</span>
+						<b>{favored(line)} to win</b>
+					</div>
+				{/if}
+				<div><span class="k">Vegas</span> <b>{spread(vegas, home, away)}</b></div>
+				{#if line || final}
+					<div>
+						<span class="k">Model</span>
+						<b>{line ? spread(line.model, line.home, line.away) : pending}</b>
+					</div>
+				{:else}
+					<div class="muted small">The model's line posts the week of the game.</div>
+				{/if}
+				{#if final}
+					<div>
+						<span class="k">Model win prob</span>
 						<b
-							>{r === line.vegas
-								? 'Push'
-								: (r > line.vegas ? line.home : line.away) + ' covered'}</b
+							>{!line
+								? pending
+								: line.home_wp >= 0.5
+									? `${line.home} ${pct(line.home_wp, 0)}`
+									: `${line.away} ${pct(1 - line.home_wp, 0)}`}</b
 						>
 					</div>
+					{#if vegas != null}
+						{@const r = (homePts ?? 0) - (awayPts ?? 0)}
+						<div>
+							<span class="k">Against the spread</span>
+							<b>{r === vegas ? 'Push' : (r > vegas ? home : away) + ' covered'}</b>
+						</div>
+					{/if}
 				{/if}
 			</div>
 		{/if}
@@ -514,33 +603,41 @@
 			</div>
 		</div>
 
-		<div class="grid-2">
-			<div class="card">
-				<h2>Plays that decided it</h2>
-				<ol class="plays">
-					{#each game.top_plays as p, i (i)}
-						<li>
-							<span
-								class="n"
-								style="border-color: {p.home_wpa > 0 ? sideColors.home : sideColors.away}"
-								>{i + 1}</span
-							>
-							<div>
-								<div class="play-head">
-									<TeamBadge team={p.posteam} />
-									<span class="muted small">Q{p.qtr > 4 ? 'OT' : p.qtr} · {p.time}</span>
-									<span
-										class="chip swing"
-										style="border-color: {p.home_wpa > 0 ? sideColors.home : sideColors.away}"
-										>{p.home_wpa > 0 ? home : away} +{Math.round(Math.abs(p.home_wpa) * 100)}% WP</span
-									>
-								</div>
-								<p class="desc">{p.desc}</p>
+		<div class="card">
+			<h2>Plays that decided it</h2>
+			<p class="sub">The biggest swings in win probability, numbered as on the chart.</p>
+			<ol class="plays">
+				{#each game.top_plays as p, i (i)}
+					<li>
+						<span
+							class="n"
+							style="border-color: {p.home_wpa > 0 ? sideColors.home : sideColors.away}"
+							>{i + 1}</span
+						>
+						<div>
+							<div class="play-head">
+								<TeamBadge team={p.posteam} />
+								<span class="muted small">Q{p.qtr > 4 ? 'OT' : p.qtr} · {p.time}</span>
+								<span
+									class="chip swing"
+									style="border-color: {p.home_wpa > 0 ? sideColors.home : sideColors.away}"
+									>{p.home_wpa > 0 ? home : away} +{Math.round(Math.abs(p.home_wpa) * 100)}% WP</span
+								>
 							</div>
-						</li>
-					{/each}
-				</ol>
-			</div>
+							<p class="desc">{p.desc}</p>
+						</div>
+					</li>
+				{/each}
+			</ol>
+		</div>
+
+		{#if plays}
+			<GameFlow data={plays} {home} {away} onhover={(t) => (hoverT = t)} />
+		{:else if schedule.value}
+			<Skeleton height={200} />
+		{/if}
+
+		<div class="grid-2">
 			<div class="card">
 				<h2>Efficiency</h2>
 				<p class="sub">Scrimmage plays only. Bold = better side.</p>
@@ -549,7 +646,7 @@
 						<tr><th></th><th><TeamBadge team={away} /></th><th><TeamBadge team={home} /></th></tr>
 					</thead>
 					<tbody>
-						{#each boxRows as r (r.key)}
+						{#each effRows as r (r.key)}
 							<tr>
 								<td>{r.label}</td>
 								<td class:win={edge(r, 'away')}>{r.fmt(game.box.away?.[r.key] ?? null)}</td>
@@ -559,6 +656,7 @@
 					</tbody>
 				</table>
 			</div>
+			{@render info()}
 		</div>
 
 		{#if plays?.box}
@@ -566,6 +664,7 @@
 				box={plays.box}
 				{away}
 				{home}
+				{season}
 				awayScore={game.away_score}
 				homeScore={game.home_score}
 				fantasy={{
@@ -575,33 +674,51 @@
 				owners={ids.value ? fantasy.ownership(ids.value) : null}
 			/>
 		{/if}
-
-		{#if plays}
-			<GameFlow data={plays} {home} {away} onhover={(t) => (hoverT = t)} />
-		{:else}
-			<Skeleton height={200} />
-		{/if}
+	{:else if final && loading}
+		<Skeleton height={900} />
+	{:else if final}
+		<div class="callout">No play-by-play for this game yet.</div>
 	{:else}
 		<div class="callout info">
-			Not played yet. Here's how the two teams match up on the season so far.
+			Not played yet. Here's how the two teams match up on the season so far{line
+				? ''
+				: '; the forecast posts the week of the game'}.
+			{#if line}<a href="{base}/predictions/">How the forecast is built →</a>{/if}
 		</div>
-		<div class="grid-2">
+		<div class="grid-3">
 			{#each [away, home] as t (t)}
 				{@const r = latestRatings.get(t)}
+				{@const rec = recs.get(t)}
+				{@const o = oddsNow.get(t)}
+				{@const qb = line ? (t === line.home ? line.home_qb : line.away_qb) : null}
+				{@const qbPts = line ? (t === line.home ? line.home_qb_pts : line.away_qb_pts) : 0}
 				<div class="card">
 					<div class="card-head">
-						<h2><TeamBadge team={t} name link /></h2>
-						{#if r}<span class="chip">Power rank #{r.rank}</span>{/if}
+						<h2><TeamBadge team={t} name link {season} /></h2>
+						{#if r}<a class="chip" href="{base}/ratings/?{tq}">Power #{r.rank}</a>{/if}
 					</div>
-					{#if r}
-						<div class="split">
-							<div><span class="k">Net</span> <b>{signed(r.points)} pts</b></div>
-							<div><span class="k">Offense</span> <b>{signed(r.off_points)}</b></div>
-							<div><span class="k">Defense</span> <b>{signed(r.def_points)}</b></div>
+					<div class="split">
+						<div><span class="k">Record</span> <b>{rec ? wlt(rec.wins, rec.games) : '0–0'}</b></div>
+						<div>
+							<span class="k">Playoffs</span>
+							{#if o}<a href="{base}/odds/?{tq}"><b>{pct(o.p_playoffs, 0)}</b></a>{:else}<b>–</b
+								>{/if}
 						</div>
+						<!-- Always rendered (– until ratings load) so the card keeps its size. -->
+						<div><span class="k">Net</span> <b>{r ? `${signed(r.points)} pts` : '–'}</b></div>
+						<div><span class="k">Offense</span> <b>{r ? signed(r.off_points) : '–'}</b></div>
+						<div><span class="k">Defense</span> <b>{r ? signed(r.def_points) : '–'}</b></div>
+					</div>
+					{#if qb}
+						<p class="muted small qbline">
+							Starting QB <b>{qb}</b>{Math.abs(qbPts) >= 0.5
+								? `: ${signed(qbPts)} pts vs the QBs behind the team's rating`
+								: ''}
+						</p>
 					{/if}
 				</div>
 			{/each}
+			{@render info()}
 		</div>
 		<div class="grid-2">
 			{#each matchups as m (m.label)}
@@ -673,7 +790,74 @@
 			{/each}
 		</div>
 	{/if}
+
+	{#if sameWeek.length}
+		<section class="card more" aria-labelledby="more-title">
+			<div class="card-head">
+				<h2 id="more-title">More {season} {roundLabel.toLowerCase()} games</h2>
+				<a href="{base}/games/?{tq}{week != null ? `&week=${week}` : ''}">Game charts →</a>
+			</div>
+			<ul class="more-games">
+				{#each sameWeek as g (g.game_id)}
+					<li>
+						<a href="{base}/game/?id={g.game_id}">
+							<TeamBadge team={g.away} />
+							{#if isPlayed(g)}<b>{g.away_score}</b>{/if}
+							<span class="muted">{g.neutral ? 'vs' : '@'}</span>
+							<TeamBadge team={g.home} />
+							{#if isPlayed(g)}<b>{g.home_score}</b>{:else}<span class="muted small"
+									>{kickoffLabel(g.gameday, g.gametime)}</span
+								>{/if}
+						</a>
+					</li>
+				{/each}
+			</ul>
+		</section>
+	{/if}
 {/if}
+
+{#snippet info()}
+	{#if row}
+		<div class="card">
+			<h2>Game info</h2>
+			<dl class="info">
+				{#if row.gameday}
+					<dt>Kickoff</dt>
+					<dd>
+						{new Date(`${row.gameday}T12:00:00`).toLocaleDateString('en-US', {
+							weekday: 'long',
+							month: 'long',
+							day: 'numeric'
+						})}{row.gametime
+							? `, ${kickoffLabel(row.gameday, row.gametime).split(' ').slice(1).join(' ')} ET`
+							: ''}
+					</dd>
+				{/if}
+				{#if row.stadium}
+					<dt>Stadium</dt>
+					<dd>
+						{row.stadium}{row.roof
+							? ` (${row.roof === 'outdoors' ? 'outdoors' : row.roof === 'dome' ? 'dome' : `${row.roof} roof`})`
+							: ''}
+					</dd>
+				{/if}
+				{#if row.away_coach || row.home_coach}
+					<dt>Head coaches</dt>
+					<dd>
+						{#each [[away, row.away_coach], [home, row.home_coach]] as [t, c], i (t)}
+							{#if c}{i ? ' · ' : ''}<a href="{base}/coaches/?q={people(c)}">{c}</a>
+								<span class="muted">({t})</span>{/if}
+						{/each}
+					</dd>
+				{/if}
+				{#if row.referee}
+					<dt>Referee</dt>
+					<dd><a href="{base}/referees/?q={people(row.referee)}">{row.referee}</a></dd>
+				{/if}
+			</dl>
+		</div>
+	{/if}
+{/snippet}
 
 <style>
 	.wp-wrap {
@@ -748,9 +932,64 @@
 			transform: translateY(-3px) rotate(-3deg) scale(1.05);
 		}
 	}
-	.meta-line {
+	.crumbs {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.2rem 0.45rem;
 		font-size: 0.85rem;
 		color: var(--text-muted);
+	}
+	.name {
+		color: inherit;
+		text-decoration: none;
+	}
+	a.name:hover {
+		text-decoration: underline;
+	}
+	.info {
+		display: grid;
+		grid-template-columns: auto 1fr;
+		gap: 0.45rem 1rem;
+		margin: 0;
+		font-size: 0.9rem;
+	}
+	.info dt {
+		color: var(--text-secondary);
+	}
+	.info dd {
+		margin: 0;
+	}
+	.qbline {
+		margin: 0.6rem 0 0;
+	}
+	.more-games {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+		gap: 0.4rem;
+	}
+	.more-games a {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 0.4rem 0.6rem;
+		border: 1px solid var(--border);
+		border-radius: 10px;
+		color: inherit;
+		text-decoration: none;
+		font-variant-numeric: tabular-nums;
+	}
+	.more-games a:hover {
+		background: var(--surface-2);
+		border-color: var(--border-strong);
+	}
+	@media (min-width: 1000px) {
+		.plays {
+			grid-template-columns: 1fr 1fr;
+			column-gap: 2rem;
+		}
 	}
 	.teams {
 		display: grid;

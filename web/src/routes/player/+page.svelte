@@ -7,19 +7,22 @@
 	import PlotFigure from '$lib/components/Plot.svelte';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import TeamBadge from '$lib/components/TeamBadge.svelte';
+	import SampleWarning from '$lib/components/SampleWarning.svelte';
 	import { epa, num, pct, signed } from '$lib/format';
 	import { gridY, isNarrow, Plot, plotStyle, signedTick, thinTicks } from '$lib/plot';
+	import { prefs, savePrefs } from '$lib/prefs.svelte';
 	import { resource, seasonResource } from '$lib/resource.svelte';
 	import { teamColor, teamName } from '$lib/teams.svelte';
 	import type { QB, QBGame, Receiver, Rusher } from '$lib/types';
 
 	const id = $derived(page.url.searchParams.get('id') ?? '');
 	const players = resource('players');
+	const metaRes = resource('meta');
 	const qbsRes = resource('qbs');
 	const recRes = resource('receivers');
 	const rushRes = resource('rushers');
-	// Game logs load one season at a time (the season picked below).
-	const qbGamesRes = seasonResource<QBGame>('qb_games', () => logSeason);
+	// Game logs load one season at a time (the page's season).
+	const qbGamesRes = seasonResource<QBGame>('qb_games', () => (role === 'QB' ? season : null));
 
 	const info = $derived(players.value?.find((p) => p.player_id === id));
 	const qb = $derived(
@@ -61,6 +64,43 @@
 	const lastTeam = $derived(qb.at(-1)?.team ?? rec.at(-1)?.team ?? rush.at(-1)?.team ?? '');
 	const seasons = $derived([...new Set([...qb, ...rec, ...rush].map((r) => r.season))].sort());
 
+	// One season for the whole page: the site's season (?season=, shared with every page) when
+	// the player has data that year, else his latest. Picking one here sets the site's season.
+	const season = $derived(
+		prefs.season != null && seasons.includes(prefs.season) ? prefs.season : (seasons.at(-1) ?? 0)
+	);
+	const status = $derived(metaRes.value?.seasons.find((s) => s.season === season));
+	function pickSeason(v: number) {
+		prefs.season = v;
+		savePrefs();
+	}
+	// The team that season (the primary role's row first), for the badge and the dot colors.
+	const seasonTeam = $derived(
+		(role === 'QB'
+			? qb.find((q) => q.season === season)?.team
+			: role === 'REC'
+				? rec.find((r) => r.season === season)?.team
+				: rush.find((r) => r.season === season)?.team) ??
+			qb.find((q) => q.season === season)?.team ??
+			rec.find((r) => r.season === season)?.team ??
+			rush.find((r) => r.season === season)?.team ??
+			lastTeam
+	);
+	// Crumb: the position's leaderboard.
+	const posPage = $derived.by(() => {
+		const pos = info?.position;
+		if (pos === 'QB' || (!pos && role === 'QB')) return { href: '/qbs/', label: 'Quarterbacks' };
+		if (pos === 'WR' || pos === 'TE' || (!pos && role === 'REC'))
+			return { href: '/receivers/', label: 'Receivers' };
+		if (pos === 'RB' || pos === 'FB' || (!pos && role === 'RUSH'))
+			return { href: '/rushers/', label: 'Rushers' };
+		return role === 'QB'
+			? { href: '/qbs/', label: 'Quarterbacks' }
+			: role === 'REC'
+				? { href: '/receivers/', label: 'Receivers' }
+				: { href: '/rushers/', label: 'Rushers' };
+	});
+
 	/** Percentile of `v` among `vals` (0..100), higher = better unless `low`. */
 	function pctile(vals: number[], v: number, low = false): number {
 		if (!vals.length) return 50;
@@ -74,61 +114,23 @@
 		const lead = Math.max(0, ...rows.map(vol));
 		return (r: T) => vol(r) >= lead * 0.4;
 	}
-	// A link to a specific season (?season=, e.g. from the record book) opens that profile.
-	let pickProfile = $state<number | null>(Number(page.url.searchParams.get('season')) || null);
-	const profileSeasons = $derived.by(() => {
-		if (role === 'QB') {
-			const all = (qbsRes.value ?? []).filter((q) => q.scope === 'all');
-			return qb
-				.filter((m) =>
-					qualifies(
-						all.filter((a) => a.season === m.season),
-						(r) => r.dropbacks
-					)(m)
-				)
-				.map((m) => m.season);
-		}
-		if (role === 'REC') {
-			const all = recRes.value ?? [];
-			return rec
-				.filter((m) =>
-					qualifies(
-						all.filter((a) => a.season === m.season),
-						(r) => r.targets
-					)(m)
-				)
-				.map((m) => m.season);
-		}
-		const all = rushRes.value ?? [];
-		return rush
-			.filter((m) =>
-				qualifies(
-					all.filter((a) => a.season === m.season),
-					(r) => r.carries
-				)(m)
-			)
-			.map((m) => m.season);
-	});
-	const profileSeason = $derived(
-		(pickProfile != null && profileSeasons.includes(pickProfile) ? pickProfile : null) ??
-			profileSeasons.at(-1) ??
-			(qb.at(-1) ?? rec.at(-1) ?? rush.at(-1))?.season ??
-			0
-	);
-
-	// League percentiles for one season, against qualified players at the position.
-	const profile = $derived.by(() => {
+	// League percentiles for the page's season, against qualified players at the position.
+	// Style rows (how, not how well) have no better end: their bars stay neutral, as on /compare/.
+	type Bar = { label: string; p: number; text: string; style?: boolean };
+	type Profile = { season: number; n: number; who: string; qualified: boolean; bars: Bar[] };
+	const profile = $derived.by<Profile | null>(() => {
 		if (role === 'QB' && qb.length) {
-			const me = qb.find((q) => q.season === profileSeason) ?? qb.at(-1)!;
-			const season = (qbsRes.value ?? []).filter(
-				(q) => q.season === me.season && q.scope === 'all'
-			);
-			const peers = season.filter(qualifies(season, (q) => q.dropbacks));
+			const me = qb.find((q) => q.season === season);
+			if (!me) return null;
+			const year = (qbsRes.value ?? []).filter((q) => q.season === me.season && q.scope === 'all');
+			const ok = qualifies(year, (q) => q.dropbacks);
+			const peers = year.filter(ok);
 			const v = (k: keyof QB) => peers.map((p) => p[k] as number).filter((x) => x != null);
 			return {
 				season: me.season,
 				n: peers.length,
 				who: 'qualified QBs',
+				qualified: ok(me),
 				bars: [
 					{ label: 'EPA per dropback', p: pctile(v('epa_db'), me.epa_db), text: epa(me.epa_db) },
 					{ label: 'CPOE', p: pctile(v('cpoe'), me.cpoe ?? 0), text: signed(me.cpoe) },
@@ -150,25 +152,30 @@
 					{
 						label: 'Throws deep (aDOT, style)',
 						p: pctile(v('adot'), me.adot ?? 0),
-						text: num(me.adot, 1) + ' yds'
+						text: num(me.adot, 1) + ' yds',
+						style: true
 					},
 					{
 						label: 'Scrambles (style)',
 						p: pctile(v('scramble_rate'), me.scramble_rate),
-						text: pct(me.scramble_rate)
+						text: pct(me.scramble_rate),
+						style: true
 					}
 				]
 			};
 		}
 		if (role === 'REC' && rec.length) {
-			const me = rec.find((r) => r.season === profileSeason) ?? rec.at(-1)!;
-			const season = (recRes.value ?? []).filter((r) => r.season === me.season);
-			const peers = season.filter(qualifies(season, (r) => r.targets));
+			const me = rec.find((r) => r.season === season);
+			if (!me) return null;
+			const year = (recRes.value ?? []).filter((r) => r.season === me.season);
+			const ok = qualifies(year, (r) => r.targets);
+			const peers = year.filter(ok);
 			const v = (k: keyof Receiver) => peers.map((p) => p[k] as number).filter((x) => x != null);
 			return {
 				season: me.season,
 				n: peers.length,
 				who: 'qualified receivers',
+				qualified: ok(me),
 				bars: [
 					{
 						label: 'Target share',
@@ -199,20 +206,24 @@
 					{
 						label: 'Depth (aDOT, style)',
 						p: pctile(v('adot'), me.adot ?? 0),
-						text: num(me.adot, 1) + ' yds'
+						text: num(me.adot, 1) + ' yds',
+						style: true
 					}
 				]
 			};
 		}
 		if (role === 'RUSH' && rush.length) {
-			const me = rush.find((r) => r.season === profileSeason) ?? rush.at(-1)!;
-			const season = (rushRes.value ?? []).filter((r) => r.season === me.season);
-			const peers = season.filter(qualifies(season, (r) => r.carries));
+			const me = rush.find((r) => r.season === season);
+			if (!me) return null;
+			const year = (rushRes.value ?? []).filter((r) => r.season === me.season);
+			const ok = qualifies(year, (r) => r.carries);
+			const peers = year.filter(ok);
 			const v = (k: keyof Rusher) => peers.map((p) => p[k] as number).filter((x) => x != null);
 			return {
 				season: me.season,
 				n: peers.length,
 				who: 'qualified rushers',
+				qualified: ok(me),
 				bars: [
 					{ label: 'EPA per carry', p: pctile(v('epa_rush'), me.epa_rush), text: epa(me.epa_rush) },
 					{
@@ -258,6 +269,7 @@
 				marks: [
 					gridY(),
 					Plot.ruleY([0], { stroke: 'var(--axis)' }),
+					Plot.ruleX([season], { stroke: 'var(--accent)', strokeDasharray: '3,3' }),
 					Plot.areaY(qb, {
 						x: 'season',
 						y1: 'epa_db_lo',
@@ -306,6 +318,7 @@
 			marks: [
 				gridY(),
 				Plot.ruleY([0], { stroke: 'var(--axis)' }),
+				Plot.ruleX([season], { stroke: 'var(--accent)', strokeDasharray: '3,3' }),
 				Plot.line(rows, { x: 'season', y, stroke: 'var(--series-1)', strokeWidth: 2 }),
 				Plot.dot(rows, {
 					x: 'season',
@@ -329,25 +342,34 @@
 		});
 	}
 
-	// QB game log for a chosen season.
-	let pickSeason = $state<number | null>(null);
-	const logSeason = $derived(pickSeason ?? qb.at(-1)?.season ?? 0);
-	const log = $derived(
+	// QB game log for the page's season. Game ids are <season>_<week>_<away>_<home>.
+	type LogRow = QBGame & { where: string };
+	const log = $derived<LogRow[]>(
 		(qbGamesRes.value ?? [])
-			.filter((g) => g.player_id === id && g.season === logSeason)
+			.filter((g) => g.player_id === id && g.season === season)
 			.sort((a, b) => a.week - b.week)
+			.map((g) => ({ ...g, where: g.game_id.split('_').at(-1) === g.team ? 'vs' : '@' }))
 	);
+	const MARGIN_L = 44;
+	const MARGIN_R = 20;
 	function gameChart(width: number) {
+		// Weeks played so far (at least 4), not an empty 18-week axis early in a season.
+		const n = Math.max(4, ...log.map((g) => g.week));
+		// Bars at most ~36px wide: a few games on a wide card stay bars, not slabs.
+		const band = (width - MARGIN_L - MARGIN_R) / n;
+		const inset = Math.max(2, (band - 36) / 2);
 		return Plot.plot({
 			width,
 			height: 230,
 			style: plotStyle,
+			marginLeft: MARGIN_L,
+			marginRight: MARGIN_R,
 			x: {
 				label: 'Week',
 				type: 'band',
-				// Weeks played so far (at least 4), not an empty 18-week axis early in a season.
-				domain: Array.from({ length: Math.max(4, ...log.map((g) => g.week)) }, (_, i) => i + 1),
-				ticks: isNarrow(width) ? [1, 4, 7, 10, 13, 16] : undefined
+				padding: 0,
+				domain: Array.from({ length: n }, (_, i) => i + 1),
+				ticks: isNarrow(width) && n > 8 ? [1, 4, 7, 10, 13, 16].filter((w) => w <= n) : undefined
 			},
 			y: { label: '↑ EPA per dropback', tickFormat: signedTick },
 			marks: [
@@ -358,8 +380,8 @@
 					y: 'epa_db',
 					fill: (g: QBGame) => (g.epa_db >= 0 ? 'var(--good)' : 'var(--bad)'),
 					rx: 3,
-					insetLeft: 2,
-					insetRight: 2
+					insetLeft: inset,
+					insetRight: inset
 				}),
 				Plot.tip(
 					log,
@@ -367,15 +389,16 @@
 						lineWidth: 40,
 						x: 'week',
 						y: 'epa_db',
-						title: (g: QBGame) =>
-							`Week ${g.week} vs ${g.opp}: ${epa(g.epa_db)} per dropback\n${g.dropbacks} dropbacks, ${num(g.pass_yards)} yds, ${g.tds} TD, ${g.ints} INT, ${g.sacks} sacks`
+						title: (g: LogRow) =>
+							`Week ${g.week} ${g.where} ${g.opp}: ${epa(g.epa_db)} per dropback\n${g.dropbacks} dropbacks, ${num(g.pass_yards)} yds, ${g.tds} TD, ${g.ints} INT, ${g.sacks} sacks`
 					})
 				)
 			]
 		});
 	}
-	const logColumns: Column<QBGame>[] = [
+	const logColumns: Column<LogRow>[] = [
 		{ key: 'week', label: 'Week', sticky: true },
+		{ key: 'where', label: 'H/A', title: 'vs = home, @ = away' },
 		{ key: 'opp', label: 'Opp', team: true },
 		{ key: 'dropbacks', label: 'Dropbacks', fmt: num },
 		{ key: 'epa_db', label: 'EPA/db', fmt: epa, better: 'high' },
@@ -388,7 +411,7 @@
 	];
 	const qbColumns: Column<QB>[] = [
 		{ key: 'season', label: 'Season', sticky: true },
-		{ key: 'teams', label: 'Team' },
+		{ key: 'team', label: 'Team', team: true },
 		{ key: 'dropbacks', label: 'Dropbacks', fmt: num },
 		{ key: 'epa_db', label: 'EPA/db', fmt: epa, better: 'high' },
 		{ key: 'cpoe', label: 'CPOE', fmt: (v) => signed(v), better: 'high' },
@@ -435,16 +458,19 @@
 		<a href="{base}/qbs/">quarterbacks</a>.
 	</div>
 {:else}
-	<section class="card head" style="--team: {teamColor(lastTeam)}">
+	<section class="card head" style="--team: {teamColor(seasonTeam)}">
 		<div class="stripe"></div>
-		<Avatar {name} src={info?.headshot} team={lastTeam} size={92} />
+		<Avatar {name} src={info?.headshot} team={seasonTeam} size={92} />
 		<div class="who">
-			<div class="eyebrow">
-				{info?.position ?? (role === 'QB' ? 'QB' : role === 'REC' ? 'Receiver' : 'Rusher')}
-			</div>
+			<nav class="eyebrow crumbs" aria-label="Breadcrumb">
+				<span>Players</span>
+				<span aria-hidden="true">/</span>
+				<a href="{base}{posPage.href}?season={season}">{posPage.label}</a>
+				{#if info?.position}<span aria-hidden="true">·</span><span>{info.position}</span>{/if}
+			</nav>
 			<h1>{name}</h1>
 			<div class="facts">
-				<TeamBadge team={lastTeam} name link />
+				<TeamBadge team={seasonTeam} name link {season} />
 				{#if info?.draft_round}<span
 						>Drafted {info.draft_year}, round {info.draft_round}, pick {info.draft_pick}</span
 					>
@@ -453,92 +479,103 @@
 				<span>In the data: {seasons[0]}–{seasons.at(-1)}</span>
 			</div>
 		</div>
-	</section>
-
-	<PlayerFantasy {id} {seasons} />
-
-	{#if profile}
-		<div class="card">
-			<div class="card-head">
-				<h2>{profile.season} profile</h2>
-				{#if profileSeasons.length > 1}
-					<label class="field">
-						Season
-						<select
-							value={profile.season}
-							onchange={(e) => (pickProfile = +(e.currentTarget as HTMLSelectElement).value)}
-						>
-							{#each [...profileSeasons].reverse() as s (s)}<option value={s}>{s}</option>{/each}
-						</select>
-					</label>
-				{/if}
-			</div>
-			<p class="sub">
-				Percentile among the {profile.n}
-				{profile.who} that season (100 = best). Qualified = at least 40% of the leader's volume.
-			</p>
-			<div class="bars">
-				{#each profile.bars as b (b.label)}
-					<div class="bar-row">
-						<span class="bl">{b.label}</span>
-						<span class="track"
-							><span
-								class="fill"
-								class:low={b.p < 35}
-								class:high={b.p >= 65}
-								style="width: {Math.max(2, b.p)}%"
-							></span></span
-						>
-						<span class="bp tnum">{b.p}</span>
-						<span class="bv tnum muted">{b.text}</span>
-					</div>
-				{/each}
-			</div>
+		<div class="actions">
+			{#if seasons.length > 1}
+				<label class="field">
+					Season
+					<select
+						value={season}
+						onchange={(e) => pickSeason(+(e.currentTarget as HTMLSelectElement).value)}
+					>
+						{#each [...seasons].reverse() as s (s)}<option value={s}>{s}</option>{/each}
+					</select>
+				</label>
+			{/if}
+			<a
+				class="compare"
+				href="{base}/compare/?mode=players&a={id}-{season}"
+				title="Compare {name} {season} with another player-season">Compare</a
+			>
 		</div>
-	{/if}
+	</section>
+	<SampleWarning {status} />
 
-	<div class="card">
-		<h2>Career arc</h2>
-		<p class="sub">
-			{role === 'QB'
-				? 'EPA per dropback by season, with the 95% interval shaded. Dot color = team.'
-				: `EPA per ${role === 'REC' ? 'target' : 'carry'} by season. Dot color = team. Remember that per-play receiver and rusher efficiency is noisy year to year.`}
-		</p>
-		<PlotFigure label="Career efficiency by season" render={careerChart} />
+	<div class="grid-2">
+		<div class="card">
+			<h2>{season} profile</h2>
+			{#if profile}
+				<p class="sub">
+					Percentile among the {profile.n}
+					{profile.who} that season (100 = best). Qualified = at least 40% of the leader's volume.
+					{#if !profile.qualified}<b
+							>{name} is below that in {season}, so read his bars with care.</b
+						>{/if} Rows marked style stay gray: neither end is better.
+				</p>
+				<div class="bars">
+					{#each profile.bars as b (b.label)}
+						<div class="bar-row">
+							<span class="bl">{b.label}</span>
+							<span class="track"
+								><span
+									class="fill"
+									class:low={!b.style && b.p < 35}
+									class:high={!b.style && b.p >= 65}
+									style="width: {Math.max(2, b.p)}%"
+								></span></span
+							>
+							<span class="bp tnum">{b.p}</span>
+							<span class="bv tnum muted">{b.text}</span>
+						</div>
+					{/each}
+				</div>
+			{:else}
+				<p class="muted">
+					No {role === 'QB' ? 'passing' : role === 'REC' ? 'receiving' : 'rushing'} season in {season}.
+				</p>
+			{/if}
+		</div>
+
+		<div class="card">
+			<h2>Career arc</h2>
+			<p class="sub">
+				{role === 'QB'
+					? 'EPA per dropback by season, with the 95% interval shaded. Dot color = team.'
+					: `EPA per ${role === 'REC' ? 'target' : 'carry'} by season. Dot color = team. Per-play receiver and rusher efficiency is noisy year to year.`}
+				The dashed line marks {season}.
+			</p>
+			<PlotFigure label="Career efficiency by season" render={careerChart} />
+		</div>
 	</div>
 
 	{#if role === 'QB'}
 		<div class="card">
-			<div class="card-head">
-				<h2>Game log</h2>
-				<label class="field">
-					Season
-					<select
-						value={logSeason}
-						onchange={(e) => (pickSeason = +(e.currentTarget as HTMLSelectElement).value)}
-					>
-						{#each [...qb].reverse() as q (q.season)}<option value={q.season}>{q.season}</option
-							>{/each}
-					</select>
-				</label>
-			</div>
-			{#if log.length}
+			<h2>{season} game log</h2>
+			{#if qbGamesRes.value === undefined}
+				<div class="log-placeholder" aria-hidden="true"></div>
+			{:else if log.length}
+				<p class="sub">EPA per dropback in each game. Click a game for its play-by-play.</p>
 				<PlotFigure label="EPA per dropback by game" render={gameChart} />
-				{#key logSeason}
+				{#key season}
 					<DataTable
 						rows={log}
 						columns={logColumns}
 						sortKey="week"
 						sortDesc={false}
 						showIndex={false}
-						filename="{name}-{logSeason}-games"
+						filename="{name}-{season}-games"
 						maxHeight="none"
+						href={(g) => `${base}/game/?id=${g.game_id}`}
 					/>
 				{/key}
 			{:else}
-				<p class="muted">No games with 5+ dropbacks in {logSeason}.</p>
+				<p class="muted">No games with 5+ dropbacks in {season}.</p>
 			{/if}
 		</div>
+	{/if}
+
+	<PlayerFantasy {id} {season} openLog={role !== 'QB'} />
+
+	{#if role === 'QB'}
 		<div class="card">
 			<h2>By season</h2>
 			<DataTable
@@ -581,7 +618,8 @@
 		</div>
 	{/if}
 	<p class="muted small">
-		{teamName(lastTeam)} is the most recent team in the data, not necessarily his current team.
+		The team badge is his team in {season}; {teamName(lastTeam)} is the most recent team in the data,
+		not necessarily his current one.
 	</p>
 {/if}
 
@@ -592,6 +630,7 @@
 		overflow: hidden;
 		isolation: isolate;
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		gap: 1.25rem;
 		padding: 1.25rem 1.25rem 1.25rem 1.6rem;
@@ -622,6 +661,42 @@
 		inset: 0 auto 0 0;
 		width: 6px;
 		background: var(--team);
+	}
+	.who {
+		flex: 1 1 12rem;
+		min-width: 0;
+	}
+	.crumbs {
+		gap: 0.4rem;
+	}
+	.crumbs a {
+		color: inherit;
+	}
+	.actions {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.6rem;
+		align-self: flex-start;
+	}
+	.compare {
+		display: inline-flex;
+		align-items: center;
+		min-height: 34px;
+		padding: 0.35rem 0.85rem;
+		border-radius: 999px;
+		border: 1px solid var(--border-strong);
+		background: var(--surface);
+		color: var(--text-primary);
+		font-weight: 600;
+		font-size: 0.85rem;
+		text-decoration: none;
+	}
+	.compare:hover {
+		background: var(--surface-2);
+	}
+	.log-placeholder {
+		height: 560px;
 	}
 	.facts {
 		display: flex;

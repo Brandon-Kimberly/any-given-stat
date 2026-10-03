@@ -23,7 +23,8 @@ import type {
 	Stability,
 	TeamSeason,
 	TeamSplit,
-	TeamWeek
+	TeamWeek,
+	Upcoming
 } from './types';
 
 export interface Datasets {
@@ -36,6 +37,7 @@ export interface Datasets {
 	rushers: Rusher[];
 	stability: Stability;
 	predictions: Predictions;
+	upcoming: Upcoming;
 	ratings: Rating[];
 	team_splits: TeamSplit[];
 	lab: Lab;

@@ -4,6 +4,8 @@
 	import { base } from '$app/paths';
 	import CountUp from '$lib/components/CountUp.svelte';
 	import TeamFantasy from '$lib/components/TeamFantasy.svelte';
+	import TeamKeyPlayers from '$lib/components/TeamKeyPlayers.svelte';
+	import TeamSchedule from '$lib/components/TeamSchedule.svelte';
 	import TeamLogo from '$lib/components/TeamLogo.svelte';
 	import { confetti } from '$lib/confetti';
 	import { page } from '$app/state';
@@ -15,14 +17,24 @@
 	import SampleWarning from '$lib/components/SampleWarning.svelte';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import TeamBadge from '$lib/components/TeamBadge.svelte';
-	import { epa, num, pct, signed } from '$lib/format';
+	import { loadPath } from '$lib/data';
+	import { epa, num, pct, pp, signed } from '$lib/format';
 	import { loadSeasonGames } from '$lib/games';
 	import { gridY, isNarrow, Plot, plotStyle, signedTick, thinTicks } from '$lib/plot';
 	import { prefs } from '$lib/prefs.svelte';
 	import { resource, seasonResource } from '$lib/resource.svelte';
 	import { ranks, rolling } from '$lib/stats';
+	import { kickoffLabel, lastGame, played } from '$lib/standings';
 	import { heroColors, teamMeta, teamName, teamPalette } from '$lib/teams.svelte';
-	import type { GameDetail, Rating, TeamSeason, TeamSplit, TeamWeek } from '$lib/types';
+	import type {
+		GameDetail,
+		PlayoffOdds,
+		Rating,
+		ScheduleGame,
+		TeamSeason,
+		TeamSplit,
+		TeamWeek
+	} from '$lib/types';
 
 	const metaRes = resource('meta');
 	const teamsRes = resource('teams');
@@ -30,6 +42,8 @@
 	const luckRes = resource('luck');
 	const ratingsRes = seasonResource<Rating>('ratings', () => prefs.season);
 	const splitsRes = seasonResource<TeamSplit>('team_splits', () => prefs.season);
+	const scheduleRes = seasonResource<ScheduleGame>('schedule', () => prefs.season);
+	const upcomingRes = resource('upcoming');
 
 	const meta = $derived(metaRes.value);
 	const teams = $derived(teamsRes.value ?? []);
@@ -78,7 +92,94 @@
 		new Map(seasonRatings.filter((r) => r.week === lastWeek).map((r) => [r.team, r]))
 	);
 	const myRating = $derived(latest.get(team));
-	const myPath = $derived(seasonRatings.filter((r) => r.team === team));
+	// Clipped to the same week as the tile: a lone Thursday game doesn't move the chart either.
+	const myPath = $derived(seasonRatings.filter((r) => r.team === team && r.week <= lastWeek));
+
+	// Schedule: this season's games (played and to come) and the best-estimate win chances.
+	const schedule = $derived(
+		(scheduleRes.value ?? []).filter((g) => g.season === prefs.season) as ScheduleGame[]
+	);
+	const scheduleReady = $derived(
+		scheduleRes.value !== undefined &&
+			(scheduleRes.value.length === 0 || scheduleRes.value[0].season === prefs.season)
+	);
+	const preds = $derived(
+		[...(upcomingRes.value?.upcoming ?? []), ...(upcomingRes.value?.next_games ?? [])].filter(
+			(p) => p.season === prefs.season
+		)
+	);
+	const mySchedule = $derived(schedule.filter((g) => g.home === team || g.away === team));
+	const nextUp = $derived(
+		mySchedule
+			.filter((g) => !played(g))
+			.sort((a, b) => `${a.gameday} ${a.gametime}`.localeCompare(`${b.gameday} ${b.gametime}`))[0]
+	);
+	const nextPred = $derived(nextUp ? preds.find((p) => p.game_id === nextUp.game_id) : undefined);
+	const nextWp = $derived.by(() => {
+		if (!nextUp || !nextPred) return null;
+		const h = nextPred.blend_wp ?? nextPred.home_wp;
+		return nextUp.home === team ? h : 1 - h;
+	});
+	// How the season ended, once it has: the last postseason game, or no playoffs.
+	const ROUND: Record<string, string> = {
+		WC: 'Wild Card',
+		DIV: 'Divisional round',
+		CON: 'Conference title game',
+		SB: 'Super Bowl'
+	};
+	const finish = $derived.by(() => {
+		if (!status?.complete || !mySchedule.length) return null;
+		const post = mySchedule.filter((g) => g.game_type !== 'REG' && played(g));
+		const last = post.at(-1);
+		if (!last) return { value: 'No playoffs', note: 'Season over' };
+		const won = (last.home === team ? 1 : -1) * (last.result ?? 0) > 0;
+		const opp = last.home === team ? last.away : last.home;
+		if (last.game_type === 'SB' && won) return { value: 'Won Super Bowl', note: `vs ${opp}` };
+		return { value: `Lost ${ROUND[last.game_type] ?? 'playoffs'}`, note: `vs ${opp}` };
+	});
+	// Head coach: from the team's latest game this season (the first one before any are played).
+	const coach = $derived.by(() => {
+		const g = lastGame(mySchedule, team) ?? mySchedule[0];
+		if (!g) return null;
+		return g.home === team ? g.home_coach : g.away_coach;
+	});
+
+	// Playoff odds after the same week as the ratings (preseason = week 0), and the change.
+	let odds = $state.raw<PlayoffOdds | null>(null);
+	$effect(() => {
+		const s = prefs.season;
+		if (s == null) return;
+		loadPath<PlayoffOdds>(`playoff_odds/${s}`)
+			.then((d) => {
+				if (prefs.season === s) odds = d;
+			})
+			.catch(() => {
+				if (prefs.season === s) odds = null;
+			});
+	});
+	const playoff = $derived.by(() => {
+		if (!odds || odds.season !== prefs.season) return null;
+		const weeks = odds.weeks.filter(
+			(w) => w === 0 || !status || status.complete || w <= status.last_week
+		);
+		const wk = weeks.at(-1);
+		if (wk == null) return null;
+		const row = (w: number | undefined) =>
+			w == null ? undefined : odds!.rows.find((r) => r.week === w && r.team === team);
+		const now = row(wk);
+		if (!now) return null;
+		const prevWeek = weeks.at(-2);
+		const prev = row(prevWeek);
+		const actual = status?.complete ? odds.actual?.[team] : undefined;
+		return {
+			week: wk,
+			p: now.p_playoffs,
+			delta: prev ? now.p_playoffs - prev.p_playoffs : null,
+			prevWeek,
+			preseason: row(0)?.p_playoffs ?? null,
+			actual
+		};
+	});
 
 	// Strength of schedule: average current rating of opponents faced so far (one pass).
 	const sos = $derived.by(() => {
@@ -185,15 +286,19 @@
 	});
 
 	type Series = { week: number; value: number; side: string };
+	// Rolling averages need a few games: before 4, the line just joins the single games.
+	const WINDOW = 4;
+	const smoothed = $derived(games.length >= WINDOW);
 	function weekly(width: number) {
 		const narrow = isNarrow(width);
+		const win = smoothed ? WINDOW : 1;
 		const off = rolling(
 			games.map((g) => g.off_epa),
-			4
+			win
 		);
 		const def = rolling(
 			games.map((g) => g.def_epa),
-			4
+			win
 		);
 		const line: Series[] = games.flatMap((g, i) => [
 			{ week: g.week, value: off[i], side: 'Offense' },
@@ -226,13 +331,22 @@
 			marks: [
 				gridY(),
 				Plot.ruleY([0], { stroke: 'var(--axis)' }),
-				Plot.dot(pts, { x: 'week', y: 'value', fill: 'side', r: 3.5, fillOpacity: 0.45 }),
+				Plot.dot(pts, {
+					x: 'week',
+					y: 'value',
+					fill: 'side',
+					r: 4,
+					fillOpacity: smoothed ? 0.45 : 1,
+					stroke: smoothed ? null : 'var(--surface)',
+					strokeWidth: 1.5
+				}),
 				Plot.line(line, {
 					x: 'week',
 					y: 'value',
 					stroke: 'side',
 					strokeWidth: 2,
-					curve: 'monotone-x'
+					// Smoothing only reads as a trend with enough points; sparse series stay linear.
+					curve: games.length >= 8 ? 'monotone-x' : 'linear'
 				}),
 				Plot.text(narrow ? [] : line.slice(-2), {
 					x: 'week',
@@ -435,7 +549,11 @@
 			alt=""
 			aria-hidden="true"
 		/>{/if}
-	<div class="crumbs"><a href="{base}/teams/">Teams</a> / {info?.division ?? team}</div>
+	<div class="crumbs">
+		<a href="{base}/teams/">Teams</a> /
+		{#if info?.division}<a href="#division" title="{info.division} standings">{info.division}</a
+			>{:else}{team}{/if}
+	</div>
 	<div class="row">
 		<TeamLogo {team} size={84} />
 		<div>
@@ -446,20 +564,31 @@
 				{#if myRating}<span>#{myRating.rank} in power ratings</span>{/if}
 				{#if style}<span>{style} offense</span>{/if}
 			</div>
+			<div class="coach">
+				{#if coach}Head coach <a href="{base}/coaches/?q={encodeURIComponent(coach)}">{coach}</a
+					>{/if}
+			</div>
 		</div>
-		<button
-			class="fav-btn"
-			aria-pressed={favorite.team === team}
-			onclick={(e) => {
-				const adding = favorite.team !== team;
-				favorite.toggle(team);
-				if (adding) confetti(e.clientX, e.clientY, teamPalette(team));
-			}}
-			title="Your team gets a gold ring everywhere on the site and a card on the home page"
-		>
-			<span aria-hidden="true">{favorite.team === team ? '★' : '☆'}</span>
-			{favorite.team === team ? 'My team' : 'Set as my team'}
-		</button>
+		<div class="hero-actions">
+			<a
+				class="hero-btn"
+				href="{base}/compare/?mode=teams&a={team}-{prefs.season}"
+				title="Compare {teamName(team)} {prefs.season} with another team-season">Compare</a
+			>
+			<button
+				class="hero-btn fav-btn"
+				aria-pressed={favorite.team === team}
+				onclick={(e) => {
+					const adding = favorite.team !== team;
+					favorite.toggle(team);
+					if (adding) confetti(e.clientX, e.clientY, teamPalette(team));
+				}}
+				title="Your team gets a gold ring everywhere on the site and a card on the home page"
+			>
+				<span aria-hidden="true">{favorite.team === team ? '★' : '☆'}</span>
+				{favorite.team === team ? 'My team' : 'Set as my team'}
+			</button>
+		</div>
 	</div>
 </section>
 
@@ -500,13 +629,50 @@
 			<div class="value"><CountUp text={epa(me.def_epa_play)} /></div>
 			<div class="note">#{rankOf('def_epa_play', false)} of {season.length} (lower is better)</div>
 		</div>
-		<div class="card tile">
-			<div class="label">Power rating</div>
+		<a
+			class="card tile link"
+			href="{base}/ratings/?season={prefs.season}"
+			title="Power ratings for every team"
+		>
+			<div class="label">Power rating <span aria-hidden="true">→</span></div>
 			<div class="value">
 				<CountUp text={myRating ? `${signed(myRating.points)} pts` : '–'} />
 			</div>
-			<div class="note">{myRating ? `#${myRating.rank} after week ${lastWeek}` : ''}</div>
-		</div>
+			<div class="note">{myRating ? `#${myRating.rank} after week ${lastWeek}` : '\u00a0'}</div>
+		</a>
+		<a
+			class="card tile link"
+			href="{base}/odds/?season={prefs.season}"
+			title="Playoff odds for every team"
+		>
+			<div class="label">
+				{playoff?.actual ? 'Playoffs' : 'Playoff odds'} <span aria-hidden="true">→</span>
+			</div>
+			<div class="value">
+				{#if playoff?.actual}
+					{playoff.actual.made_playoffs ? 'Made it' : 'Missed'}
+				{:else}
+					<CountUp text={playoff ? pct(playoff.p, 0) : '–'} />
+				{/if}
+			</div>
+			<div class="note">
+				{#if !playoff}
+					&nbsp;
+				{:else if playoff.actual}
+					{playoff.preseason != null ? `${pct(playoff.preseason, 0)} in preseason` : ''}
+				{:else if playoff.week === 0}
+					Preseason simulation
+				{:else if playoff.delta != null}
+					<span class="delta" class:up={playoff.delta > 0.0005} class:down={playoff.delta < -0.0005}
+						>{playoff.delta > 0.0005 ? '▲' : playoff.delta < -0.0005 ? '▼' : ''}
+						{pp(playoff.delta)} pts</span
+					>
+					{playoff.prevWeek === 0 ? 'since preseason' : `since week ${playoff.prevWeek}`}
+				{:else}
+					After week {playoff.week}
+				{/if}
+			</div>
+		</a>
 		<div class="card tile">
 			<div class="label">Schedule so far</div>
 			<div class="value">
@@ -522,6 +688,68 @@
 			<div class="note">
 				{rec ? `Pythagorean ${num(rec.pythag_wins, 1)} wins (${signed(rec.wins_over_pythag)})` : ''}
 			</div>
+		</div>
+		{#if finish}
+			<div class="card tile">
+				<div class="label">Season result</div>
+				<div class="value small-value">{finish.value}</div>
+				<div class="note">{finish.note}</div>
+			</div>
+		{:else}
+			<a class="card tile link" href="#schedule">
+				<div class="label">Next game <span aria-hidden="true">↓</span></div>
+				<div class="value">
+					{#if nextUp}{nextUp.home === team ? 'vs' : '@'}
+						{nextUp.home === team ? nextUp.away : nextUp.home}{:else}–{/if}
+				</div>
+				<div class="note">
+					{#if nextUp}
+						{kickoffLabel(nextUp.gameday, nextUp.gametime)}{nextWp != null
+							? ` · ${pct(nextWp, 0)} to win`
+							: ''}
+					{:else}&nbsp;{/if}
+				</div>
+			</a>
+		{/if}
+	</div>
+
+	<div class="grid-2 top">
+		<TeamSchedule
+			{team}
+			season={prefs.season ?? 0}
+			games={scheduleReady ? schedule : undefined}
+			predictions={preds}
+		/>
+		<div class="card" id="division">
+			<div class="card-head">
+				<h2>{info?.division ?? 'Division'}</h2>
+				<a href="{base}/odds/?season={prefs.season}">Playoff odds →</a>
+			</div>
+			<p class="sub">Standings with point differential and current power rating.</p>
+			<table class="div">
+				<thead><tr><th>Team</th><th>W–L</th><th>Diff</th><th>Rating</th></tr></thead>
+				<tbody>
+					{#each division as d (d.team)}
+						<tr class:me={d.team === team}>
+							<td><TeamBadge team={d.team} name="nick" link season={prefs.season} /></td>
+							<td class="tnum">{d.rec.text}</td>
+							<td class="tnum">{signed(d.diff, 0)}</td>
+							<td class="tnum">{signed(d.power)}</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+			{#if myPath.length}
+				<div class="card-head" style="margin-top: 1rem">
+					<h3>
+						{status && !status.complete
+							? `Power rating through week ${lastWeek}`
+							: `Power rating by week, ${prefs.season}`}
+					</h3>
+					<a href="{base}/ratings/?season={prefs.season}">All ratings →</a>
+				</div>
+				<PlotFigure label="Power rating by week" render={ratingPath} />
+			{/if}
 		</div>
 	</div>
 
@@ -579,35 +807,17 @@
 				{/each}
 			</div>
 		</div>
-		<div class="card">
-			<h2>{info?.division ?? 'Division'}</h2>
-			<p class="sub">Standings with point differential and current power rating.</p>
-			<table class="div">
-				<thead><tr><th>Team</th><th>W–L</th><th>Diff</th><th>Rating</th></tr></thead>
-				<tbody>
-					{#each division as d (d.team)}
-						<tr class:me={d.team === team}>
-							<td><TeamBadge team={d.team} name="nick" link /></td>
-							<td class="tnum">{d.rec.text}</td>
-							<td class="tnum">{signed(d.diff, 0)}</td>
-							<td class="tnum">{signed(d.power)}</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-			{#if myPath.length}
-				<h3 style="margin-top: 1rem">Power rating through {prefs.season}</h3>
-				<PlotFigure label="Power rating by week" render={ratingPath} />
-			{/if}
-		</div>
+		<TeamKeyPlayers {team} season={prefs.season ?? 0} />
 	</div>
 
 	<div class="grid-2">
 		<div class="card">
 			<h2>Week by week</h2>
 			<p class="sub">
-				Dots are single games; lines are 4-game rolling averages. All plays. Offense: higher is
-				better; defense: lower is better.
+				{smoothed
+					? 'Dots are single games; lines are 4-game rolling averages.'
+					: 'Single games, joined by lines (rolling averages start at 4 games).'} All plays. Offense:
+				higher is better; defense: lower is better.
 			</p>
 			{#if games.length}<PlotFigure label="Weekly EPA per play" render={weekly} />{/if}
 		</div>
@@ -734,8 +944,42 @@
 		opacity: 0.85;
 		margin-bottom: 0.6rem;
 	}
-	.crumbs a {
+	.crumbs a,
+	.coach a {
 		color: #fff;
+	}
+	.coach {
+		font-size: 0.85rem;
+		opacity: 0.92;
+		margin-top: 0.2rem;
+		/* Reserved before the schedule (and the coach's name) loads. */
+		min-height: 1.4em;
+	}
+	/* Eight tiles: four across on a desktop, two on phones (app.css). */
+	.tiles {
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+	}
+	@media (max-width: 560px) {
+		.tiles {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+	}
+	a.tile.link {
+		color: inherit;
+		text-decoration: none;
+	}
+	a.tile.link .label span {
+		color: var(--accent-ink);
+	}
+	.small-value {
+		font-size: clamp(1.05rem, 0.9rem + 0.6vw, 1.35rem);
+	}
+	.delta {
+		font-weight: 700;
+		color: var(--text-secondary);
+	}
+	.top {
+		align-items: start;
 	}
 	.row {
 		display: flex;
@@ -743,9 +987,15 @@
 		flex-wrap: wrap;
 		gap: 1rem;
 	}
-	.fav-btn {
+	.hero-actions {
 		margin-left: auto;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+	}
+	.hero-btn {
 		display: inline-flex;
+		text-decoration: none;
 		align-items: center;
 		gap: 0.4rem;
 		border-radius: 999px;
@@ -756,7 +1006,7 @@
 		font-size: 0.85rem;
 		padding: 0.35rem 0.85rem;
 	}
-	.fav-btn:hover {
+	.hero-btn:hover {
 		background: rgba(0, 0, 0, 0.35);
 	}
 	.fav-btn[aria-pressed='true'] span {
@@ -786,7 +1036,7 @@
 		.row > div {
 			flex: 1 1 calc(100% - 5rem);
 		}
-		.fav-btn {
+		.hero-actions {
 			margin-left: 0;
 		}
 	}
@@ -868,10 +1118,14 @@
 	.div tr.me td {
 		background: var(--accent-soft);
 	}
+	/* Flex, not an auto-fit grid: a short last row stretches across instead of leaving a hole. */
 	.splits {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+		display: flex;
+		flex-wrap: wrap;
 		gap: 1rem 1.25rem;
+	}
+	.splits > table {
+		flex: 1 1 min(100%, 340px);
 	}
 	.splits table {
 		border-collapse: collapse;

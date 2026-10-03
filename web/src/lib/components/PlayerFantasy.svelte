@@ -12,10 +12,9 @@
 	import { num, pct, signed } from '$lib/format';
 	import { gridY, isNarrow, Plot, plotStyle } from '$lib/plot';
 
-	let { id, seasons }: { id: string; seasons: number[] } = $props();
-
-	let picked = $state<number | null>(null);
-	const season = $derived(picked ?? seasons.at(-1) ?? 0);
+	// The season comes from the page (one season control for the whole player page).
+	// openLog: show the game log expanded (players with no QB game log above it).
+	let { id, season, openLog = false }: { id: string; season: number; openLog?: boolean } = $props();
 	const fs = fantasySeason(() => season);
 	const ids = fantasyIds();
 	const result = $derived(scoredSeason(fs.value));
@@ -59,8 +58,11 @@
 	function weeklyChart(width: number) {
 		const narrow = isNarrow(width);
 		const reg = games.filter((g) => !g.post);
-		// The whole regular season, so an in-progress year shows what's still to come.
-		const maxWeek = Math.max(season >= 2021 ? 18 : 17, ...reg.map((g) => g.week));
+		// Weeks so far (at least 4), as in the QB game log: not 18 slots for 3 games.
+		const maxWeek = Math.max(4, ...reg.map((g) => g.week));
+		// Bars at most ~36px wide.
+		const band = (width - 44) / maxWeek;
+		const inset = Math.max(band * 0.1, (band - 36) / 2);
 		return Plot.plot({
 			width,
 			height: narrow ? 220 : 260,
@@ -70,8 +72,8 @@
 			x: {
 				label: null,
 				domain: Array.from({ length: maxWeek }, (_, i) => i + 1),
-				tickFormat: (w: number) => (narrow && w % 2 === 0 ? '' : `${w}`),
-				padding: 0.2
+				tickFormat: (w: number) => (narrow && maxWeek > 9 && w % 2 === 0 ? '' : `${w}`),
+				padding: 0
 			},
 			y: { label: '↑ Points', nice: true, grid: false },
 			marks: [
@@ -82,7 +84,9 @@
 					y: 'points',
 					fill: (d: Game) =>
 						rep != null && d.points >= rep ? 'var(--series-1)' : 'var(--neutral-mark)',
-					rx: 3
+					rx: 3,
+					insetLeft: inset,
+					insetRight: inset
 				}),
 				...(rep != null
 					? [
@@ -118,8 +122,11 @@
 		});
 	}
 
-	const cols: Column<Game>[] = [
+	type Row = Game & { where: string };
+	const rows = $derived<Row[]>(games.map((g) => ({ ...g, where: g.home ? 'vs' : '@' })));
+	const cols: Column<Row>[] = [
 		{ key: 'week', label: 'Week', fmt: (v) => String(v), sticky: true },
+		{ key: 'where', label: 'H/A', title: 'vs = home, @ = away' },
 		{ key: 'opp', label: 'Opp', team: true },
 		{ key: 'points', label: 'Points', fmt: (v) => num(v, 1), better: 'high' },
 		{ key: 'summary', label: 'Line' }
@@ -128,7 +135,7 @@
 
 <section class="card fantasy" aria-labelledby="fantasy-title">
 	<div class="card-head">
-		<h2 id="fantasy-title">Fantasy <span class="muted">· {scoringLabel()}</span></h2>
+		<h2 id="fantasy-title">{season} fantasy <span class="muted">· {scoringLabel()}</span></h2>
 		<div class="right">
 			{#if owner}
 				<span class="owner" class:mine={owner.mine}
@@ -136,14 +143,6 @@
 				>
 			{:else if fantasy.league && ids.value}
 				<span class="owner">Available in your league</span>
-			{/if}
-			{#if seasons.length > 1}
-				<label class="field">
-					Season
-					<select value={season} onchange={(e) => (picked = +e.currentTarget.value)}>
-						{#each [...seasons].reverse() as s (s)}<option value={s}>{s}</option>{/each}
-					</select>
-				</label>
 			{/if}
 		</div>
 	</div>
@@ -176,10 +175,10 @@
 			<a href="{base}/fantasy/">Change scoring</a>.
 		</p>
 		<PlotFigure label="Fantasy points by week" render={weeklyChart} />
-		<details>
+		<details open={openLog}>
 			<summary>Game log</summary>
 			<DataTable
-				rows={games}
+				{rows}
 				columns={cols}
 				sortKey="week"
 				sortDesc={false}

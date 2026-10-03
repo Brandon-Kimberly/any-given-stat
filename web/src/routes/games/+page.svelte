@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { base } from '$app/paths';
+	import { replaceState } from '$app/navigation';
+	import { page } from '$app/state';
 	import Controls from '$lib/components/Controls.svelte';
 	import LoadError from '$lib/components/LoadError.svelte';
 	import Skeleton from '$lib/components/Skeleton.svelte';
@@ -18,7 +20,7 @@
 	import type { GameDetail } from '$lib/types';
 
 	const meta = resource('meta');
-	const preds = resource('predictions');
+	const preds = resource('upcoming');
 	let games = $state.raw<GameDetail[] | null>(null);
 	let error = $state<string | null>(null);
 
@@ -51,10 +53,24 @@
 		...new Set([...rows.map((r) => r.label), ...upcoming.map((u) => `Week ${u.week}`)])
 	]);
 	const shownUpcoming = $derived(upcoming.filter((u) => `Week ${u.week}` === week));
-	let pickedWeek = $state<string | null>(null);
-	const week = $derived(
-		pickedWeek && weeks.includes(pickedWeek) ? pickedWeek : (weeks.at(-1) ?? '')
+	// The week lives in the URL (?week=4, ?week=post) so a week's scores can be linked. By
+	// default: the last fully played week while a season is on, else the last week.
+	const status = $derived(meta.value?.seasons.find((s) => s.season === prefs.season));
+	const defaultWeek = $derived(
+		status && !status.complete && weeks.includes(`Week ${status.last_week}`)
+			? `Week ${status.last_week}`
+			: (weeks.at(-1) ?? '')
 	);
+	const urlWeek = $derived(page.url.searchParams.get('week'));
+	const week = $derived.by(() => {
+		const w = urlWeek === 'post' ? 'Playoffs' : urlWeek ? `Week ${urlWeek}` : null;
+		return w && weeks.includes(w) ? w : defaultWeek;
+	});
+	function pickWeek(w: string) {
+		const url = new URL(page.url);
+		url.searchParams.set('week', w === 'Playoffs' ? 'post' : w.replace('Week ', ''));
+		replaceState(url, page.state);
+	}
 	const shown = $derived(rows.filter((r) => r.label === week));
 	const best = $derived([...rows].sort((a, b) => b.excite - a.excite).slice(0, 8));
 	const comebacks = $derived(
@@ -78,10 +94,8 @@
 	<div class="eyebrow">Games</div>
 	<h1>Scores & game charts</h1>
 	<p class="lede">
-		Every game's win probability, play by play. The line in each card is the home team's win
-		probability (above the middle = home team favored). The more it swings, the higher the
-		excitement index (total win-probability movement). Open a game for the full chart and the plays
-		that decided it.
+		Every game's win probability, play by play. Each card's line is the home team's chance to win;
+		the more it swings, the higher the excitement index.
 	</p>
 </section>
 
@@ -98,7 +112,7 @@
 				role="tab"
 				aria-selected={w === week}
 				class:on={w === week}
-				onclick={() => (pickedWeek = w)}>{w.replace('Week ', 'Wk ')}</button
+				onclick={() => pickWeek(w)}>{w.replace('Week ', 'Wk ')}</button
 			>
 		{/each}
 	</div>
@@ -127,16 +141,17 @@
 			</a>
 		{/each}
 		{#each shownUpcoming as u (u.game_id)}
-			{@const fav = u.home_wp >= 0.5 ? u.home : u.away}
+			{@const wp = u.blend_wp ?? u.home_wp}
 			<a class="card game interactive upcoming" href="{base}/game/?id={u.game_id}">
 				<div class="row"><TeamBadge team={u.away} name="nick" /></div>
 				<div class="row"><TeamBadge team={u.home} name="nick" /></div>
 				<div class="preview">
 					<span><span class="k">Vegas</span> {spread(u.vegas, u.home, u.away)}</span>
-					<span
-						><span class="k">Model</span>
-						{fav}
-						{pct(u.home_wp >= 0.5 ? u.home_wp : 1 - u.home_wp, 0)}</span
+					<span><span class="k">Model</span> {spread(u.model, u.home, u.away)}</span>
+					<span title="Our model blended with the Vegas line"
+						><span class="k">Best estimate</span>
+						{wp >= 0.5 ? u.home : u.away}
+						{pct(wp >= 0.5 ? wp : 1 - wp, 0)}</span
 					>
 				</div>
 				<div class="foot">
