@@ -1,6 +1,7 @@
 <script lang="ts">
 	import LoadError from '$lib/components/LoadError.svelte';
 	import FantasyRecords from '$lib/components/FantasyRecords.svelte';
+	import PageToc from '$lib/components/PageToc.svelte';
 	import RecordList, { type RecordItem } from '$lib/components/RecordList.svelte';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import { epa, num, pct, signed } from '$lib/format';
@@ -9,6 +10,59 @@
 	import type { RecordGame, RecordPlayer, RecordTeam } from '$lib/types';
 
 	const res = resource('records');
+
+	// A short, readable line for a play-by-play description: no clock, formation or jersey
+	// numbers, outcome first ("J.Daniels 52-yd pass to N.Brown for a TD"). The full text stays
+	// in the row's tooltip; anything unrecognized falls back to the cleaned description.
+	const NAME = String.raw`[A-Z][\w'.-]*(?: (?:Jr\.|Sr\.|II|III|IV|St\. [A-Z][a-z]+|[A-Z][a-z]+))?`;
+	function playSummary(desc: string): string {
+		const s = desc
+			.replace(/^\(\d*:\d+\)\s*/, '')
+			.replace(/^(\([^)]*\)\s*)+/, '')
+			.replace(/\b[A-Z]{2,3}-(?=\d{1,2}-[A-Z])/g, '')
+			.replace(/\b\d{1,2}-(?=[A-Z])/g, '')
+			.replace(/\s*\[[^\]]*\]/g, '')
+			.replace(/\s*\(Aborted\)/g, '')
+			.replace(new RegExp(`${NAME} reported in as eligible\\.\\s*`, 'g'), '');
+		const td = /TOUCHDOWN/.test(s) ? ' for a TD' : '';
+		const safety = /SAFETY/.test(s) ? ', safety' : '';
+		const re = (p: string) => s.match(new RegExp(p));
+		let m: RegExpMatchArray | null;
+		if ((m = re(`(${NAME}) (\\d+) yard field goal is (GOOD|No Good|BLOCKED)`))) {
+			const res = m[3] === 'GOOD' ? 'good' : m[3] === 'BLOCKED' ? 'blocked' : 'no good';
+			return `${m[1]} ${m[2]}-yd field goal ${res}${m[3] !== 'GOOD' && td ? ', returned for a TD' : ''}`;
+		}
+		if ((m = re(`(${NAME}) pass .*?INTERCEPTED by (${NAME})`))) {
+			const six = s.match(/INTERCEPTED.*? for (\d+) yards?, TOUCHDOWN/);
+			return `${m[2]} intercepts ${m[1]}${six ? `, ${six[1]}-yd pick-six` : td}`;
+		}
+		if (
+			(m = re(
+				`(${NAME}) pass (?:[a-z]+ [a-z]+ )?to (${NAME})(?: to [A-Z]{2,3} -?\\d+)? for (-?\\d+) yards?`
+			))
+		) {
+			const lats = [...s.matchAll(new RegExp(`Lateral to (${NAME})`, 'g'))];
+			if (lats.length)
+				return `${m[1]} pass to ${m[2]}, lateral${lats.length > 1 ? 's' : ''} to ${lats.at(-1)![1]}${td}`;
+			return `${m[1]} ${m[3]}-yd pass to ${m[2]}${td}${safety}`;
+		}
+		if (
+			/FUMBLES/.test(s) &&
+			(m = re(`(${NAME})\\s.*?FUMBLES.*?RECOVERED by (?:[A-Z]{2,3}-)?(${NAME})`))
+		)
+			return `${m[1]} fumbles, recovered by ${m[2]}${td}${safety}`;
+		if ((m = re(`(${NAME}) sacked`)))
+			return `${m[1]} sacked${/FUMBLES/.test(s) ? ', fumble' : ''}${td}${safety}`;
+		if ((m = re(`(${NAME}) (?:scrambles )?(?:left|right|up)\\b.*? for (-?\\d+) yards?`)))
+			return `${m[1]} ${m[2]}-yd ${/scrambles/.test(s) ? 'scramble' : 'run'}${td}${safety}`;
+		return s
+			.replace(/\s*The Replay Official.*$/, '')
+			.replace(/\s*PENALTY on.*$/, '')
+			.replace(/\b(TOUCHDOWN|INTERCEPTED|FUMBLES|RECOVERED|BLOCKED|SAFETY)\b/g, (w) =>
+				w.toLowerCase()
+			)
+			.trim();
+	}
 	const r = $derived(res.value);
 
 	const record = (t: RecordTeam) => `${t.wins}–${t.losses}${t.ties ? `–${t.ties}` : ''}`;
@@ -163,7 +217,8 @@
 									key: `${p.game_id}-${p.qtr}-${p.time}`,
 									href: `/game/?id=${p.game_id}`,
 									team: p.wpa >= 0 ? p.posteam : p.defteam,
-									title: p.desc.replace(/^\(\d+:\d+\)\s*/, ''),
+									title: playSummary(p.desc),
+									tip: p.desc,
 									sub: `${p.posteam} vs ${p.defteam} · ${gameLabel(p)} · Q${p.qtr > 4 ? 'OT' : p.qtr} ${p.time ?? ''}`,
 									stat: `${Math.round(Math.abs(p.wpa) * 100)}% WP`
 								}))
@@ -191,10 +246,12 @@
 {:else if !r}
 	<Skeleton height={500} />
 {:else}
-	<nav class="jump" aria-label="Sections">
-		{#each sections as s (s.id)}<a class="chip" href="#{s.id}">{s.label}</a>{/each}
-		<a class="chip" href="#fantasy">Fantasy</a>
-	</nav>
+	<PageToc
+		items={[
+			...sections.map((s) => ({ id: s.id, label: s.label })),
+			{ id: 'fantasy', label: 'Fantasy' }
+		]}
+	/>
 	{#each sections as s (s.id)}
 		<h2 class="section" id={s.id}>{s.label}</h2>
 		<div class="grid-2">
@@ -216,15 +273,6 @@
 {/if}
 
 <style>
-	.jump {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.4rem;
-		margin-bottom: 0.5rem;
-	}
-	.jump a {
-		text-decoration: none;
-	}
 	/* Section titles with a brand-gradient rule fading out to the right. */
 	.section {
 		display: flex;
@@ -233,7 +281,7 @@
 		font-size: 1.5rem;
 		font-stretch: 112%;
 		margin: 1.75rem 0 0.85rem;
-		scroll-margin-top: 80px;
+		scroll-margin-top: 7.5rem; /* clear the header and the sticky "On this page" bar */
 	}
 	.section::after {
 		content: '';

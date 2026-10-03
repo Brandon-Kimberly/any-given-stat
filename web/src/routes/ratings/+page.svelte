@@ -9,7 +9,7 @@
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import TeamBadge from '$lib/components/TeamBadge.svelte';
 	import { signed } from '$lib/format';
-	import { gridY, isNarrow, Plot, plotStyle, thinTicks } from '$lib/plot';
+	import { gridY, isNarrow, Plot, plotStyle, signedTick, thinTicks } from '$lib/plot';
 	import { prefs } from '$lib/prefs.svelte';
 	import { resource, seasonResource } from '$lib/resource.svelte';
 	import { teamName } from '$lib/teams.svelte';
@@ -63,14 +63,16 @@
 	}
 
 	function trajectories(width: number) {
-		const focus = season.filter((r) => highlighted.includes(r.team));
-		const rest = season.filter((r) => !highlighted.includes(r.team));
+		// Series stop at the week the page reports ("through week N"), like the end dots.
+		const shown = season.filter((r) => r.week <= lastWeek);
+		const shownWeeks = weeks.filter((w) => w <= lastWeek);
+		const focus = shown.filter((r) => highlighted.includes(r.team));
+		const rest = shown.filter((r) => !highlighted.includes(r.team));
 		const ends = focus.filter((r) => r.week === lastWeek);
 		const narrow = isNarrow(width);
 		// Direct-label line ends, skipping any that would overprint a label already placed;
 		// the legend still identifies every highlighted team.
-		const span =
-			Math.max(...season.map((r) => r.points)) - Math.min(...season.map((r) => r.points));
+		const span = Math.max(...shown.map((r) => r.points)) - Math.min(...shown.map((r) => r.points));
 		const labelled: Rating[] = [];
 		for (const r of [...ends].sort((a, b) => b.points - a.points)) {
 			if (labelled.every((l) => Math.abs(l.points - r.points) > span * 0.05)) labelled.push(r);
@@ -80,8 +82,13 @@
 			height: narrow ? 300 : 400,
 			style: plotStyle,
 			marginRight: narrow ? 12 : 50,
-			x: { label: 'After week', tickFormat: 'd', ticks: thinTicks(weeks, width, 34) },
-			y: { label: '↑ Power rating (points vs average team, neutral field)', tickFormat: '+.0f' },
+			x: { label: 'After week', tickFormat: 'd', ticks: thinTicks(shownWeeks, width, 34) },
+			y: {
+				label: narrow
+					? '↑ Power rating (pts vs average)'
+					: '↑ Power rating (points vs average team, neutral field)',
+				tickFormat: signedTick
+			},
 			color: { domain: highlighted, range: SLOTS.slice(0, highlighted.length), legend: true },
 			marks: [
 				gridY(),
@@ -116,7 +123,7 @@
 					fontWeight: 600
 				}),
 				Plot.tip(
-					season,
+					shown,
 					Plot.pointer({
 						lineWidth: 40,
 						x: 'week',

@@ -130,6 +130,8 @@
 		const rows = (odds?.rows ?? []).filter((r) => divTeams.includes(r.team));
 		const last = rows.filter((r) => r.week === odds!.weeks.at(-1));
 		const narrow = isNarrow(width);
+		// Early in a season every week gets a tick (and a dot); later, every 2nd or 4th.
+		const few = odds!.weeks.length <= 9;
 		return Plot.plot({
 			width,
 			height: 280,
@@ -144,8 +146,8 @@
 			},
 			x: {
 				label: null,
-				ticks: odds!.weeks.filter((w) => w % (narrow ? 4 : 2) === 0),
-				tickFormat: (w: number) => (w === 0 ? 'Pre' : `Wk ${w}`)
+				ticks: few ? odds!.weeks : odds!.weeks.filter((w) => w % (narrow ? 4 : 2) === 0),
+				tickFormat: (w: number) => (w === 0 ? 'Pre' : narrow && few ? `${w}` : `Wk ${w}`)
 			},
 			y: { domain: [0, 1], label: '↑ Chance to make the playoffs', tickFormat: '.0%' },
 			marks: [
@@ -155,9 +157,18 @@
 					x: 'week',
 					y: 'p_playoffs',
 					stroke: 'team',
-					strokeWidth: 2.5,
-					curve: 'monotone-x'
+					strokeWidth: 2.5
 				}),
+				few
+					? Plot.dot(rows, {
+							x: 'week',
+							y: 'p_playoffs',
+							fill: 'team',
+							r: 4,
+							stroke: 'var(--surface)',
+							strokeWidth: 1.5
+						})
+					: null,
 				...(narrow
 					? []
 					: [
@@ -258,7 +269,8 @@
 		{ id: 'title', label: 'Title odds' },
 		{ id: 'divisions', label: 'Divisions' },
 		{ id: 'trust', label: 'Track record' },
-		...(versions.length ? [{ id: 'versions', label: 'Old vs new' }] : [])
+		...(versions.length ? [{ id: 'versions', label: 'Old vs new' }] : []),
+		{ id: 'how', label: 'How it works' }
 	]);
 	function versionChart(width: number) {
 		const rows = versions.flatMap((s) => [
@@ -280,7 +292,7 @@
 			marks: [
 				gridY(),
 				Plot.line(rows, { x: 'season', y: 'brier', stroke: 'who', strokeWidth: 2 }),
-				Plot.dot(rows, { x: 'season', y: 'brier', fill: 'who', r: 3.5 }),
+				Plot.dot(rows, { x: 'season', y: 'brier', fill: 'who', r: 4 }),
 				Plot.tip(
 					rows,
 					Plot.pointer({
@@ -304,7 +316,7 @@
 			marginLeft: 44,
 			x: { domain: [0, 1], label: 'Forecast chance →', tickFormat: '.0%' },
 			y: { domain: [0, 1], label: '↑ Actually made it', tickFormat: '.0%' },
-			r: { range: [3, 14] },
+			r: { range: [4, 14] },
 			marks: [
 				gridX(),
 				gridY(),
@@ -347,7 +359,7 @@
 				gridY(),
 				Plot.ruleY([0], { stroke: 'var(--axis)' }),
 				Plot.line(skill, { x: 'week', y: 'skill', stroke: 'var(--series-1)', strokeWidth: 2.5 }),
-				Plot.dot(skill, { x: 'week', y: 'skill', fill: 'var(--series-1)', r: 3 }),
+				Plot.dot(skill, { x: 'week', y: 'skill', fill: 'var(--series-1)', r: 4 }),
 				Plot.tip(
 					skill,
 					Plot.pointerX({
@@ -562,16 +574,21 @@
 		</section>
 	{/if}
 
-	<p class="muted small method">
-		How it works: each unplayed game's margin is drawn around the
-		<a href="{base}/predictions/#round3">site's forecast</a>: the gap in EPA and points ratings
-		(from games already played) plus home field. Next week's games start from the Vegas line, nudged
-		toward the model. Each simulated season also draws how wrong each team's rating might be: a
-		typical error of {num(tauPre, 1)} points in the preseason, shrinking to {num(tauLate, 1)} by season's
-		end (tuned on 2017–2021). That way a team's games rise or fall together, as in real life. Seeding
-		uses the main NFL tiebreakers (head-to-head, division and conference record, strength of victory and
-		schedule), and the bracket reseeds.
-	</p>
+	<section class="card method" id="how">
+		<h2>How this works</h2>
+		<p>
+			Each unplayed game's margin is drawn around the
+			<a href="{base}/predictions/#round3">site's forecast</a>: the gap in EPA and points ratings
+			(from games already played) plus home field. Next week's games start from the Vegas line,
+			nudged toward the model. Each simulated season also draws how wrong each team's rating might
+			be: a typical error of {num(tauPre, 1)} points in the preseason, shrinking to {num(
+				tauLate,
+				1
+			)} by season's end (tuned on 2017–2021). That way a team's games rise or fall together, as in real
+			life. Seeding uses the main NFL tiebreakers (head-to-head, division and conference record, strength
+			of victory and schedule), and the bracket reseeds.
+		</p>
+	</section>
 {/if}
 
 <style>
@@ -682,8 +699,10 @@
 	.divs {
 		margin-bottom: 0.75rem;
 	}
-	.method {
+	.method p {
+		margin: 0;
 		max-width: 75ch;
+		color: var(--text-secondary);
 	}
 	@media (max-width: 560px) {
 		.opt {

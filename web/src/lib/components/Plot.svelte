@@ -56,15 +56,80 @@
 		const node = render(width);
 		el.replaceChildren(node);
 		declutter(el);
+		clearAxisLabels(el);
 		// Expose each chart as one labeled image; Plot's per-mark aria-labels on <g> have no role.
-		for (const svg of el.querySelectorAll('svg')) {
-			svg.setAttribute('role', 'img');
-			svg.setAttribute('aria-label', label);
-			for (const g of svg.querySelectorAll('[aria-label]')) g.removeAttribute('aria-label');
-		}
+		const strip = () => {
+			for (const svg of el.querySelectorAll('svg')) {
+				if (svg.getAttribute('role') !== 'img') svg.setAttribute('role', 'img');
+				if (svg.getAttribute('aria-label') !== label) svg.setAttribute('aria-label', label);
+				for (const g of svg.querySelectorAll('[aria-label]')) g.removeAttribute('aria-label');
+			}
+		};
+		strip();
+		// Plot's pointer tip re-adds aria-label="tip" on its <g> after every hover; strip it again
+		// so the chart stays one labeled image (aria-label on a role-less <g> is prohibited).
+		const mo = new MutationObserver(strip);
+		mo.observe(el, {
+			subtree: true,
+			childList: true,
+			attributes: true,
+			attributeFilter: ['aria-label']
+		});
 		if (renders++ === 0) intro = true;
-		return () => node.remove();
+		return () => {
+			mo.disconnect();
+			node.remove();
+		};
 	});
+
+	/** Plot puts the x-axis label in the bottom margin, right-aligned, where it overprints the
+	 * last tick labels unless the margin is generous. Move any label that collides with its tick
+	 * labels clear of them (below a bottom axis, above a top one) and grow the SVG to fit, so no
+	 * chart has to remember a bigger marginBottom. Runs before paint, so nothing shifts. */
+	function clearAxisLabels(root: HTMLElement) {
+		for (const svg of root.querySelectorAll<SVGSVGElement>('svg')) {
+			const label = svg.querySelector<SVGGElement>(':scope > g[aria-label="x-axis label"]');
+			const ticks = [
+				...svg.querySelectorAll<SVGTextElement>(':scope > g[aria-label="x-axis tick label"] text')
+			]
+				.map((t) => t.getBoundingClientRect())
+				.filter((r) => r.width);
+			if (!label || !ticks.length) continue;
+			const lr = label.getBoundingClientRect();
+			if (!lr.width) continue;
+			const pad = 2;
+			const hit = ticks.some(
+				(r) =>
+					r.left < lr.right + pad &&
+					r.right > lr.left - pad &&
+					r.top < lr.bottom &&
+					r.bottom > lr.top
+			);
+			if (!hit) continue;
+			const vb = svg.viewBox.baseVal;
+			const box = svg.getBoundingClientRect();
+			if (!vb || !vb.height || !box.height) continue;
+			const k = vb.height / box.height; // screen px -> SVG units
+			const tickMid = ticks.reduce((a, r) => a + (r.top + r.bottom) / 2, 0) / ticks.length;
+			const below = (lr.top + lr.bottom) / 2 >= tickMid;
+			const shift = below
+				? (Math.max(...ticks.map((r) => r.bottom)) + pad - lr.top) * k
+				: (Math.min(...ticks.map((r) => r.top)) - pad - lr.bottom) * k;
+			label.setAttribute(
+				'transform',
+				`translate(0,${shift}) ${label.getAttribute('transform') ?? ''}`
+			);
+			// Grow the SVG by however far the label now pokes out.
+			const grow = below
+				? (lr.bottom - box.bottom) * k + shift + pad
+				: (box.top - lr.top) * k - shift + pad;
+			if (grow > 0) {
+				const h = vb.height + grow;
+				svg.setAttribute('viewBox', `${vb.x} ${below ? vb.y : vb.y - grow} ${vb.width} ${h}`);
+				svg.setAttribute('height', String(h));
+			}
+		}
+	}
 
 	async function savePng() {
 		busy = true;

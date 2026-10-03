@@ -1,5 +1,7 @@
 <script lang="ts">
+	import { afterNavigate, replaceState } from '$app/navigation';
 	import { base } from '$app/paths';
+	import { page } from '$app/state';
 	import Controls from '$lib/components/Controls.svelte';
 	import DataTable, { type Column } from '$lib/components/DataTable.svelte';
 	import LoadError from '$lib/components/LoadError.svelte';
@@ -17,6 +19,23 @@
 	const metaRes = resource('meta');
 	let view = $state<'career' | 'season'>('career');
 	let minGames = $state(34);
+
+	// ?q= pre-filters the table and rings the matching coach in the charts, so other pages can
+	// deep-link (/coaches/?q=Dan%20Campbell). The filter box and the URL stay in sync.
+	let q = $state(page.url.searchParams.get('q') ?? '');
+	afterNavigate(() => (q = page.url.searchParams.get('q') ?? ''));
+	$effect(() => {
+		const want = q.trim();
+		const url = new URL(page.url);
+		if ((url.searchParams.get('q') ?? '') === want) return;
+		if (want) url.searchParams.set('q', want);
+		else url.searchParams.delete('q');
+		replaceState(url, page.state);
+	});
+	const matches = (name: string) => {
+		const t = q.trim().toLowerCase();
+		return !!t && name.toLowerCase().includes(t);
+	};
 
 	const careers = $derived(
 		(res.value?.careers ?? [])
@@ -111,18 +130,41 @@
 
 	const lastName = (n: string) => n.split(' ').slice(1).join(' ') || n;
 
+	// Bubble radius in pixels (area ~ games, never under 4 px).
+	const radius = (games: number, max: number) => Math.max(4, 11 * Math.sqrt(games / max));
+
 	// Aggressiveness vs results.
 	function aggroChart(width: number) {
 		const rows = careers.filter((c) => c.go_rate_clear != null && c.clear_go >= 20);
-		const byGames = [...rows].sort((a, b) => b.games - a.games);
+		const maxG = Math.max(1, ...rows.map((r) => r.games));
+		const rad = (d: CareerRow) => radius(d.games, maxG);
+		// Labels sit just above each bubble: one text mark per pixel radius, biggest careers
+		// first, so decluttering still keeps the longest-serving coaches (and a ?q= match first).
+		const hit = rows.filter((r) => matches(r.coach));
+		const rest = rows.filter((r) => !matches(r.coach));
+		const sizes = [...new Set(rest.map((r) => Math.round(rad(r))))].sort((a, b) => b - a);
+		const label = (data: CareerRow[], dy: number, strong = false) =>
+			Plot.text(data, {
+				x: 'go_rate_clear',
+				y: 'net_epa',
+				text: (d: CareerRow) => lastName(d.coach),
+				lineAnchor: 'bottom',
+				dy,
+				fill: strong ? 'var(--text-primary)' : 'var(--text-secondary)',
+				fontWeight: strong ? 700 : 400,
+				fontSize: 11,
+				className: 'declutter'
+			});
 		return Plot.plot({
 			width,
 			height: 380,
 			style: plotStyle,
 			marginLeft: 48,
-			x: { label: 'Went for it on clear-go 4th downs →', tickFormat: '.0%' },
-			y: { label: '↑ Net EPA per play', tickFormat: signedTick },
-			r: { range: [2, 10] },
+			marginRight: 24,
+			marginTop: 30,
+			x: { label: 'Went for it on clear-go 4th downs →', tickFormat: '.0%', inset: 28 },
+			y: { label: '↑ Net EPA per play', tickFormat: signedTick, inset: 12 },
+			r: { type: 'identity' }, // radii below are pixels
 			marks: [
 				gridX(),
 				gridY(),
@@ -130,20 +172,25 @@
 				Plot.dot(rows, {
 					x: 'go_rate_clear',
 					y: 'net_epa',
-					r: 'games',
+					r: rad,
 					fill: 'var(--series-1)',
 					fillOpacity: 0.6,
 					stroke: 'var(--surface)'
 				}),
-				Plot.text(byGames, {
+				Plot.dot(hit, {
 					x: 'go_rate_clear',
 					y: 'net_epa',
-					text: (d: CareerRow) => lastName(d.coach),
-					dy: -12,
-					fill: 'var(--text-secondary)',
-					fontSize: 11,
-					className: 'declutter'
+					r: (d: CareerRow) => rad(d) + 2.5,
+					stroke: 'var(--text-primary)',
+					strokeWidth: 2
 				}),
+				...hit.map((d) => label([d], -(rad(d) + 5), true)),
+				...sizes.map((px) =>
+					label(
+						rest.filter((r) => Math.round(rad(r)) === px).sort((a, b) => b.games - a.games),
+						-(px + 3)
+					)
+				),
 				Plot.tip(
 					rows,
 					Plot.pointer({
@@ -175,7 +222,8 @@
 			height: 340,
 			style: plotStyle,
 			marginLeft: 44,
-			x: { label: 'Games against the spread →' },
+			marginRight: 24,
+			x: { label: 'Games against the spread →', inset: 10 },
 			y: {
 				label: '↑ Cover rate',
 				tickFormat: '.0%',
@@ -199,9 +247,25 @@
 					x: 'n',
 					y: 'ats_pct',
 					fill: 'var(--series-1)',
-					r: 3.5,
+					r: 4,
 					fillOpacity: 0.8
 				}),
+				Plot.dot(
+					atsRows.filter((c) => matches(c.coach)),
+					{ x: 'n', y: 'ats_pct', r: 7, stroke: 'var(--text-primary)', strokeWidth: 2 }
+				),
+				Plot.text(
+					atsRows.filter((c) => matches(c.coach)),
+					{
+						x: 'n',
+						y: 'ats_pct',
+						text: (d: CareerRow) => lastName(d.coach),
+						dy: -12,
+						fill: 'var(--text-primary)',
+						fontWeight: 700,
+						className: 'declutter'
+					}
+				),
 				Plot.text(outside, {
 					x: 'n',
 					y: 'ats_pct',
@@ -240,6 +304,18 @@
 {:else if !res.value || !metaRes.value}
 	<Skeleton height={480} />
 {:else}
+	<div class="toolbar">
+		<label class="field">
+			Min games
+			<select bind:value={minGames}>
+				{#each [1, 17, 34, 68] as g (g)}<option value={g}>{g}</option>{/each}
+			</select>
+		</label>
+		<label class="field">
+			Find a coach
+			<input type="search" placeholder="e.g. Dan Campbell" bind:value={q} />
+		</label>
+	</div>
 	<div class="grid-2">
 		<section class="card">
 			<h2>Who trusts the math on 4th down?</h2>
@@ -264,47 +340,57 @@
 		</section>
 	</div>
 
-	<div class="toolbar">
-		<div class="seg" role="group" aria-label="View">
-			<button aria-pressed={view === 'career'} onclick={() => (view = 'career')}>Careers</button>
-			<button aria-pressed={view === 'season'} onclick={() => (view = 'season')}>One season</button>
+	<section class="card" id="table">
+		<div class="card-head">
+			<h2>
+				{view === 'career'
+					? `Every head coach, ${minGames}+ games`
+					: `Head coaches, ${prefs.season}`}
+			</h2>
+			<div class="toolbar tight">
+				<div class="seg" role="group" aria-label="View">
+					<button aria-pressed={view === 'career'} onclick={() => (view = 'career')}>Careers</button
+					>
+					<button aria-pressed={view === 'season'} onclick={() => (view = 'season')}
+						>One season</button
+					>
+				</div>
+				{#if view === 'season'}
+					<Controls seasons={metaRes.value.seasons} showScope={false} />
+				{/if}
+			</div>
 		</div>
 		{#if view === 'career'}
-			<label class="field">
-				Min games
-				<select bind:value={minGames}>
-					{#each [1, 17, 34, 68] as g (g)}<option value={g}>{g}</option>{/each}
-				</select>
-			</label>
+			<DataTable
+				rows={careers}
+				columns={careerCols}
+				sortKey="win_pct"
+				search="coach"
+				bind:query={q}
+				filename="coaches"
+			/>
 		{:else}
-			<Controls seasons={metaRes.value.seasons} showScope={false} />
+			<SampleWarning {status} />
+			<DataTable
+				rows={seasonRows}
+				columns={seasonCols}
+				sortKey="net_epa"
+				search="coach"
+				bind:query={q}
+				filename="coaches-{prefs.season}"
+			/>
 		{/if}
-	</div>
-	{#if view === 'career'}
-		<DataTable
-			rows={careers}
-			columns={careerCols}
-			sortKey="win_pct"
-			search="coach"
-			filename="coaches"
-		/>
-	{:else}
-		<SampleWarning {status} />
-		<DataTable
-			rows={seasonRows}
-			columns={seasonCols}
-			sortKey="net_epa"
-			search="coach"
-			filename="coaches-{prefs.season}"
-		/>
-	{/if}
-	<p class="muted small">
-		Regular season, 2016 on. ATS uses the closing line. Net EPA is the team's, which reflects the
-		roster as much as the coach.
-	</p>
+		<p class="muted small">
+			Regular season, 2016 on. ATS uses the closing line. Net EPA is the team's, which reflects the
+			roster as much as the coach.
+		</p>
+	</section>
 {/if}
 
 <style>
+	.tight {
+		margin: 0;
+	}
 	.small {
 		font-size: 0.8rem;
 		margin-top: 0.75rem;

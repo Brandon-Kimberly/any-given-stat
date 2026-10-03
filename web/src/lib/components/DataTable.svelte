@@ -30,7 +30,8 @@
 		highlight,
 		showIndex = true,
 		filename = 'any-given-stat',
-		maxHeight = '70vh'
+		maxHeight,
+		query = $bindable('')
 	}: {
 		rows: T[];
 		columns: Column<T>[];
@@ -45,14 +46,34 @@
 		highlight?: (row: T) => boolean;
 		showIndex?: boolean;
 		filename?: string;
+		/** Inner scroller height. Default: none for tables of 32 rows or fewer (a league's worth
+		 * of teams reads in full, punchline rows included), otherwise 70vh. */
 		maxHeight?: string;
+		/** The filter box's text (bindable, e.g. to sync it with a `?q=` URL param). */
+		query?: string;
 	} = $props();
+	const cap = $derived(maxHeight ?? (rows.length <= 32 ? 'none' : '70vh'));
+
+	// Fade the right edge while more columns hide off to the right (wide tables on phones,
+	// or 15 columns at desktop width), so it reads as scrollable.
+	let scroller: HTMLDivElement;
+	let moreRight = $state(false);
+	const edge = () => {
+		if (scroller) moreRight = scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 2;
+	};
+	$effect(() => {
+		const ro = new ResizeObserver(edge);
+		ro.observe(scroller);
+		const t = scroller.querySelector('table');
+		if (t) ro.observe(t);
+		edge();
+		return () => ro.disconnect();
+	});
 
 	// svelte-ignore state_referenced_locally
 	let sortKey = $state(initialSort);
 	// svelte-ignore state_referenced_locally
 	let sortDesc = $state(initialDesc);
-	let query = $state('');
 	// Render a first screenful quickly; long tables reveal the rest on request.
 	const STEP = 75;
 	let limit = $state(STEP);
@@ -157,76 +178,78 @@
 	{#if search}
 		<input type="search" placeholder="Filter…" bind:value={query} aria-label="Filter rows" />
 	{/if}
-	<span class="muted count">{visible.length} rows</span>
+	<span class="muted count">{visible.length} {visible.length === 1 ? 'row' : 'rows'}</span>
 	<button class="ghost small" onclick={csv} title="Download these rows as CSV">
 		<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14" /></svg>
 		CSV
 	</button>
 </div>
-<div class="scroll" style="max-height: {maxHeight}">
-	<table>
-		<thead>
-			<tr>
-				{#if showIndex}<th class="rank" scope="col">#</th>{/if}
-				{#each columns as c (c.key)}
-					<th
-						scope="col"
-						class:sticky={c.sticky}
-						class:num={!c.sticky && !c.team}
-						title={c.title}
-						aria-sort={sortKey === c.key ? (sortDesc ? 'descending' : 'ascending') : 'none'}
-					>
-						<button class="th" class:sorted={sortKey === c.key} onclick={() => sortBy(c)}>
-							{c.label}<span class="arrow" aria-hidden="true"
-								>{sortKey === c.key ? (sortDesc ? '↓' : '↑') : '↕'}</span
-							>
-						</button>
-					</th>
-				{/each}
-			</tr>
-		</thead>
-		<tbody>
-			{#each visible.slice(0, limit) as row, i (i)}
-				<tr
-					class:clickable={!!(href?.(row) || onrowclick)}
-					class:hl={highlight?.(row)}
-					class:fav={isFav(row)}
-					onclick={(e) => rowClick(e, row)}
-				>
-					{#if showIndex}<td class="rank"
-							>{#if i < 3}<span class="medal m{i + 1}">{i + 1}</span>{:else}{i + 1}{/if}</td
-						>{/if}
-					{#each columns as c, ci (c.key)}
-						{@const text = c.fmt ? c.fmt(row[c.key]) : (row[c.key] ?? '–')}
-						<td
+<div class="scroll-wrap" class:more-right={moreRight}>
+	<div class="scroll" style="max-height: {cap}" bind:this={scroller} onscroll={edge}>
+		<table>
+			<thead>
+				<tr>
+					{#if showIndex}<th class="rank" scope="col">#</th>{/if}
+					{#each columns as c (c.key)}
+						<th
+							scope="col"
 							class:sticky={c.sticky}
 							class:num={!c.sticky && !c.team}
-							style={shade(c, row[c.key])}
+							title={c.title}
+							aria-sort={sortKey === c.key ? (sortDesc ? 'descending' : 'ascending') : 'none'}
 						>
-							{#if ci === 0 && href?.(row)}
-								<a class="cell-link" href={href(row)}
-									>{#if c.team}<TeamBadge team={row[c.key]} />{:else}{text}{/if}</a
+							<button class="th" class:sorted={sortKey === c.key} onclick={() => sortBy(c)}>
+								{c.label}<span class="arrow" aria-hidden="true"
+									>{sortKey === c.key ? (sortDesc ? '↓' : '↑') : '↕'}</span
 								>
-							{:else if ci === 0 && onrowclick}
-								<button
-									class="cell-btn"
-									aria-pressed={highlight ? highlight(row) : undefined}
-									onclick={() => onrowclick(row)}
-									>{#if c.team}<TeamBadge team={row[c.key]} />{:else}{text}{/if}</button
-								>
-							{:else if c.team && row[c.key]}
-								<TeamBadge team={row[c.key]} link season={rowSeason(row)} />
-							{:else}
-								{text}
-							{/if}
-						</td>
+							</button>
+						</th>
 					{/each}
 				</tr>
-			{:else}
-				<tr><td class="empty" colspan={columns.length + 1}>No rows match.</td></tr>
-			{/each}
-		</tbody>
-	</table>
+			</thead>
+			<tbody>
+				{#each visible.slice(0, limit) as row, i (i)}
+					<tr
+						class:clickable={!!(href?.(row) || onrowclick)}
+						class:hl={highlight?.(row)}
+						class:fav={isFav(row)}
+						onclick={(e) => rowClick(e, row)}
+					>
+						{#if showIndex}<td class="rank"
+								>{#if i < 3}<span class="medal m{i + 1}">{i + 1}</span>{:else}{i + 1}{/if}</td
+							>{/if}
+						{#each columns as c, ci (c.key)}
+							{@const text = c.fmt ? c.fmt(row[c.key]) : (row[c.key] ?? '–')}
+							<td
+								class:sticky={c.sticky}
+								class:num={!c.sticky && !c.team}
+								style={shade(c, row[c.key])}
+							>
+								{#if ci === 0 && href?.(row)}
+									<a class="cell-link" href={href(row)}
+										>{#if c.team}<TeamBadge team={row[c.key]} />{:else}{text}{/if}</a
+									>
+								{:else if ci === 0 && onrowclick}
+									<button
+										class="cell-btn"
+										aria-pressed={highlight ? highlight(row) : undefined}
+										onclick={() => onrowclick(row)}
+										>{#if c.team}<TeamBadge team={row[c.key]} />{:else}{text}{/if}</button
+									>
+								{:else if c.team && row[c.key]}
+									<TeamBadge team={row[c.key]} link season={rowSeason(row)} />
+								{:else}
+									{text}
+								{/if}
+							</td>
+						{/each}
+					</tr>
+				{:else}
+					<tr><td class="empty" colspan={columns.length + 1}>No rows match.</td></tr>
+				{/each}
+			</tbody>
+		</table>
+	</div>
 </div>
 {#if visible.length > limit}
 	<button class="more" onclick={() => (limit = Infinity)}>
@@ -257,6 +280,29 @@
 		stroke-width: 2;
 		stroke-linecap: round;
 		stroke-linejoin: round;
+	}
+	.scroll-wrap {
+		position: relative;
+	}
+	.scroll-wrap::after {
+		content: '';
+		position: absolute;
+		top: 1px;
+		right: 1px;
+		bottom: 1px;
+		width: 36px;
+		border-radius: 0 9px 9px 0;
+		background: linear-gradient(
+			to right,
+			transparent,
+			color-mix(in srgb, var(--surface) 92%, transparent)
+		);
+		pointer-events: none;
+		opacity: 0;
+		transition: opacity 0.2s;
+	}
+	.scroll-wrap.more-right::after {
+		opacity: 1;
 	}
 	.scroll {
 		overflow: auto;

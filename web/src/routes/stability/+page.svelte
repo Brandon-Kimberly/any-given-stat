@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import DataTable, { type Column } from '$lib/components/DataTable.svelte';
 	import PlotFigure from '$lib/components/Plot.svelte';
 	import LoadError from '$lib/components/LoadError.svelte';
@@ -23,8 +24,34 @@
 	const isTeamMetric = $derived(!!current?.group.startsWith('team'));
 	const pairs = $derived(data?.yoy_pairs[selected] ?? []);
 
+	// Glossary entries for the metrics that have one.
+	const GLOSSARY: Record<string, string> = {
+		off_epa: 'epa',
+		off_pass_epa: 'epa',
+		off_rush_epa: 'epa',
+		def_epa: 'epa',
+		def_pass_epa: 'epa',
+		def_rush_epa: 'epa',
+		rb_epa: 'epa',
+		wr_epa_target: 'epa',
+		off_success: 'success',
+		rb_success: 'success',
+		off_proe: 'proe',
+		off_rz_td: 'red-zone',
+		qb_epa: 'epa-db',
+		qb_cpoe: 'cpoe',
+		qb_sack_rate: 'dropback'
+	};
+	const gloss = (id: string) => `${base}/glossary/#${id}`;
+
 	function dotplot(width: number) {
 		const rows = [...metrics].sort((a, b) => (b.split_half_r ?? -1) - (a.split_half_r ?? -1));
+		// Fit the x range to the data (correlations here top out well below 1).
+		const rs = metrics
+			.flatMap((m) => [m.split_half_r, m.yoy_r])
+			.filter((r): r is number => r != null);
+		const lo = Math.min(-0.1, Math.floor((Math.min(...rs) - 0.05) * 10) / 10);
+		const hi = Math.min(1, Math.ceil((Math.max(...rs) + 0.05) * 10) / 10);
 		const long = rows.flatMap((m) => [
 			{ label: m.label, r: m.split_half_r, kind: 'Within season (odd vs even weeks)' },
 			{ label: m.label, r: m.yoy_r, kind: 'Year over year' }
@@ -34,7 +61,7 @@
 			height: rows.length * 26 + 70,
 			style: plotStyle,
 			marginLeft: Math.min(190, width * 0.42),
-			x: { domain: [-0.1, 1], label: 'Correlation (0 = pure noise, 1 = perfectly repeatable) →' },
+			x: { domain: [lo, hi], label: 'Correlation (0 = pure noise, 1 = perfectly repeatable) →' },
 			y: { domain: rows.map((m) => m.label), label: null },
 			color: {
 				domain: ['Within season (odd vs even weeks)', 'Year over year'],
@@ -93,7 +120,7 @@
 				Plot.dot(pairs, {
 					x: 'y1',
 					y: 'y2',
-					r: 3.5,
+					r: 4,
 					fill: (d: { unit: string }) => (isTeamMetric ? teamColor(d.unit) : 'var(--series-1)'),
 					fillOpacity: 0.65
 				}),
@@ -202,22 +229,24 @@
 		<div class="card">
 			<h2>How to read this</h2>
 			<p>
-				<strong>Split-half r</strong> correlates a stat in odd weeks with the same stat in even weeks.
-				Weather, opponents and injuries mix roughly evenly between the two halves, so the correlation
-				mostly measures skill, not luck.
+				<strong><a href={gloss('split-half')}>Split-half r</a></strong> correlates a stat in odd weeks
+				with the same stat in even weeks. Weather, opponents and injuries mix roughly evenly between the
+				two halves, so the correlation mostly measures skill, not luck.
 			</p>
 			<p>
-				<strong>Season reliability</strong> scales that up to a full season with the Spearman-Brown formula,
-				2r / (1 + r). That's the share of the variation between teams (or players) that is real.
+				<strong><a href={gloss('reliability')}>Season reliability</a></strong> scales that up to a full
+				season with the Spearman-Brown formula, 2r / (1 + r). That's the share of the variation between
+				teams (or players) that is real.
 			</p>
 			<p>
-				<strong>n for 50% signal</strong> is the sample size where a stat is half skill, half noise:
-				n<sub>half</sub> × (1 − r) / r, where n<sub>half</sub> is the sample in each half. Below it, regress
-				hard toward the league average.
+				<strong><a href={gloss('half-signal')}>n for 50% signal</a></strong> is the sample size
+				where a stat is half skill, half noise: n<sub>half</sub> × (1 − r) / r, where n<sub
+					>half</sub
+				> is the sample in each half. Below it, regress hard toward the league average.
 			</p>
 			<p>
-				<strong>Year-over-year r</strong> also includes real change (roster turnover, coaching), so it's
-				a lower bound on how stable the underlying skill is.
+				<strong><a href={gloss('yoy')}>Year-over-year r</a></strong> also includes real change (roster
+				turnover, coaching), so it's a lower bound on how stable the underlying skill is.
 			</p>
 			<p class="muted">
 				The usual pattern: offense is more stable than defense, passing more than rushing, and
@@ -227,6 +256,16 @@
 	</div>
 
 	<div class="card">
-		<DataTable rows={metrics} {columns} sortKey="split_half_r" />
+		<h2>Every stat, by the numbers</h2>
+		<p class="sub">
+			Metric names link to their <a href="{base}/glossary/">glossary</a> entry where there is one.
+		</p>
+		<DataTable
+			rows={metrics}
+			{columns}
+			sortKey="split_half_r"
+			href={(m) => (GLOSSARY[m.key] ? gloss(GLOSSARY[m.key]) : '')}
+			filename="signal-vs-noise"
+		/>
 	</div>
 {/if}

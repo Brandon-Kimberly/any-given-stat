@@ -7,7 +7,10 @@
 
 	// Keep the active pill visible when the bar overflows (phones); scroll only the bar.
 	$effect(() => {
-		const a = active && nav?.querySelector<HTMLElement>(`a[href="#${active}"]`);
+		if (!nav) return;
+		// Back at the top (nothing active): show the bar from its start again.
+		if (!active) return void nav.scrollTo({ left: 0, behavior: 'smooth' });
+		const a = nav.querySelector<HTMLElement>(`a[href="#${active}"]`);
 		if (a)
 			nav.scrollTo({
 				left: a.offsetLeft - nav.clientWidth / 2 + a.offsetWidth / 2,

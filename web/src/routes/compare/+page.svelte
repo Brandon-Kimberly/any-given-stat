@@ -2,6 +2,7 @@
 	// Tale of the tape: two teams or two players side by side, each from any season, on league
 	// percentiles within their own season (so a 2017 and a 2025 season compare fairly).
 	import { goto } from '$app/navigation';
+	import { base } from '$app/paths';
 	import { page } from '$app/state';
 	import LoadError from '$lib/components/LoadError.svelte';
 	import PlotFigure from '$lib/components/Plot.svelte';
@@ -13,9 +14,10 @@
 	import { gridY, isNarrow, Plot, plotStyle, signedTick, thinTicks } from '$lib/plot';
 	import { prefs } from '$lib/prefs.svelte';
 	import { resource, seasonResource } from '$lib/resource.svelte';
+	import { ratingsWeek } from '$lib/season';
 	import { normCdf, percentileOf } from '$lib/stats';
 	import { teamName } from '$lib/teams.svelte';
-	import type { QB, Rating, Receiver, Rusher, TeamSeason } from '$lib/types';
+	import type { Player, QB, Rating, Receiver, Rusher, TeamSeason } from '$lib/types';
 
 	type Mode = 'teams' | 'qbs' | 'receivers' | 'rushers';
 	const MODES: { key: Mode; label: string }[] = [
@@ -130,19 +132,34 @@
 	let qbs = $state.raw<QB[] | null>(null);
 	let receivers = $state.raw<Receiver[] | null>(null);
 	let rushers = $state.raw<Rusher[] | null>(null);
+	let players = $state.raw<Player[] | null>(null);
 	let loadError = $state<string | null>(null);
 
+	// URL: ?mode=teams|qbs|receivers|rushers&a=<id>-<season>&b=<id>-<season>. Team and player
+	// pages link ?mode=teams&a=DET-2026 or ?mode=players&a=<gsis id>-2026: "players" resolves to
+	// the right group from the player's position, and a lone `a` leaves B for the reader to pick.
 	const params = $derived(page.url.searchParams);
+	const rawMode = $derived(params.get('mode'));
+	const playerMode = $derived.by<Mode | null>(() => {
+		if (rawMode !== 'players' || !players) return null;
+		const id = parseSide(params.get('a'))?.id ?? parseSide(params.get('b'))?.id;
+		const g = players.find((p) => p.player_id === id)?.position_group;
+		return g === 'QB' ? 'qbs' : g === 'RB' ? 'rushers' : g ? 'receivers' : 'qbs';
+	});
 	const mode = $derived<Mode>(
-		(MODES.find((m) => m.key === params.get('mode'))?.key ?? 'teams') as Mode
+		MODES.find((m) => m.key === rawMode)?.key ??
+			(rawMode === 'players' ? (playerMode ?? 'qbs') : 'teams')
 	);
+	const waitingForPlayers = $derived(rawMode === 'players' && !players);
 	const seasons = $derived((metaRes.value?.seasons ?? []).map((s) => s.season).reverse());
 	const latest = $derived(seasons[0] ?? prefs.season ?? 0);
 
 	$effect(() => {
 		const want = mode;
+		const needPlayers = waitingForPlayers;
 		import('$lib/data').then(({ load }) => {
 			const fail = (e: unknown) => (loadError = e instanceof Error ? e.message : String(e));
+			if (needPlayers) return void load('players').then((v) => (players = v), fail);
 			if (want === 'qbs' && !qbs) load('qbs').then((v) => (qbs = v), fail);
 			if (want === 'receivers' && !receivers) load('receivers').then((v) => (receivers = v), fail);
 			if (want === 'rushers' && !rushers) load('rushers').then((v) => (rushers = v), fail);
@@ -194,10 +211,13 @@
 		return i > 0 && Number.isInteger(season) ? { id: v.slice(0, i), season } : null;
 	}
 
-	/** A side from the URL, else a sensible default (your team / the top two by volume or rating). */
+	/** A side from the URL, else a sensible default (your team / the top two by volume or rating).
+	 * With only A in the URL (a "Compare" link from a team or player page), B starts empty. */
 	function side(which: 'a' | 'b') {
 		const fromUrl = parseSide(params.get(which));
 		if (fromUrl) return fromUrl;
+		const other = parseSide(params.get(which === 'a' ? 'b' : 'a'));
+		if (which === 'b' && other) return { id: '', season: other.season };
 		const season = prefs.season ?? latest;
 		const { rows } = seasonPool(season);
 		let ordered = rows;
@@ -214,8 +234,10 @@
 	function setSide(which: 'a' | 'b', id: string, season: number) {
 		const url = new URL(page.url);
 		url.searchParams.set('mode', mode);
-		url.searchParams.set('a', which === 'a' ? `${id}-${season}` : `${A.id}-${A.season}`);
-		url.searchParams.set('b', which === 'b' ? `${id}-${season}` : `${B.id}-${B.season}`);
+		const put = (k: 'a' | 'b', s: { id: string; season: number }) =>
+			s.id ? url.searchParams.set(k, `${s.id}-${s.season}`) : url.searchParams.delete(k);
+		put('a', which === 'a' ? { id, season } : A);
+		put('b', which === 'b' ? { id, season } : B);
 		goto(url, { keepFocus: true, noScroll: true, replaceState: true });
 	}
 	function setSeason(which: 'a' | 'b', season: number) {
@@ -235,8 +257,10 @@
 	function swap() {
 		const url = new URL(page.url);
 		url.searchParams.set('mode', mode);
-		url.searchParams.set('a', `${B.id}-${B.season}`);
-		url.searchParams.set('b', `${A.id}-${A.season}`);
+		const put = (k: 'a' | 'b', s: { id: string; season: number }) =>
+			s.id ? url.searchParams.set(k, `${s.id}-${s.season}`) : url.searchParams.delete(k);
+		put('a', B);
+		put('b', A);
 		goto(url, { keepFocus: true, noScroll: true, replaceState: true });
 	}
 
@@ -257,8 +281,16 @@
 	]);
 
 	function label(s: { id: string; row: Row | null; season: number }): string {
+		if (!s.id) return mode === 'teams' ? 'Pick a team' : 'Pick a player';
 		if (mode === 'teams') return `${s.season} ${teamName(s.id)}`;
 		return `${s.row?.full_name ?? s.row?.name ?? s.id} (${s.season})`;
+	}
+	/** The side's own page: the team in that season, or the player's profile. */
+	function sideHref(s: { id: string; season: number }): string | null {
+		if (!s.id) return null;
+		return mode === 'teams'
+			? `${base}/team/?t=${s.id}&season=${s.season}`
+			: `${base}/player/?id=${encodeURIComponent(s.id)}`;
 	}
 	function shortLabel(s: { id: string; row: Row | null; season: number }): string {
 		if (mode === 'teams') return `${s.id} ${s.season}`;
@@ -318,15 +350,18 @@
 		return { ra, rb, margin, pA: normCdf(margin / sigma) };
 	});
 
+	// Each side's path stops at its season's reported week ("through week N").
+	function path(s: { id: string; season: number; row: Row | null }) {
+		const own = ratingRows.filter((r) => r.team === s.id && r.season === s.season);
+		const status = metaRes.value?.seasons.find((x) => x.season === s.season);
+		const last = ratingsWeek(
+			own.map((r) => r.week),
+			status
+		);
+		return own.filter((r) => r.week <= last).map((r) => ({ ...r, who: shortLabel(s) }));
+	}
 	function pathChart(width: number) {
-		const rows = [
-			...ratingRows
-				.filter((r) => r.team === a.id && r.season === a.season)
-				.map((r) => ({ ...r, who: shortLabel(a) })),
-			...ratingRows
-				.filter((r) => r.team === b.id && r.season === b.season)
-				.map((r) => ({ ...r, who: shortLabel(b) }))
-		];
+		const rows = [...path(a), ...(b.id ? path(b) : [])];
 		const weeks = [...new Set(rows.map((r) => r.week))].sort((x, y) => x - y);
 		return Plot.plot({
 			width,
@@ -335,7 +370,7 @@
 			marginLeft: 40,
 			marginRight: isNarrow(width) ? 10 : 70,
 			color: {
-				domain: [shortLabel(a), shortLabel(b)],
+				domain: b.id ? [shortLabel(a), shortLabel(b)] : [shortLabel(a)],
 				range: ['var(--series-1)', 'var(--series-2)'],
 				legend: true
 			},
@@ -344,14 +379,8 @@
 			marks: [
 				gridY(),
 				Plot.ruleY([0], { stroke: 'var(--axis)' }),
-				Plot.line(rows, {
-					x: 'week',
-					y: 'points',
-					stroke: 'who',
-					strokeWidth: 2.5,
-					curve: 'monotone-x'
-				}),
-				Plot.dot(rows, { x: 'week', y: 'points', fill: 'who', r: 3 }),
+				Plot.line(rows, { x: 'week', y: 'points', stroke: 'who', strokeWidth: 2.5 }),
+				Plot.dot(rows, { x: 'week', y: 'points', fill: 'who', r: 4 }),
 				Plot.tip(
 					rows,
 					Plot.pointer({
@@ -369,15 +398,15 @@
 	const status = $derived(
 		metaRes.value?.seasons.find((s) => s.season === Math.max(a.season, b.season))
 	);
-	const ready = $derived(!!pool && !!metaRes.value);
+	const ready = $derived(!!pool && !!metaRes.value && !waitingForPlayers);
 	const error = $derived(metaRes.error ?? teamsRes.error ?? loadError);
 </script>
 
 <svelte:head><title>Compare · Any Given Stat</title></svelte:head>
 
 <div class="page-head">
-	<div class="eyebrow">Compare</div>
-	<h1>Tale of the tape</h1>
+	<div class="eyebrow">Explore</div>
+	<h1>Compare: tale of the tape</h1>
 	<p class="lede">
 		Any two teams or players, each from any season since 2016. Bars are league percentiles within
 		that player's or team's own season (100 = best), so different eras compare fairly.
@@ -422,7 +451,9 @@
 				<label class="field grow">
 					{mode === 'teams' ? 'Team' : 'Player'}
 					<select value={s.id} onchange={(e) => setSide(k, e.currentTarget.value, s.season)}>
-						{#if !s.row}<option value={s.id}>{s.id || '—'}</option>{/if}
+						{#if !s.row}<option value={s.id}
+								>{s.id || (mode === 'teams' ? 'Pick a team…' : 'Pick a player…')}</option
+							>{/if}
 						{#each options(s.season) as r (r[idKey])}
 							<option value={r[idKey]}
 								>{mode === 'teams'
@@ -444,22 +475,30 @@
 	<section class="card tape">
 		<div class="tape-head">
 			<div class="who a">
-				{#if mode === 'teams'}<TeamBadge team={a.id} size="lg" />{:else if a.row}<TeamBadge
+				{#if mode === 'teams' && a.id}<TeamBadge team={a.id} size="lg" />{:else if a.row}<TeamBadge
 						team={a.row.team}
 						size="md"
 					/>{/if}
 				<div>
-					<div class="name">{label(a)}</div>
-					<div class="score"><b>{wins.a}</b> of {wins.of} categories</div>
+					<div class="name">
+						{#if sideHref(a)}<a href={sideHref(a)}>{label(a)}</a>{:else}{label(a)}{/if}
+					</div>
+					<div class="score">
+						{#if a.id && b.id}<b>{wins.a}</b> of {wins.of} categories{:else}&nbsp;{/if}
+					</div>
 				</div>
 			</div>
 			<div class="vs" aria-hidden="true">VS</div>
 			<div class="who b">
 				<div>
-					<div class="name">{label(b)}</div>
-					<div class="score"><b>{wins.b}</b> of {wins.of} categories</div>
+					<div class="name">
+						{#if sideHref(b)}<a href={sideHref(b)}>{label(b)}</a>{:else}{label(b)}{/if}
+					</div>
+					<div class="score">
+						{#if a.id && b.id}<b>{wins.b}</b> of {wins.of} categories{:else}Choose one above{/if}
+					</div>
 				</div>
-				{#if mode === 'teams'}<TeamBadge team={b.id} size="lg" />{:else if b.row}<TeamBadge
+				{#if mode === 'teams' && b.id}<TeamBadge team={b.id} size="lg" />{:else if b.row}<TeamBadge
 						team={b.row.team}
 						size="md"
 					/>{/if}
@@ -589,6 +628,16 @@
 	}
 	.name {
 		font: 800 clamp(1rem, 0.9rem + 0.6vw, 1.35rem) / 1.15 var(--display);
+	}
+	.name a {
+		color: inherit;
+		text-decoration: underline;
+		text-decoration-color: var(--border-strong);
+		text-underline-offset: 3px;
+	}
+	.name a:hover {
+		color: var(--accent-ink);
+		text-decoration-color: currentColor;
 	}
 	.score {
 		font-size: 0.82rem;
