@@ -10,7 +10,8 @@
 	import { isNarrow, Plot, plotStyle } from '$lib/plot';
 	import { resource, seasonResource } from '$lib/resource.svelte';
 	import { excitement, excitementPercentile, loadSeasonGames } from '$lib/games';
-	import { teamColor, teamName } from '$lib/teams.svelte';
+	import { favorite } from '$lib/favorite.svelte';
+	import { heroColors, teamColor, teamName } from '$lib/teams.svelte';
 	import type { GameDetail, GamePrediction, Rating } from '$lib/types';
 
 	const meta = resource('meta');
@@ -174,16 +175,25 @@
 			]
 		});
 	}
+	// Your team's colors light the hero (darkened so white text stays readable).
+	const tint = $derived(heroColors(favorite.team));
 </script>
 
 <svelte:head><title>Any Given Stat · NFL analytics</title></svelte:head>
 
-<section class="hero">
+<section
+	class="hero"
+	class:team-tint={!!tint}
+	style:--hero-from={tint?.from}
+	style:--hero-to={tint?.to}
+>
+	<div class="aurora" aria-hidden="true"><span></span><span></span><span></span></div>
+	<div class="turf" aria-hidden="true"></div>
 	<div class="eyebrow" style="color: rgba(255,255,255,0.75)">
 		{season}
 		{#if latest}· {inProgress ? `through week ${latest.last_week}` : 'final'}{/if}
 	</div>
-	<h1>Know which numbers matter.</h1>
+	<h1>Know which numbers <span class="glow">matter.</span></h1>
 	<p class="lede">
 		Every NFL play since 2016, turned into opponent-adjusted ratings, win probability charts,
 		predictions honestly scored against Vegas, and a running check on which stats are real and which
@@ -208,6 +218,7 @@
 		</div>
 	</dl>
 	<svg class="ball" viewBox="0 0 160 100" aria-hidden="true">
+		<path class="trail" d="M-70 70h70M-90 52h82M-60 34h58" />
 		<path class="hide" d="M8 50C30 8 130 8 152 50 130 92 30 92 8 50Z" />
 		<path class="seam" d="M30 26c8 16 8 32 0 48M130 26c-8 16-8 32 0 48" />
 		<path class="lace" d="M55 50h50M62 43v14M72 43v14M82 43v14M92 43v14M100 44v12" />
@@ -395,9 +406,125 @@
 </section>
 
 <style>
+	/* ---------- Hero: a stadium under the lights ---------- */
+	.hero {
+		min-height: 400px;
+		padding-bottom: clamp(1.5rem, 1rem + 3vw, 3rem);
+		background:
+			radial-gradient(120% 90% at 85% -10%, rgba(255, 255, 255, 0.16), transparent 55%),
+			linear-gradient(135deg, var(--hero-from), var(--hero-to));
+		box-shadow:
+			0 30px 60px -30px color-mix(in srgb, var(--hero-to) 70%, transparent),
+			var(--shadow-md);
+		transition: background 0.6s var(--ease);
+	}
+	.hero > :not(.aurora):not(.turf):not(.ball) {
+		position: relative;
+		z-index: 2;
+	}
 	.hero h1 {
-		font-size: clamp(2rem, 1.3rem + 3vw, 3.25rem);
-		max-width: 18ch;
+		font-size: clamp(2.2rem, 1.3rem + 3.6vw, 3.9rem);
+		font-stretch: 118%;
+		line-height: 1.02;
+		max-width: 16ch;
+		margin-bottom: 0.7rem;
+		text-shadow: 0 2px 30px rgba(0, 0, 0, 0.25);
+	}
+	/* Gradient text (light end stays ≥ 7:1 against the dark hero). */
+	.glow {
+		background: linear-gradient(100deg, #ffffff 10%, #a5f3fc 55%, #c4b5fd 95%);
+		-webkit-background-clip: text;
+		background-clip: text;
+		color: transparent;
+		background-size: 200% 100%;
+		animation: glow-pan 8s ease-in-out infinite alternate;
+	}
+	@keyframes glow-pan {
+		to {
+			background-position: 100% 0;
+		}
+	}
+	/* Aurora: three blurred lights drifting over the gradient. */
+	.aurora {
+		position: absolute;
+		inset: 0;
+		z-index: 0;
+		overflow: hidden;
+		pointer-events: none;
+	}
+	.aurora span {
+		position: absolute;
+		width: 46%;
+		aspect-ratio: 1;
+		border-radius: 50%;
+		filter: blur(60px);
+		opacity: 0.55;
+		mix-blend-mode: screen;
+	}
+	.aurora span:nth-child(1) {
+		left: -8%;
+		top: -30%;
+		background: radial-gradient(circle, #22d3ee, transparent 65%);
+		animation: drift-a 19s ease-in-out infinite alternate;
+	}
+	.aurora span:nth-child(2) {
+		right: -6%;
+		top: -20%;
+		background: radial-gradient(circle, #8b5cf6, transparent 65%);
+		animation: drift-b 23s ease-in-out infinite alternate;
+	}
+	.aurora span:nth-child(3) {
+		left: 30%;
+		bottom: -45%;
+		background: radial-gradient(circle, #3b82f6, transparent 65%);
+		animation: drift-c 27s ease-in-out infinite alternate;
+	}
+	.team-tint .aurora span {
+		opacity: 0.32;
+	}
+	@keyframes drift-a {
+		to {
+			transform: translate(35%, 25%) scale(1.2);
+		}
+	}
+	@keyframes drift-b {
+		to {
+			transform: translate(-30%, 35%) scale(0.9);
+		}
+	}
+	@keyframes drift-c {
+		to {
+			transform: translate(20%, -25%) scale(1.15);
+		}
+	}
+	/* The field: yard lines in perspective, receding to the horizon and rolling toward you. */
+	.turf {
+		position: absolute;
+		left: -30%;
+		right: -30%;
+		bottom: -2px;
+		height: 78%;
+		z-index: 1;
+		pointer-events: none;
+		background:
+			repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.34) 0 2px, transparent 2px 64px),
+			repeating-linear-gradient(
+				90deg,
+				transparent 0 calc(5% - 1px),
+				rgba(255, 255, 255, 0.13) calc(5% - 1px) 5%
+			);
+		transform: perspective(520px) rotateX(64deg);
+		transform-origin: 50% 100%;
+		mask-image: linear-gradient(to top, #000 0%, rgba(0, 0, 0, 0.55) 40%, transparent 75%);
+		-webkit-mask-image: linear-gradient(to top, #000 0%, rgba(0, 0, 0, 0.55) 40%, transparent 75%);
+		animation: roll 5s linear infinite;
+	}
+	@keyframes roll {
+		to {
+			background-position:
+				0 64px,
+				0 0;
+		}
 	}
 	.hero-stats {
 		display: flex;
@@ -418,13 +545,29 @@
 	/* A football drifting across the field behind the copy. */
 	.ball {
 		position: absolute;
-		right: 6%;
-		top: 16%;
-		width: clamp(110px, 15vw, 190px);
+		right: 7%;
+		top: 14%;
+		z-index: 1;
+		width: clamp(120px, 16vw, 210px);
+		overflow: visible;
 		transform: rotate(-28deg);
 		animation: spiral 7s ease-in-out infinite;
 		pointer-events: none;
-		filter: drop-shadow(0 18px 24px rgba(0, 0, 0, 0.25));
+		filter: drop-shadow(0 22px 26px rgba(0, 0, 0, 0.3))
+			drop-shadow(0 0 30px rgba(165, 243, 252, 0.25));
+	}
+	.ball .trail {
+		fill: none;
+		stroke: rgba(255, 255, 255, 0.35);
+		stroke-width: 2.5;
+		stroke-linecap: round;
+		stroke-dasharray: 40 200;
+		animation: streak 1.8s linear infinite;
+	}
+	@keyframes streak {
+		to {
+			stroke-dashoffset: -240;
+		}
 	}
 	.ball .hide {
 		fill: rgba(255, 255, 255, 0.1);
@@ -475,10 +618,23 @@
 		background: rgba(255, 255, 255, 0.2);
 		transform: translateY(-1px);
 	}
+	.hero-btn {
+		backdrop-filter: blur(8px);
+		-webkit-backdrop-filter: blur(8px);
+	}
 	.hero-btn.primary {
 		background: #fff;
 		color: #0f2a4f !important;
 		border-color: #fff;
+		box-shadow: 0 10px 30px -10px rgba(165, 243, 252, 0.6);
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.aurora span,
+		.turf,
+		.glow,
+		.ball .trail {
+			animation: none;
+		}
 	}
 	.dash {
 		display: grid;

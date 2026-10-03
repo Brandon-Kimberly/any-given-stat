@@ -68,3 +68,37 @@ export function matchupColors(away: string, home: string): { away: string; home:
 		? { away: 'var(--series-2)', home: 'var(--series-1)' }
 		: { away: a, home: h };
 }
+
+function hex([r, g, b]: [number, number, number]): string {
+	return `#${[r, g, b].map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`;
+}
+function luminance([r, g, b]: [number, number, number]): number {
+	const f = (v: number) => {
+		const c = v / 255;
+		return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+	};
+	return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+}
+/** `color` darkened toward a night-sky base just enough for white text at `contrast`:1. */
+export function nightShade(color: string, contrast = 5.5): string | null {
+	const c = rgb(color);
+	if (!c) return null;
+	const base: [number, number, number] = [5, 8, 20];
+	for (let t = 0.85; t >= 0; t -= 0.05) {
+		const mix = c.map((v, i) => v * t + base[i] * (1 - t)) as [number, number, number];
+		if (1.05 / (luminance(mix) + 0.05) >= contrast) return hex(mix);
+	}
+	return hex(base);
+}
+
+/** Hero gradient stops in a team's colors, safe behind white text. */
+export function heroColors(team: string | null | undefined): { from: string; to: string } | null {
+	const m = team ? teamMeta.byTeam[team] : undefined;
+	if (!m) return null;
+	const from = nightShade(m.color);
+	// A secondary that's white, black or gray reads as nothing: fall back to the primary.
+	const second = rgb(m.color2);
+	const flat = !second || Math.max(...second) - Math.min(...second) < 24;
+	const to = nightShade(flat ? m.color : m.color2, 6.5);
+	return from && to ? { from, to } : null;
+}

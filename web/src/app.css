@@ -33,14 +33,25 @@
 	--plot-background: var(--surface);
 	--shadow-sm: 0 1px 2px rgba(11, 11, 11, 0.04), 0 1px 1px rgba(11, 11, 11, 0.03);
 	--shadow-md: 0 6px 20px -8px rgba(11, 11, 11, 0.18), 0 2px 6px -2px rgba(11, 11, 11, 0.06);
-	--header-bg: rgba(252, 252, 251, 0.78);
+	--header-bg: rgba(252, 252, 251, 0.72);
+	--shadow-glow: 0 0 0 1px rgba(42, 120, 214, 0.16), 0 16px 40px -18px rgba(42, 120, 214, 0.35);
+	--card-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0) 90px);
+	/* Ambient light behind the page and the brand gradient (decoration only, never text). */
+	--ambient-1: rgba(42, 120, 214, 0.08);
+	--ambient-2: rgba(235, 104, 52, 0.05);
+	--ambient-3: rgba(27, 175, 122, 0.04);
+	--brand-a: #1f63b8;
+	--brand-b: #0e9fb8;
+	--brand-c: #7c5cd6;
+	--brand-gradient: linear-gradient(110deg, var(--brand-a), var(--brand-b) 55%, var(--brand-c));
+	--grain-opacity: 0.035;
 	/* Hero band: deep "night game" blue with yard lines, same in both themes. */
 	--hero-from: #0f2a4f;
 	--hero-to: #1c5cab;
 	--radius: 14px;
 	--radius-sm: 8px;
-	--font: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
-	--display: 'Archivo', 'Inter', system-ui, sans-serif;
+	--font: 'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+	--display: 'Archivo Variable', 'Archivo', 'Inter Variable', system-ui, sans-serif;
 	--mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 	--ease: cubic-bezier(0.2, 0.7, 0.2, 1);
 }
@@ -48,17 +59,18 @@
 @media (prefers-color-scheme: dark) {
 	:root:not([data-theme='light']) {
 		color-scheme: dark;
-		--page: #0b0b0b;
-		--surface: #1a1a19;
-		--surface-2: #242423;
-		--surface-3: #2e2e2c;
+		/* "Prime time": blue-black page, surfaces lit from above. */
+		--page: #070a12;
+		--surface: #10141d;
+		--surface-2: #171c27;
+		--surface-3: #212736;
 		--text-primary: #ffffff;
-		--text-secondary: #c9c8bf;
-		--text-muted: #a3a198;
-		--grid: #2c2c2a;
-		--axis: #3d3d3a;
-		--border: rgba(255, 255, 255, 0.09);
-		--border-strong: rgba(255, 255, 255, 0.18);
+		--text-secondary: #c6cbd6;
+		--text-muted: #9ca3b2;
+		--grid: #1e2431;
+		--axis: #343c4d;
+		--border: rgba(160, 180, 220, 0.11);
+		--border-strong: rgba(170, 190, 230, 0.22);
 		--accent: #3987e5;
 		--accent-ink: #86b6ef;
 		--accent-soft: rgba(57, 135, 229, 0.16);
@@ -72,24 +84,34 @@
 		--good-wash: rgba(57, 135, 229, 0.34);
 		--bad-wash: rgba(230, 103, 103, 0.3);
 		--bad-ink: #ff9b94;
-		--shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-		--shadow-md: 0 10px 28px -10px rgba(0, 0, 0, 0.7), 0 2px 6px -2px rgba(0, 0, 0, 0.5);
-		--header-bg: rgba(20, 20, 19, 0.72);
+		--shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+		--shadow-md: 0 18px 40px -16px rgba(0, 0, 0, 0.8), 0 2px 8px -2px rgba(0, 0, 0, 0.5);
+		--shadow-glow: 0 0 0 1px rgba(120, 170, 255, 0.18), 0 18px 50px -20px rgba(57, 135, 229, 0.45);
+		--header-bg: rgba(10, 13, 20, 0.7);
+		--card-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0) 120px);
+		--ambient-1: rgba(57, 135, 229, 0.16);
+		--ambient-2: rgba(139, 92, 246, 0.11);
+		--ambient-3: rgba(34, 211, 238, 0.07);
+		--brand-a: #4d94ff;
+		--brand-b: #22d3ee;
+		--brand-c: #a78bfa;
+		--grain-opacity: 0.05;
 	}
 }
 :root[data-theme='dark'] {
 	color-scheme: dark;
-	--page: #0b0b0b;
-	--surface: #1a1a19;
-	--surface-2: #242423;
-	--surface-3: #2e2e2c;
+	/* "Prime time": blue-black page, surfaces lit from above. */
+	--page: #070a12;
+	--surface: #10141d;
+	--surface-2: #171c27;
+	--surface-3: #212736;
 	--text-primary: #ffffff;
-	--text-secondary: #c9c8bf;
-	--text-muted: #a3a198;
-	--grid: #2c2c2a;
-	--axis: #3d3d3a;
-	--border: rgba(255, 255, 255, 0.09);
-	--border-strong: rgba(255, 255, 255, 0.18);
+	--text-secondary: #c6cbd6;
+	--text-muted: #9ca3b2;
+	--grid: #1e2431;
+	--axis: #343c4d;
+	--border: rgba(160, 180, 220, 0.11);
+	--border-strong: rgba(170, 190, 230, 0.22);
 	--accent: #3987e5;
 	--accent-ink: #86b6ef;
 	--accent-soft: rgba(57, 135, 229, 0.16);
@@ -103,9 +125,18 @@
 	--good-wash: rgba(57, 135, 229, 0.34);
 	--bad-wash: rgba(230, 103, 103, 0.3);
 	--bad-ink: #ff9b94;
-	--shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-	--shadow-md: 0 10px 28px -10px rgba(0, 0, 0, 0.7), 0 2px 6px -2px rgba(0, 0, 0, 0.5);
-	--header-bg: rgba(20, 20, 19, 0.72);
+	--shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+	--shadow-md: 0 18px 40px -16px rgba(0, 0, 0, 0.8), 0 2px 8px -2px rgba(0, 0, 0, 0.5);
+	--shadow-glow: 0 0 0 1px rgba(120, 170, 255, 0.18), 0 18px 50px -20px rgba(57, 135, 229, 0.45);
+	--header-bg: rgba(10, 13, 20, 0.7);
+	--card-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0) 120px);
+	--ambient-1: rgba(57, 135, 229, 0.16);
+	--ambient-2: rgba(139, 92, 246, 0.11);
+	--ambient-3: rgba(34, 211, 238, 0.07);
+	--brand-a: #4d94ff;
+	--brand-b: #22d3ee;
+	--brand-c: #a78bfa;
+	--grain-opacity: 0.05;
 }
 
 /* ---------- Base ---------- */
@@ -531,10 +562,33 @@ button.ghost:hover {
 		animation: none !important;
 	}
 }
-::view-transition-old(root),
+/* Route changes: the old page fades up and out, the new one rises in. */
+::view-transition-old(root) {
+	animation: 0.16s ease-out both vt-out;
+}
 ::view-transition-new(root) {
-	animation-duration: 0.22s;
-	animation-timing-function: var(--ease);
+	animation: 0.32s var(--ease) both vt-in;
+}
+@keyframes vt-out {
+	to {
+		opacity: 0;
+		transform: translateY(-6px);
+	}
+}
+@keyframes vt-in {
+	from {
+		opacity: 0;
+		transform: translateY(12px);
+	}
+}
+/* Theme switch: one snapshot; the new theme is revealed by a clip-path circle (theme.svelte.ts). */
+:root.theme-vt header {
+	view-transition-name: none !important;
+}
+:root.theme-vt::view-transition-old(root),
+:root.theme-vt::view-transition-new(root) {
+	animation: none;
+	mix-blend-mode: normal;
 }
 
 /* ---------- Observable Plot ---------- */
@@ -678,4 +732,232 @@ html.theming *::after {
 /* Jump links (PageToc) land below the sticky header and the jump bar itself. */
 :where(section, div)[id] {
 	scroll-margin-top: 7.5rem;
+}
+
+/* =====================================================================================
+   Visual layer v2: ambient light, display type, surfaces, focus, buttons.
+   Decoration only: no text sits on a gradient, and everything respects reduced motion.
+   ===================================================================================== */
+
+/* Ambient light: soft brand-colored glows fixed behind the page, plus a faint film grain
+   so large flat areas don't band. Both sit under all content and ignore the pointer. */
+body {
+	position: relative;
+	isolation: isolate;
+}
+body::before,
+body::after {
+	content: '';
+	position: fixed;
+	inset: 0;
+	z-index: -1;
+	pointer-events: none;
+}
+body::before {
+	background:
+		radial-gradient(60rem 40rem at 8% -10%, var(--ambient-1), transparent 70%),
+		radial-gradient(50rem 36rem at 100% 0%, var(--ambient-2), transparent 70%),
+		radial-gradient(70rem 40rem at 50% 115%, var(--ambient-3), transparent 70%);
+}
+body::after {
+	opacity: var(--grain-opacity);
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 1 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+	mix-blend-mode: overlay;
+}
+
+/* Display type: Archivo's width axis gives headlines a broadcast-graphics stance. */
+h1 {
+	font-stretch: 112%;
+	font-weight: 800;
+	letter-spacing: -0.025em;
+}
+h2 {
+	font-stretch: 104%;
+}
+.tile .value {
+	font-stretch: 108%;
+	letter-spacing: -0.02em;
+}
+
+/* Section labels: a short brand-gradient tick before the text (the text keeps its ink). */
+.eyebrow {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.45rem;
+}
+.eyebrow::before {
+	content: '';
+	width: 1.1rem;
+	height: 3px;
+	border-radius: 3px;
+	background: var(--brand-gradient);
+	flex: none;
+}
+
+/* Surfaces: a soft top sheen so cards read as lit objects; a hairline inner highlight. */
+.card {
+	background: var(--card-sheen), var(--surface);
+	border-color: var(--border);
+}
+a.card:hover,
+.card.interactive:hover {
+	box-shadow: var(--shadow-glow);
+	border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+
+/* Focus: a soft glow ring that follows the element's own radius. */
+:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+	box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/* Primary buttons: a deep accent with a light sweep on hover. */
+button.primary,
+a.button.primary {
+	position: relative;
+	overflow: hidden;
+	background:
+		linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0) 60%),
+		var(--accent-fill);
+	box-shadow:
+		0 1px 0 rgba(255, 255, 255, 0.18) inset,
+		0 6px 16px -8px color-mix(in srgb, var(--accent) 80%, transparent);
+}
+button.primary::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(
+		110deg,
+		transparent 30%,
+		rgba(255, 255, 255, 0.28) 50%,
+		transparent 70%
+	);
+	transform: translateX(-120%);
+	pointer-events: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+	button.primary:hover::after {
+		transform: translateX(120%);
+		transition: transform 0.7s var(--ease);
+	}
+}
+
+/* Skeletons shimmer with a hint of the brand color. */
+.skeleton {
+	background: var(--surface-2);
+}
+.skeleton::after {
+	background: linear-gradient(
+		90deg,
+		transparent,
+		color-mix(in srgb, var(--accent) 10%, var(--surface-3)),
+		transparent
+	);
+}
+
+/* Chips and callouts: a touch more depth. */
+.callout {
+	background: var(--card-sheen), var(--surface);
+	box-shadow: var(--shadow-sm);
+}
+
+/* ---------- Card spotlight (lib/motion.ts sets --mx/--my on the hovered card) ---------- */
+@property --spot-fill {
+	syntax: '<color>';
+	inherits: false;
+	initial-value: transparent;
+}
+@property --spot-edge {
+	syntax: '<color>';
+	inherits: false;
+	initial-value: transparent;
+}
+.card {
+	--spot-edge: var(--border);
+	border: 1px solid transparent;
+	background:
+		radial-gradient(
+				520px circle at var(--mx, 50%) var(--my, -400px),
+				var(--spot-fill),
+				transparent 42%
+			)
+			padding-box,
+		var(--card-sheen) padding-box,
+		linear-gradient(var(--surface), var(--surface)) padding-box,
+		radial-gradient(
+				360px circle at var(--mx, 50%) var(--my, -400px),
+				var(--spot-edge),
+				var(--border) 70%
+			)
+			border-box;
+	transition:
+		--spot-fill 0.4s var(--ease),
+		--spot-edge 0.4s var(--ease),
+		box-shadow 0.25s var(--ease),
+		transform 0.25s var(--ease);
+}
+@media (hover: hover) and (pointer: fine) {
+	.card:hover {
+		--spot-fill: color-mix(in srgb, var(--accent) 7%, transparent);
+		--spot-edge: color-mix(in srgb, var(--accent) 60%, var(--border));
+	}
+}
+
+/* ---------- Segmented controls: a pill that slides to the selected option ---------- */
+.seg {
+	position: relative;
+}
+.seg > button {
+	position: relative;
+	z-index: 1;
+}
+.seg[data-pill]::before {
+	content: '';
+	position: absolute;
+	left: 0;
+	top: 0;
+	z-index: 0;
+	width: var(--pill-w);
+	height: var(--pill-h);
+	transform: translate(var(--pill-x), var(--pill-y));
+	border-radius: 7px;
+	background: var(--surface);
+	box-shadow:
+		var(--shadow-sm),
+		0 0 0 1px var(--border);
+	transition:
+		transform 0.38s cubic-bezier(0.3, 1.25, 0.45, 1),
+		width 0.38s cubic-bezier(0.3, 1.25, 0.45, 1),
+		height 0.2s;
+}
+.seg.pill-instant::before {
+	transition: none;
+}
+.seg[data-pill] > button[aria-pressed='true'] {
+	background: transparent;
+	box-shadow: none;
+}
+
+/* ---------- Scroll reveal: cards rise into place as they enter (transform only, so text
+   is always fully opaque; nothing already on screen moves). ---------- */
+@supports (animation-timeline: view()) {
+	@media (prefers-reduced-motion: no-preference) {
+		main .card,
+		main .tiles > *,
+		main .rl {
+			animation: reveal linear both;
+			animation-timeline: view();
+			animation-range: entry 0% entry 55%;
+		}
+	}
+}
+@keyframes reveal {
+	from {
+		transform: translateY(28px) scale(0.985);
+	}
+	to {
+		transform: none;
+	}
 }

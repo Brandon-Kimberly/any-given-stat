@@ -42,7 +42,7 @@
 			detail: 'Shortcut: t',
 			href: '#theme',
 			key: 'toggle dark light mode theme',
-			run: toggleTheme
+			run: () => toggleTheme()
 		},
 		{
 			kind: 'Action',
