@@ -370,6 +370,11 @@
 				>; EPA, win probability, CPOE and xYAC from the nflfastR models. Regular season unless
 				noted.
 			</p>
+			<p class="muted small-print">
+				An independent, free fan project, not affiliated with or endorsed by the NFL, its teams,
+				ESPN or Sleeper. Team names and logos are trademarks of their owners; headlines link to
+				their publishers.
+			</p>
 		</div>
 		<div class="foot-meta">
 			{#if meta && latest}
@@ -810,6 +815,10 @@
 	}
 	.foot-brand {
 		font: 600 1rem var(--display);
+	}
+	.small-print {
+		font-size: 0.78rem;
+		max-width: 70ch;
 	}
 	.foot-brand b {
 		font-weight: 800;

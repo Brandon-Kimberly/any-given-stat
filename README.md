@@ -5,7 +5,8 @@ charts for every game, predictions honestly scored against Vegas, fourth-down de
 interactive primer on how football works in numbers, and a page that measures which stats are signal
 and which are noise.
 
-**Live site:** https://brandon-kimberly.github.io/any-given-stat/ (rebuilt daily during the season)
+**Live site:** https://brandon-kimberly.github.io/any-given-stat/ (free to use; rebuilt daily during
+the season, with news and injury reports every few hours)
 
 ![Home dashboard](docs/home.png)
 
@@ -109,6 +110,25 @@ static site on GitHub Pages, rebuilt by a scheduled GitHub Action
 - **Tested math.** Metric logic is unit-tested against hand-computed answers on synthetic play-by-play
   (`pipeline/tests`), and every SQL explorer preset is executed against real data in CI.
 
+## Host your own copy (free)
+
+The whole site is static files plus a scheduled GitHub Action, so it costs nothing to run:
+
+1. Fork this repository (it must stay public for free GitHub Pages and Actions minutes).
+2. In the fork: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+3. **Actions → Deploy site → Run workflow** (or push to `main`). The first run downloads every
+   season; later runs reuse that cache and only refresh the current season.
+
+`.github/workflows/deploy.yml` then rebuilds daily in season (plus after Sunday and Monday night
+games, and every 6 hours for news and injury reports) and publishes to
+`https://<you>.github.io/<repo>/`. The public build (`PUBLIC_HOSTED=1`) has no local server, so it
+offers Sleeper leagues only (ESPN's league API refuses requests from other websites), shows news
+from the last build, and hides the Sync button. Everything else is identical to the local app.
+
+Cost and limits: GitHub Pages allows 1 GB of site (this one is ~250 MB) and about 100 GB of traffic a
+month; a first visit downloads 0.6 MB (home) to 1.2 MB (game, team pages) compressed, so that is
+tens of thousands of visits a month for $0. A custom domain is the only optional cost (~$10/year).
+
 ## Run it locally
 
 Requires Python 3.11+, [uv](https://docs.astral.sh/uv/) and Node 22.
@@ -171,4 +191,7 @@ npm run serve
 
 Play-by-play, EPA, win probability, CPOE, xYAC and xpass come from
 [nflverse](https://github.com/nflverse/nflverse-data) and the
-[nflfastR](https://www.nflfastr.com/) models. This project is not affiliated with the NFL.
+[nflfastR](https://www.nflfastr.com/) models. Headlines come from ESPN and link to the original
+stories; fantasy leagues load from Sleeper (and ESPN in the local app). This is an independent, free
+fan project, not affiliated with or endorsed by the NFL, its teams, ESPN or Sleeper; team names and
+logos are trademarks of their owners.

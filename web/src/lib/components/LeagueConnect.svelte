@@ -4,6 +4,7 @@
 	import { currentSeason, fantasy } from '$lib/fantasy/league.svelte';
 	import { PRESETS, unsupported, type PresetName } from '$lib/fantasy/scoring';
 	import { toast } from '$lib/toast.svelte';
+	import { hosted } from '$lib/hosted';
 
 	let platform = $state<'sleeper' | 'espn'>('sleeper');
 	let leagueId = $state('');
@@ -99,7 +100,7 @@
 		<div class="head">
 			<div>
 				<div class="eyebrow">Your league</div>
-				<h2 id="league-title">Connect your fantasy league</h2>
+				<h2 id="league-title">Connect your {hosted ? 'Sleeper' : 'fantasy'} league</h2>
 				<p class="muted small">
 					Points across the site switch to your league's exact scoring, and your roster gets
 					highlighted. Nothing leaves this browser except the request to your platform.
@@ -107,16 +108,20 @@
 			</div>
 		</div>
 		<form class="connect" onsubmit={connect}>
-			<div class="seg" role="group" aria-label="Platform">
-				<button
-					type="button"
-					aria-pressed={platform === 'sleeper'}
-					onclick={() => (platform = 'sleeper')}>Sleeper</button
-				>
-				<button type="button" aria-pressed={platform === 'espn'} onclick={() => (platform = 'espn')}
-					>ESPN</button
-				>
-			</div>
+			{#if !hosted}
+				<div class="seg" role="group" aria-label="Platform">
+					<button
+						type="button"
+						aria-pressed={platform === 'sleeper'}
+						onclick={() => (platform = 'sleeper')}>Sleeper</button
+					>
+					<button
+						type="button"
+						aria-pressed={platform === 'espn'}
+						onclick={() => (platform = 'espn')}>ESPN</button
+					>
+				</div>
+			{/if}
 			<label class="field grow">
 				League ID
 				<input
@@ -145,6 +150,8 @@
 			{#if platform === 'sleeper'}
 				Find it in the Sleeper app under League → Settings, or in the web address:
 				sleeper.com/leagues/<b>ID</b>.
+				{#if hosted}ESPN leagues connect in the free local app, since ESPN doesn't let other
+					websites read league data.{/if}
 			{:else}
 				It's the <b>leagueId</b> in your league's web address on fantasy.espn.com. ESPN leagues load
 				through the local app (<code>.\start.cmd</code> or <code>./start.sh</code>), since ESPN

@@ -2,6 +2,7 @@
 // doesn't exist: the first status request fails, `available` turns false and polling stops.
 
 import { base } from '$app/paths';
+import { hosted } from './hosted';
 import { toast } from '$lib/toast.svelte';
 
 export type SyncState = 'idle' | 'checking' | 'downloading' | 'building' | 'error';
@@ -81,6 +82,10 @@ class SyncStore {
 	start(): void {
 		if (this.#started || typeof window === 'undefined') return;
 		this.#started = true;
+		if (hosted) {
+			this.available = false; // no local server on the public site
+			return;
+		}
 		void this.poll();
 	}
 
