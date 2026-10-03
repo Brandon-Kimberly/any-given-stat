@@ -53,17 +53,22 @@ jobs:
           uv sync
           uv run ags build
 
+      # Its base_url is the site's real address (custom domain included): link previews need it.
+      - id: pages
+        uses: actions/configure-pages@v5
+
       - name: Build site
         working-directory: web
         env:
           BASE_PATH: /${{ github.event.repository.name }}
           # Public build: no local /api server (Sync, live news, ESPN proxy). src/lib/hosted.ts
           PUBLIC_HOSTED: '1'
+          # Absolute link-preview URLs (og:image, og:url). src/hooks.server.ts
+          PUBLIC_SITE_URL: ${{ steps.pages.outputs.base_url }}
         run: |
           npm ci
           npm run build
 
-      - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web/build
