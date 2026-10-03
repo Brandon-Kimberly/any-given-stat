@@ -29,6 +29,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
+        with:
+          # Pinned: an unpinned setup asks the GitHub API for the latest uv, and fails with it.
+          version: '0.8.17'
       - uses: actions/setup-node@v4
         with:
           node-version: 22

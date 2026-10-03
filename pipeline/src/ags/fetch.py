@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import shutil
 import sys
+import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -128,12 +130,31 @@ def fetch_depth(season: int, *, force: bool = False, raw_dir: Path = RAW_DIR) ->
     )
 
 
+# Transient failures (GitHub's release CDN answers 502/503 now and then) retry with backoff; a
+# missing file (404) or a bad request fails at once.
+RETRY_DELAYS = (2.0, 5.0, 15.0)
+
+
+def _transient(e: Exception) -> bool:
+    if isinstance(e, urllib.error.HTTPError):
+        return e.code == 429 or e.code >= 500
+    return isinstance(e, (urllib.error.URLError, TimeoutError, ConnectionError))
+
+
 def _download(url: str, dest: Path) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_suffix(".part")
-    print(f"fetch {url}", file=sys.stderr)
-    with urllib.request.urlopen(url, timeout=120) as resp, tmp.open("wb") as f:
-        shutil.copyfileobj(resp, f)
+    for attempt, delay in enumerate((*RETRY_DELAYS, None)):
+        print(f"fetch {url}" + (f" (retry {attempt})" if attempt else ""), file=sys.stderr)
+        try:
+            with urllib.request.urlopen(url, timeout=120) as resp, tmp.open("wb") as f:
+                shutil.copyfileobj(resp, f)
+            break
+        except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
+            if delay is None or not _transient(e):
+                raise
+            print(f"  {e}; retrying in {delay:.0f}s", file=sys.stderr)
+            time.sleep(delay)
     tmp.replace(dest)
 
 
