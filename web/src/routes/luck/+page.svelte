@@ -74,14 +74,19 @@
 	const bigUnder = $derived(pairs.filter((p) => p.over <= -2));
 
 	function expected(width: number) {
-		const lo = Math.min(...rows.map((r) => Math.min(r.wins, r.pythag_wins))) - 0.5;
+		// Wins can't be negative: the axes start at 0 (insets keep a 0-win dot off the ticks).
+		const lo = Math.max(0, Math.min(...rows.map((r) => Math.min(r.wins, r.pythag_wins))) - 0.5);
 		const hi = Math.max(...rows.map((r) => Math.max(r.wins, r.pythag_wins))) + 0.5;
 		return Plot.plot({
 			width,
 			height: Math.min(520, Math.max(340, width * 0.65)),
 			style: plotStyle,
-			x: { domain: [lo, hi], label: 'Pythagorean wins (from points scored and allowed) →' },
-			y: { domain: [lo, hi], label: '↑ Actual wins' },
+			x: {
+				domain: [lo, hi],
+				label: 'Pythagorean wins (from points scored and allowed) →',
+				inset: 8
+			},
+			y: { domain: [lo, hi], label: '↑ Actual wins', inset: 8 },
 			marks: [
 				gridX(),
 				gridY(),

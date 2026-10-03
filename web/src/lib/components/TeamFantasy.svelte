@@ -1,6 +1,7 @@
 <script lang="ts">
 	// A team's fantasy season under the current scoring: who scores the points, and how
 	// generous the defense is to each position (rank among 32: 1 = gives up the most).
+	import { hasPlayerPage } from '$lib/playerPages.svelte';
 	import { base } from '$app/paths';
 	import { pointsAllowed } from '$lib/fantasy/analysis';
 	import { fantasyIds, fantasySeason, scoredSeason, scoringLabel } from '$lib/fantasy/data.svelte';
@@ -24,7 +25,7 @@
 	);
 	const POS: FantasyPos[] = ['QB', 'RB', 'WR', 'TE', 'K'];
 	const href = (pos: FantasyPos, id: string) =>
-		['QB', 'RB', 'WR', 'TE'].includes(pos) ? `${base}/player/?id=${id}` : null;
+		hasPlayerPage(id) ? `${base}/player/?id=${id}&season=${season}` : null;
 	const tone = (rank: number) => (rank <= 8 ? 'soft' : '');
 </script>
 

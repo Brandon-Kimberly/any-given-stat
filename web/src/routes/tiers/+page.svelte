@@ -47,7 +47,7 @@
 			.map((t) => ({ c: t.c, x: y0 + t.c, y: y0 }))
 			.filter((t) => t.x > x0 + (x1 - x0) * 0.04 && t.x < x1 - (x1 - x0) * 0.22);
 		const narrow = isNarrow(width);
-		const height = Math.min(660, Math.max(360, width * 0.72));
+		const height = Math.min(520, Math.max(360, width * 0.72));
 		// Labels: the highlighted team first, then the extremes, so decluttering keeps those.
 		const labelOrder = [...rows].sort(
 			(a, b) =>

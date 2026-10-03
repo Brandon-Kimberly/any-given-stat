@@ -1,6 +1,7 @@
 <script lang="ts">
 	// All-time fantasy records under the current scoring. Every season's stat lines (~250 KB
 	// each, gzipped) load only once this section scrolls near the screen.
+	import { hasPlayerPage } from '$lib/playerPages.svelte';
 	import { base } from '$app/paths';
 	import RecordList, { type RecordItem } from '$lib/components/RecordList.svelte';
 	import Skeleton from '$lib/components/Skeleton.svelte';
@@ -36,7 +37,6 @@
 	const results = $derived<[FantasySeason, SeasonResult][]>(
 		(files ?? []).map((f) => [f, scored(f, fantasy.scoring, currentLineup())])
 	);
-	const skill = (pos: string) => ['QB', 'RB', 'WR', 'TE'].includes(pos);
 
 	type GameRow = { f: FantasySeason; gid: string; pid: string; team: string; pts: number };
 	const games = $derived.by<GameRow[]>(() => {
@@ -82,7 +82,11 @@
 	);
 	const seasonItem = ({ season, p }: (typeof seasonRows)[number], stat: string): RecordItem => ({
 		key: `${season}-${p.id}`,
-		href: skill(p.pos) ? `/player/?id=${p.id}` : `/fantasy/?season=${season}`,
+		href: hasPlayerPage(p.id)
+			? `/player/?id=${p.id}&season=${season}`
+			: p.pos === 'DEF'
+				? `/team/?t=${p.id}&season=${season}`
+				: `/fantasy/?season=${season}`,
 		team: p.team,
 		title: p.pos === 'DEF' ? `${teamName(p.id)} D/ST` : `${p.name}, ${p.pos}`,
 		sub: `${season} · ${num(p.ppg, 1)} per game over ${p.games} games`,

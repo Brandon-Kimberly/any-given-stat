@@ -1,4 +1,5 @@
 <script module lang="ts">
+	import { hasPlayerPage } from '$lib/playerPages.svelte';
 	import type { StatLine as Line } from '$lib/fantasy/statline';
 
 	/** "23/31, 287 yd, 2 TD · 4 car, 12 yd" style summary for the fantasy table. */
@@ -51,7 +52,8 @@
 		awayScore,
 		homeScore,
 		fantasy,
-		owners
+		owners,
+		season
 	}: {
 		box: GameBox;
 		away: string;
@@ -62,6 +64,8 @@
 		fantasy?: { label: string; score: (line: StatLine, pos: FantasyPos) => number } | null;
 		/** Fantasy roster owners (gsis id or team code), when a league is connected. */
 		owners?: Map<string, { teamName: string; mine: boolean }> | null;
+		/** The game's season, so player links open that season. */
+		season?: number;
 	} = $props();
 
 	let side = $state<'away' | 'home'>('away');
@@ -143,7 +147,7 @@
 	}
 	const sacks = (x: number) => (Number.isInteger(x) ? String(x) : x.toFixed(1));
 	const playerHref = (r: Row) =>
-		['QB', 'RB', 'WR', 'TE'].includes(r.pos) ? `${base}/player/?id=${r.id}` : null;
+		hasPlayerPage(r.id) ? `${base}/player/?id=${r.id}${season ? `&season=${season}` : ''}` : null;
 
 	// Team stats, away vs home: [label, away, home, display(away), display(home), better].
 	type TeamStat = {
@@ -257,7 +261,8 @@
 		{#if passers.length}
 			<div class="sec">
 				<h3>Passing</h3>
-				<div class="scroll">
+				<!-- svelte-ignore a11y_no_noninteractive_tabindex (scrollable: keyboard users need focus) -->
+				<div class="scroll" tabindex="0" role="region" aria-label="Passing table">
 					<table>
 						<thead>
 							<tr>
@@ -295,7 +300,8 @@
 		{#if rushers.length}
 			<div class="sec">
 				<h3>Rushing</h3>
-				<div class="scroll">
+				<!-- svelte-ignore a11y_no_noninteractive_tabindex (scrollable: keyboard users need focus) -->
+				<div class="scroll" tabindex="0" role="region" aria-label="Rushing table">
 					<table>
 						<thead>
 							<tr>
@@ -340,7 +346,8 @@
 		{#if receivers.length}
 			<div class="sec">
 				<h3>Receiving</h3>
-				<div class="scroll">
+				<!-- svelte-ignore a11y_no_noninteractive_tabindex (scrollable: keyboard users need focus) -->
+				<div class="scroll" tabindex="0" role="region" aria-label="Receiving table">
 					<table>
 						<thead>
 							<tr>
@@ -378,7 +385,8 @@
 		{#if defenders.length}
 			<div class="sec">
 				<h3>Defense</h3>
-				<div class="scroll">
+				<!-- svelte-ignore a11y_no_noninteractive_tabindex (scrollable: keyboard users need focus) -->
+				<div class="scroll" tabindex="0" role="region" aria-label="Defense table">
 					<table>
 						<thead>
 							<tr>
@@ -423,7 +431,8 @@
 				{#if kickers.length}
 					<div>
 						<h3>Kicking</h3>
-						<div class="scroll">
+						<!-- svelte-ignore a11y_no_noninteractive_tabindex (scrollable: keyboard users need focus) -->
+						<div class="scroll" tabindex="0" role="region" aria-label="Kicking table">
 							<table>
 								<thead>
 									<tr>
@@ -452,7 +461,8 @@
 				{#if punters.length}
 					<div>
 						<h3>Punting</h3>
-						<div class="scroll">
+						<!-- svelte-ignore a11y_no_noninteractive_tabindex (scrollable: keyboard users need focus) -->
+						<div class="scroll" tabindex="0" role="region" aria-label="Punting table">
 							<table>
 								<thead>
 									<tr>
@@ -484,7 +494,8 @@
 		{#if returners.length}
 			<div class="sec">
 				<h3>Returns</h3>
-				<div class="scroll">
+				<!-- svelte-ignore a11y_no_noninteractive_tabindex (scrollable: keyboard users need focus) -->
+				<div class="scroll" tabindex="0" role="region" aria-label="Returns table">
 					<table>
 						<thead>
 							<tr>
@@ -519,7 +530,8 @@
 		{#if fantasy && scorers.length}
 			<div class="sec">
 				<h3>Fantasy <span class="muted">· {fantasy.label}</span></h3>
-				<div class="scroll">
+				<!-- svelte-ignore a11y_no_noninteractive_tabindex (scrollable: keyboard users need focus) -->
+				<div class="scroll" tabindex="0" role="region" aria-label="Fantasy table">
 					<table>
 						<thead
 							><tr

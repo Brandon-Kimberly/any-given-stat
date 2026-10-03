@@ -119,3 +119,23 @@ def test_team_splits_rank_and_defensive_score_margin(make_pbp):
     }
     assert aaa_off["Up 9+"]["epa"] == pytest.approx(1.0)
     assert aaa_off["Up 9+"]["rank"] == 1
+
+
+def test_split_upcoming_gives_bye_and_thursday_teams_their_next_game():
+    from ags.ratings import split_upcoming
+
+    g = lambda week, away, home: {  # noqa: E731
+        "game_id": f"{week}_{away}_{home}", "week": week, "gameday": f"2026-10-{week:02d}",
+        "away": away, "home": home,
+    }  # fmt: skip
+    rows = [
+        g(4, "AAA", "BBB"),  # week 4 (CCC played Thursday, DDD on bye: no week-4 rows)
+        g(5, "CCC", "AAA"),  # CCC's next game
+        g(5, "DDD", "EEE"),  # DDD's next game (EEE also had no week-4 game)
+        g(5, "BBB", "FFF"),  # FFF has no week-4 game either
+        g(6, "CCC", "DDD"),  # already covered
+    ]
+    this_week, later = split_upcoming(rows)
+    assert [r["game_id"] for r in this_week] == ["4_AAA_BBB"]
+    assert [r["game_id"] for r in later] == ["5_CCC_AAA", "5_DDD_EEE", "5_BBB_FFF"]
+    assert split_upcoming([]) == ([], [])

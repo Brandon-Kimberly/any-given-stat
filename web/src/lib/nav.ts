@@ -15,32 +15,41 @@ export const navGroups: NavGroup[] = [
 	{
 		label: 'Teams',
 		items: [
-			{
-				href: '/tiers/',
-				label: 'Team tiers',
-				blurb: 'Offense vs defense, raw or opponent-adjusted'
-			},
+			{ href: '/tiers/', label: 'Team tiers', blurb: 'Offense vs defense, raw or adjusted' },
 			{ href: '/ratings/', label: 'Power ratings', blurb: 'Predictive ratings, week by week' },
-			{
-				href: '/odds/',
-				label: 'Playoff odds',
-				blurb: '10,000 simulated seasons, replayable week by week'
-			},
+			{ href: '/odds/', label: 'Playoff odds', blurb: '10,000 simulated seasons' },
 			{ href: '/teams/', label: 'Team stats', blurb: 'Every efficiency stat, sortable' },
-			{ href: '/luck/', label: 'Luck', blurb: 'Record vs points, and who regresses' },
+			{ href: '/luck/', label: 'Luck', blurb: 'Record vs points: who regresses' },
 			{ href: '/fourth/', label: 'Fourth downs', blurb: 'Who leaves points on the field' }
 		]
 	},
 	{
 		label: 'Players',
 		items: [
-			{ href: '/qbs/', label: 'Quarterbacks', blurb: 'EPA per dropback, CPOE, how sure we are' },
+			{ href: '/qbs/', label: 'Quarterbacks', blurb: 'EPA per dropback and CPOE, with error bars' },
 			{ href: '/receivers/', label: 'Receivers', blurb: 'Target share, air yards, WOPR' },
-			{ href: '/rushers/', label: 'Rushers', blurb: 'Efficiency on designed runs' },
+			{ href: '/rushers/', label: 'Rushers', blurb: 'Efficiency on designed runs' }
+		]
+	},
+	{
+		// One page: the header shows it as a plain link, not a menu.
+		label: 'Fantasy',
+		items: [
 			{
 				href: '/fantasy/',
 				label: 'Fantasy',
 				blurb: 'Your league’s scoring: rankings, value, matchups'
+			}
+		]
+	},
+	{
+		// One page: a plain header link.
+		label: 'News',
+		items: [
+			{
+				href: '/news/',
+				label: 'News',
+				blurb: 'Headlines and this week’s injury report, by team or your roster'
 			}
 		]
 	},
@@ -51,7 +60,7 @@ export const navGroups: NavGroup[] = [
 			{
 				href: '/predictions/',
 				label: 'Predictions vs Vegas',
-				blurb: 'Model lines and attempts to beat Vegas'
+				blurb: 'This week’s forecast, and how accurate it is'
 			}
 		]
 	},
@@ -59,7 +68,7 @@ export const navGroups: NavGroup[] = [
 		label: 'History',
 		items: [
 			{ href: '/records/', label: 'Record book', blurb: 'Best and worst seasons, wildest games' },
-			{ href: '/coaches/', label: 'Coaches', blurb: '4th-down nerve, records, against the spread' },
+			{ href: '/coaches/', label: 'Coaches', blurb: 'Records, ATS and 4th-down nerve' },
 			{ href: '/referees/', label: 'Referees', blurb: 'Flags and home-field lean' }
 		]
 	},
@@ -69,7 +78,7 @@ export const navGroups: NavGroup[] = [
 			{
 				href: '/learn/',
 				label: 'How football works',
-				blurb: 'Expected points, win probability, 4th down math'
+				blurb: 'Expected points, win probability, 4th downs'
 			},
 			{ href: '/stability/', label: 'Signal vs noise', blurb: 'Which stats predict themselves' },
 			{ href: '/glossary/', label: 'Glossary', blurb: 'Every metric, defined' }
@@ -78,7 +87,7 @@ export const navGroups: NavGroup[] = [
 	{
 		label: 'Explore',
 		items: [
-			{ href: '/compare/', label: 'Compare', blurb: 'Any two teams or players, any seasons' },
+			{ href: '/compare/', label: 'Compare', blurb: 'Any two teams or players' },
 			{ href: '/explore/', label: 'SQL explorer', blurb: 'Query every play in your browser' }
 		]
 	}

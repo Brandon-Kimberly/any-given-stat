@@ -32,6 +32,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from . import news
 from .cli import default_seasons, parse_seasons, run_build
 from .config import DATA_VERSION, OUT_DIR, REPO_ROOT
 from .sync import SyncManager
@@ -290,6 +291,7 @@ class SiteHandler(BaseHTTPRequestHandler):
     data_dir: Path = DATA_DIR
     manager: SyncManager | None = None
     gz = GzipCache()
+    news_feed = news.LiveNews()
 
     def log_message(self, format: str, *args: object) -> None:
         pass  # quiet; errors are reported via log_error
@@ -442,6 +444,12 @@ class SiteHandler(BaseHTTPRequestHandler):
             return
         if path == "/api/espn/league":
             self._espn_league(post)
+            return
+        if path == "/api/news":
+            if post:
+                self._json({"error": "method not allowed"}, HTTPStatus.METHOD_NOT_ALLOWED)
+            else:
+                self._json(self.news_feed.get(self.data_dir))
             return
         m = self.manager
         if m is None:

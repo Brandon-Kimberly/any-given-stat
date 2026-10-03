@@ -1,45 +1,65 @@
 <script lang="ts">
-	// ⌘K / Ctrl+K (or "/") search across pages, teams and players.
+	// ⌘K / Ctrl+K (or "/") search across pages, teams, players, glossary terms, coaches and
+	// this season's games. Everything but pages and teams loads the first time it opens.
 	import { goto } from '$app/navigation';
 	import { base } from '$app/paths';
-	import { load } from '$lib/data';
+	import { load, loadPath } from '$lib/data';
 	import { allPages } from '$lib/nav';
 	import { favorite } from '$lib/favorite.svelte';
+	import { kickoffLabel } from '$lib/kickoff';
+	import { headshotUrl, loadPlayerIndex } from '$lib/playerPages.svelte';
+	import { parseGlossary, rank } from '$lib/search';
 	import { teamMeta } from '$lib/teams.svelte';
 	import { readRecent } from '$lib/recent';
 	import { toggleTheme } from '$lib/theme.svelte';
+	import type { ScheduleGame } from '$lib/types';
 	import Avatar from './Avatar.svelte';
 	import TeamLogo from './TeamLogo.svelte';
 	import { copyLink } from '$lib/toast.svelte';
 
 	let { open = $bindable(false) }: { open?: boolean } = $props();
 
+	type Kind = 'Page' | 'Team' | 'Player' | 'Game' | 'Coach' | 'Glossary' | 'Action' | 'Recent';
 	interface Entry {
-		kind: 'Page' | 'Team' | 'Player' | 'Action' | 'Recent';
+		kind: Kind;
 		label: string;
 		detail: string;
 		href: string;
 		run?: () => void;
-		/** Lowercased text the query matches against. */
+		/** Extra text the query matches against (the label always counts). */
 		key: string;
 		/** Team code: a logo tile for teams, the ring color for players. */
 		team?: string;
 		/** Player headshot (players.json). */
 		photo?: string | null;
+		/** Last season seen: recent players win ties. */
+		season?: number;
 	}
+	/** Ties in match quality go to the kinds people look for most. */
+	const PRIORITY: Record<Kind, number> = {
+		Recent: 0,
+		Page: 1,
+		Team: 2,
+		Action: 3,
+		Player: 4,
+		Glossary: 5,
+		Coach: 6,
+		Game: 7
+	};
 
 	let query = $state('');
 	let active = $state(0);
 	let input = $state<HTMLInputElement>();
 	let players = $state.raw<Entry[]>([]);
-	let loadedPlayers = false;
+	let extras = $state.raw<Entry[]>([]);
+	let loaded = false;
 
 	const pages = allPages.map<Entry>((p) => ({
 		kind: 'Page',
 		label: p.label,
 		detail: p.blurb,
 		href: p.href,
-		key: `${p.label} ${p.blurb}`.toLowerCase()
+		key: p.blurb
 	}));
 	const actions = $derived<Entry[]>([
 		{
@@ -47,7 +67,7 @@
 			label: 'Toggle dark mode',
 			detail: 'Shortcut: t',
 			href: '#theme',
-			key: 'toggle dark light mode theme',
+			key: 'dark light mode theme',
 			run: () => toggleTheme()
 		},
 		{
@@ -55,7 +75,7 @@
 			label: 'Copy link to this view',
 			detail: 'Season, filters and selections included · c',
 			href: '#copy',
-			key: 'copy link share url',
+			key: 'share url',
 			run: () => copyLink()
 		},
 		...(favorite.team
@@ -65,7 +85,7 @@
 						label: 'Go to my team',
 						detail: `${favorite.team} · g then m`,
 						href: `/team/?t=${favorite.team}`,
-						key: 'my team favorite'
+						key: 'favorite'
 					}
 				]
 			: [])
@@ -76,15 +96,34 @@
 			label: t.name,
 			detail: `${t.team} · ${t.division}`,
 			href: `/team/?t=${t.team}`,
-			key: `${t.team} ${t.name} ${t.nick}`.toLowerCase(),
+			key: `${t.team} ${t.nick}`,
 			team: t.team
 		}))
 	);
 
-	async function loadPlayers() {
-		if (loadedPlayers) return;
-		loadedPlayers = true;
-		// Latest season each player appears in, from the three player datasets.
+	/** Players, glossary terms, coaches and this season's games, fetched once, in parallel. */
+	function loadMore() {
+		if (loaded) return;
+		loaded = true;
+		loadPlayers().then((p) => (players = p));
+		Promise.all([loadTerms(), loadCoaches(), loadGames()]).then((lists) => (extras = lists.flat()));
+	}
+
+	async function loadPlayers(): Promise<Entry[]> {
+		// Everyone with a player page (player_index.json): kickers, punters and defenders too.
+		const index = await loadPlayerIndex().catch(() => null);
+		if (index?.size && [...index.values()].some((r) => r[4]))
+			return [...index.values()].map(([id, name, pos, team, season, photo]) => ({
+				kind: 'Player',
+				label: name,
+				detail: `${pos ?? 'Player'} · ${team} · last seen ${season}`,
+				href: `/player/?id=${id}`,
+				key: '',
+				team,
+				photo: headshotUrl(photo),
+				season
+			}));
+		// Before a rebuild writes the index: the latest season in the three player datasets.
 		const [qbs, rec, rush, directory] = await Promise.all([
 			load('qbs').catch(() => []),
 			load('receivers').catch(() => []),
@@ -102,26 +141,74 @@
 			add(r.player_id, r.full_name ?? r.name, r.team, r.season, r.position ?? 'Receiver');
 		for (const r of rush)
 			add(r.player_id, r.full_name ?? r.name, r.team, r.season, r.position ?? 'Rusher');
-		players = [...best].map(([id, p]) => ({
+		return [...best].map(([id, p]) => ({
 			kind: 'Player',
 			label: p.name,
 			detail: `${p.role} · ${p.team} · last seen ${p.season}`,
 			href: `/player/?id=${id}`,
-			key: p.name.toLowerCase(),
+			key: '',
 			team: p.team,
-			photo: photos.get(id) ?? null
+			photo: photos.get(id) ?? null,
+			season: p.season
 		}));
 	}
 
-	function score(e: Entry, q: string): number {
-		if (!q) return e.kind === 'Page' ? 1 : 0;
-		const label = e.label.toLowerCase();
-		if (label === q) return 100;
-		if (label.startsWith(q)) return 80;
-		if (label.split(/[\s.]+/).some((w) => w.startsWith(q))) return 60;
-		if (e.key.includes(q)) return 30;
-		return 0;
+	/** Glossary terms, read from the glossary page itself so the two never drift. */
+	async function loadTerms(): Promise<Entry[]> {
+		try {
+			const src = (await import('../../routes/glossary/+page.svelte?raw')).default;
+			return parseGlossary(src).map((t) => ({
+				kind: 'Glossary',
+				label: t.term,
+				detail: t.def.length > 90 ? `${t.def.slice(0, 88).trimEnd()}…` : t.def,
+				href: `/glossary/#${t.id}`,
+				key: 'glossary definition'
+			}));
+		} catch {
+			return [];
+		}
 	}
+
+	async function loadCoaches(): Promise<Entry[]> {
+		const c = await load('coaches').catch(() => null);
+		return (c?.careers ?? []).map((k) => ({
+			kind: 'Coach',
+			label: k.coach,
+			detail: `Head coach · ${k.teams} · ${k.first === k.last ? k.first : `${k.first}–${k.last}`}`,
+			href: `/coaches/?q=${encodeURIComponent(k.coach)}`,
+			key: `coach ${k.teams}`
+		}));
+	}
+
+	/** Every game of the latest season: "DET @ GB · Wk 5". */
+	async function loadGames(): Promise<Entry[]> {
+		const meta = await load('meta').catch(() => null);
+		const season = meta?.seasons.at(-1)?.season;
+		if (!season) return [];
+		const games = await loadPath<ScheduleGame[]>(`schedule/${season}`).catch(() => []);
+		const name = (t: string) => teamMeta.byTeam[t]?.name ?? t;
+		return games.map((g) => {
+			const wk = g.game_type === 'REG' ? `Wk ${g.week}` : g.game_type;
+			const score =
+				g.result == null
+					? kickoffLabel(g.gameday, g.gametime)
+					: `${g.away} ${g.away_score}, ${g.home} ${g.home_score}`;
+			return {
+				kind: 'Game',
+				label: `${g.away} ${g.neutral ? 'vs' : '@'} ${g.home} · ${wk}`,
+				detail: `${season} · ${score}`,
+				href: `/game/?id=${g.game_id}`,
+				key: `${name(g.away)} ${name(g.home)} week ${g.week} ${season}`
+			};
+		});
+	}
+
+	const GLYPH: Partial<Record<Kind, string>> = {
+		Action: '›',
+		Glossary: 'Aa',
+		Game: '@',
+		Coach: 'HC'
+	};
 
 	// Empty query: recently opened teams, players and pages first, then every page.
 	let recent = $state<string[]>([]);
@@ -135,17 +222,17 @@
 	});
 
 	const results = $derived.by(() => {
-		const q = query.trim().toLowerCase();
-		if (!q && recentEntries.length) {
+		const q = query.trim();
+		if (!q) {
 			const seen = new Set(recentEntries.map((e) => e.href));
 			return [...recentEntries, ...pages.filter((p) => !seen.has(p.href))].slice(0, 12);
 		}
-		return [...pages, ...actions, ...teams, ...players]
-			.map((e) => ({ e, s: score(e, q) }))
-			.filter((r) => r.s > 0)
-			.sort((a, b) => b.s - a.s)
-			.slice(0, 12)
-			.map((r) => r.e);
+		// Ties: kind first, then the most recent players.
+		return rank(
+			[...pages, ...actions, ...teams, ...players, ...extras],
+			q,
+			(e) => PRIORITY[e.kind] * 10000 - (e.season ?? 0)
+		);
 	});
 
 	$effect(() => {
@@ -153,7 +240,7 @@
 			recent = readRecent();
 			query = '';
 			active = 0;
-			loadPlayers();
+			loadMore();
 			queueMicrotask(() => input?.focus());
 		}
 	});
@@ -219,7 +306,7 @@
 					bind:this={input}
 					bind:value={query}
 					{onkeydown}
-					placeholder="Search teams, players, pages…"
+					placeholder="Search teams, players, games, coaches, terms…"
 					aria-label="Search"
 					role="combobox"
 					aria-expanded="true"
@@ -246,7 +333,7 @@
 									size={34}
 								/>
 							{:else if r.team}<TeamLogo team={r.team} size={34} glow={false} />
-							{:else}<span class="glyph">{r.kind === 'Action' ? '›' : '#'}</span>{/if}
+							{:else}<span class="glyph">{GLYPH[r.kind] ?? '#'}</span>{/if}
 						</span>
 						<span class="kind">{r.kind}</span>
 						<span class="label">{r.label}</span>

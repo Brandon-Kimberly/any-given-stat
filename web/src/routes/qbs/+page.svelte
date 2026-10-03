@@ -46,8 +46,14 @@
 			style: plotStyle,
 			r: { type: 'identity' }, // radii below are pixels; Plot would rescale them
 			marginRight: 30,
-			x: { label: 'CPOE (completion % over expected) →', tickFormat: signedTick },
-			y: { label: '↑ EPA per dropback', tickFormat: '+.2f' },
+			marginTop: 34,
+			x: {
+				label: 'CPOE (completion % over expected) →',
+				tickFormat: signedTick,
+				inset: narrow ? 18 : 28
+			},
+			// The top inset keeps the highest QB's name below the quadrant note in the margin.
+			y: { label: '↑ EPA per dropback', tickFormat: '+.2f', insetTop: 16, insetBottom: 8 },
 			marks: [
 				gridX(),
 				gridY(),
@@ -59,16 +65,17 @@
 				Plot.dot(data, {
 					x: 'cpoe',
 					y: 'epa_db',
-					r: (d: QB) => Math.max(3.5, Math.sqrt(d.dropbacks) / (narrow ? 3.4 : 2.6)),
+					r: (d: QB) => Math.max(4, Math.sqrt(d.dropbacks) / (narrow ? 3.4 : 2.6)),
 					fill: (d: QB) => teamColor(d.team),
 					fillOpacity: 0.9,
 					stroke: 'var(--surface)',
 					strokeWidth: 1.5
 				}),
-				Plot.text(narrow ? [] : ['Accurate and efficient'], {
+				// Quadrant note sits in the top margin, clear of the dot labels.
+				Plot.text(narrow ? [] : ['Accurate and efficient ↗'], {
 					frameAnchor: 'top-right',
-					dx: -4,
-					dy: 4,
+					lineAnchor: 'bottom',
+					dy: -8,
 					fill: 'var(--text-muted)',
 					fontSize: 11
 				}),
@@ -236,17 +243,15 @@
 {:else if !qbsRes.value}
 	<Skeleton height={400} />
 {:else if rows.length}
-	<div class="grid-2">
-		<div class="card">
-			<h2>Efficiency vs accuracy</h2>
-			<p class="sub">Dot size = dropbacks. Lines are the medians among QBs shown.</p>
-			<PlotFigure label="QB EPA per dropback vs CPOE" render={scatter} />
-		</div>
-		<div class="card">
-			<h2>How sure are we?</h2>
-			<p class="sub">EPA per dropback with 95% intervals. Overlapping bars: too close to call.</p>
-			<PlotFigure label="QB EPA per dropback with confidence intervals" render={intervals} />
-		</div>
+	<div class="card">
+		<h2>Efficiency vs accuracy</h2>
+		<p class="sub">Dot size = dropbacks. Lines are the medians among QBs shown.</p>
+		<PlotFigure label="QB EPA per dropback vs CPOE" render={scatter} />
+	</div>
+	<div class="card">
+		<h2>How sure are we?</h2>
+		<p class="sub">EPA per dropback with 95% intervals. Overlapping bars: too close to call.</p>
+		<PlotFigure label="QB EPA per dropback with confidence intervals" render={intervals} />
 	</div>
 	<div class="card">
 		<DataTable

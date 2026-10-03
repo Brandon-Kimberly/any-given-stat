@@ -26,6 +26,7 @@
 	<img
 		class="logo"
 		class:glow
+		class:full={meta.logo_fit === 'contain'}
 		src="{base}/data/{meta.logo}"
 		alt={label ? teamName(team) : ''}
 		width={size}
@@ -33,6 +34,7 @@
 		loading="lazy"
 		decoding="async"
 		style:--c={meta.color}
+		style:--s="{size}px"
 		onerror={() => (failed = true)}
 	/>
 {:else}
@@ -53,7 +55,25 @@
 			transform 0.3s cubic-bezier(0.3, 1.3, 0.5, 1),
 			box-shadow 0.3s var(--ease);
 	}
-	.logo.glow {
+	/* A full logo sits whole on a light tile (logos are drawn for light backgrounds), inset so
+	   nothing touches the rounded corners. */
+	.logo.full {
+		box-sizing: border-box;
+		width: var(--s);
+		height: var(--s);
+		object-fit: contain;
+		padding: calc(var(--s) * 0.12);
+		background: radial-gradient(120% 120% at 30% 20%, #ffffff, #eef2f7 70%), #fff;
+		box-shadow:
+			inset 0 0 0 1px rgba(15, 23, 42, 0.08),
+			0 1px 2px rgba(15, 23, 42, 0.12);
+	}
+	.logo.full.glow {
+		box-shadow:
+			inset 0 0 0 1px rgba(15, 23, 42, 0.08),
+			0 10px 28px -12px color-mix(in srgb, var(--c) 80%, transparent);
+	}
+	.logo.glow:not(.full) {
 		box-shadow:
 			0 0 0 1px rgba(255, 255, 255, 0.14),
 			0 10px 28px -10px color-mix(in srgb, var(--c) 85%, transparent);

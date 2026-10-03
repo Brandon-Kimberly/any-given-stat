@@ -1,4 +1,7 @@
-import { prefetch } from '$lib/prefetch';
+import { prefetch, prefetchSeason } from '$lib/prefetch';
 
-export const load = () =>
-	prefetch('predictions', 'luck', 'qbs', 'stability', 'games/index', 'playoff_odds/index');
+// Home always shows the latest season; prefs.season is the latest unless a visitor picked another.
+export const load = ({ url }: { url: URL }) => {
+	prefetch('meta', 'upcoming', 'highlight');
+	return prefetchSeason(url, 'schedule', 'ratings', 'qb_games', 'playoff_odds');
+};

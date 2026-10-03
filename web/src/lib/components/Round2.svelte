@@ -159,8 +159,7 @@
 	];
 </script>
 
-<section class="card" id="round2">
-	<div class="eyebrow">Round 2</div>
+<section class="card">
 	<h2>Everything the line was supposed to know</h2>
 	<p class="sub">
 		Round 1 concluded that the line knows things the model doesn't: injuries, weather, motivation.
@@ -170,8 +169,7 @@
 			'–'
 		)}. The choice was
 		<a href="https://github.com/Brandon-Kimberly/any-given-stat/commit/97932fd">committed</a>
-		on {p.freeze_date}, before any round-2 test or live result existed. (The week table at the top
-		of the page shows the round-3 forecast; round 2's lines are below.)
+		on {p.freeze_date}, before any round-2 test or live result existed.
 	</p>
 	<div class="tiles">
 		<div class="card tile">
@@ -208,11 +206,14 @@
 {#if games.length}
 	<section class="card">
 		<div class="card-head">
-			<h2>Week {games[0].week}, factor by factor</h2>
+			<h2>Week {games[0].week} under the round-2 model</h2>
 		</div>
 		<p class="sub">
-			What moves each line, in points toward the home team (right) or the visitor (left). Biggest
-			disagreements with Vegas first; a ★ marks a bet under the frozen rule.
+			Round 2's own lines, not the forecast at the top of the page. Round 2's frozen choice ({lab
+				.chosen.variant}) was picked to find bets; the forecast (round 3) also uses points ratings
+			and was picked for accuracy, so the two “model” lines differ. In points toward the home team
+			(right) or the visitor (left). Biggest disagreements with Vegas first; a ★ marks a bet under
+			the frozen rule.
 		</p>
 		{#if !injuryFresh}
 			<div class="callout info" role="note">
@@ -234,7 +235,9 @@
 							>{/if}
 					</header>
 					<div class="lines">
-						<span><span class="k">Model</span> <b>{spread(g.model, g.home, g.away)}</b></span>
+						<span
+							><span class="k">Round-2 model</span> <b>{spread(g.model, g.home, g.away)}</b></span
+						>
 						<span><span class="k">Vegas</span> <b>{spread(g.vegas, g.home, g.away)}</b></span>
 					</div>
 					<ul class="factors">
@@ -297,14 +300,17 @@
 		</p>
 	</section>
 	<section class="card">
-		<h2>Live coefficients</h2>
+		<h2>Round 2's live coefficients</h2>
 		<p class="sub">
 			The frozen variant refit on every completed season before {p.live_season} (a fixed rule, no choices).
 			“Per unit” is one unit's effect (± 95% range). “Typical” is how many points it moves a usual game
 			(one standard deviation).
 		</p>
 		<table class="coef">
-			<thead><tr><th>Input</th><th>Per unit</th><th>Typical</th></tr></thead>
+			<thead
+				><tr><th scope="col">Input</th><th scope="col">Per unit</th><th scope="col">Typical</th></tr
+				></thead
+			>
 			<tbody>
 				{#each lab.coefficients as c (c.feature)}
 					<tr>

@@ -90,3 +90,34 @@ def test_season_games_wp_top_plays_and_box(make_pbp):
     assert home["epa_play"] == pytest.approx((2 + 4 + 6 - 1) / 4)
     assert home["rush_epa"] == pytest.approx(-1.0)
     assert (away["plays"], away["pass_epa"]) == (4, pytest.approx(4.0))
+
+
+def test_highlight_picks_the_weeks_wildest_game_and_counts_favorite_changes():
+    from ags.games import highlight
+
+    calm = {
+        "game_id": "a",
+        "season": 2026,
+        "week": 3,
+        "home": "H",
+        "away": "A",
+        "home_score": 30,
+        "away_score": 3,
+        "wp": [[0, 0.6], [1800, 0.8], [3600, 1.0]],
+    }
+    wild = {
+        "game_id": "b",
+        "season": 2026,
+        "week": 3,
+        "home": "H",
+        "away": "A",
+        "home_score": 21,
+        "away_score": 20,
+        "wp": [[0, 0.55], [900, 0.3], [1800, 0.7], [2700, 0.2], [3600, 1.0]],
+    }
+    other_week = {**wild, "game_id": "c", "week": 2}
+    h = highlight([calm, wild, other_week], 3)
+    assert h["game_id"] == "b"
+    assert h["favorite_changes"] == 4
+    assert h["excitement"] == round(0.25 + 0.4 + 0.5 + 0.8, 3)
+    assert highlight([calm], 9) is None

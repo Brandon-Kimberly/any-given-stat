@@ -406,13 +406,16 @@ def apply_to_predictions(preds: dict, games: list[dict], f, fc: Forecast) -> dic
         return row | {
             "model": m,
             "home_wp": win_prob(m, sigma),
-            "blend": float(blend(np.array([line]), np.array([m]), fc.blend_k)[0]),
+            "blend": (bl := float(blend(np.array([line]), np.array([m]), fc.blend_k)[0])),
+            # The site's best estimate (market blend) as a home win probability.
+            "blend_wp": None if np.isnan(bl) else win_prob(bl, sigma),
             "home_qb_pts": row["home_qb_pts"] * scale,
             "away_qb_pts": row["away_qb_pts"] * scale,
         }
 
     preds["games"] = [update(r, True) for r in preds["games"]]
     preds["upcoming"] = [update(r, False) for r in preds["upcoming"]]
+    preds["next_games"] = [update(r, False) for r in preds.get("next_games", [])]
     season = f["season"]
     summary = []
     for name, seasons in (

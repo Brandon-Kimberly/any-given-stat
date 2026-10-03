@@ -53,18 +53,30 @@
 			]);
 	});
 
+	// Seasons still in progress -> their last fully played week. Their points are partial, so
+	// they're drawn hollow, joined by a dashed segment and labeled "thru wk N".
+	// Only the latest season can be in progress (2022 reads incomplete for its cancelled game).
+	const live = $derived.by(() => {
+		const cur = meta.value?.seasons.at(-1);
+		return new Map(cur && !cur.complete ? [[cur.season, cur.last_week]] : []);
+	});
 	function trendChart(width: number) {
 		const narrow = isNarrow(width);
 		const last = trend.slice(-2);
+		const done = trend.filter((t) => !live.has(t.season));
+		const partial = trend.filter((t) => live.has(t.season));
+		const lastDone = Math.max(...done.map((t) => t.season));
+		const tail = trend.filter((t) => t.season === lastDone || live.has(t.season));
 		return Plot.plot({
 			width,
-			height: 280,
+			height: 290,
 			style: plotStyle,
-			marginRight: narrow ? 10 : 200,
+			marginRight: narrow ? 24 : 200,
+			marginBottom: partial.length ? 42 : 30,
 			x: {
 				label: null,
-				tickFormat: 'd',
-				ticks: thinTicks([...new Set(trend.map((t) => t.season))], width, 42)
+				ticks: thinTicks([...new Set(trend.map((t) => t.season))], width, 42),
+				tickFormat: (s: number) => (live.has(s) ? `${s}\nthru wk ${live.get(s)}` : `${s}`)
 			},
 			y: {
 				label: '↑ Share of 4th downs',
@@ -78,13 +90,28 @@
 			},
 			marks: [
 				gridY(),
-				Plot.line(trend, { x: 'season', y: 'v', stroke: 'what', strokeWidth: 2 }),
-				Plot.dot(trend, {
+				Plot.line(done, { x: 'season', y: 'v', stroke: 'what', strokeWidth: 2 }),
+				Plot.line(partial.length ? tail : [], {
+					x: 'season',
+					y: 'v',
+					stroke: 'what',
+					strokeWidth: 2,
+					strokeDasharray: '4,4'
+				}),
+				Plot.dot(done, {
 					x: 'season',
 					y: 'v',
 					fill: 'what',
 					r: 4,
 					stroke: 'var(--surface)',
+					strokeWidth: 2
+				}),
+				Plot.dot(partial, {
+					x: 'season',
+					y: 'v',
+					stroke: 'what',
+					fill: 'var(--surface)',
+					r: 4.5,
 					strokeWidth: 2
 				}),
 				Plot.text(narrow ? [] : last, {
@@ -103,7 +130,7 @@
 						x: 'season',
 						y: 'v',
 						title: (d: { season: number; v: number; what: string }) =>
-							`${d.season}: ${d.what}: ${pct(d.v, 1)}`
+							`${d.season}${live.has(d.season) ? ` (through week ${live.get(d.season)}, in progress)` : ''}: ${d.what}: ${pct(d.v, 1)}`
 					})
 				)
 			]
@@ -116,11 +143,12 @@
 		const order = [...data].sort((a, b) => b.epa_lost - a.epa_lost);
 		return Plot.plot({
 			width,
-			height: Math.min(460, Math.max(320, width * 0.6)),
+			height: Math.min(480, Math.max(320, width * 0.45)),
 			style: plotStyle,
 			marginTop: 32,
-			x: { label: 'Went for it in clear-go spots →', tickFormat: '.0%' },
-			y: { label: '↑ Less EPA left on the field (better)', reverse: true, nice: true },
+			// Insets keep edge dots (and their labels) off the axes' tick labels.
+			x: { label: 'Went for it in clear-go spots →', tickFormat: '.0%', inset: 18 },
+			y: { label: '↑ Less EPA left on the field (better)', reverse: true, nice: true, inset: 10 },
 			marks: [
 				gridX(),
 				gridY(),
@@ -229,31 +257,23 @@
 		</p>
 		<PlotFigure label="League 4th down aggressiveness by season" render={trendChart} />
 	</div>
-	<div class="grid-2">
-		<div class="card">
-			<h2>Who follows the math, {prefs.season}</h2>
-			<p class="sub">Right = goes for it when the math says go. Up = less EPA left on the field.</p>
-			{#if rows.length}<PlotFigure
-					label="Aggressiveness vs EPA lost by team"
-					render={scatter}
-				/>{/if}
-		</div>
-		<div class="card">
-			<h2>Read this with care</h2>
-			<p>{res.value.meta.caveat}</p>
+	<div class="card">
+		<h2>Who follows the math, {prefs.season}</h2>
+		<p class="sub">Right = goes for it when the math says go. Up = less EPA left on the field.</p>
+		{#if rows.length}<PlotFigure label="Aggressiveness vs EPA lost by team" render={scatter} />{/if}
+		<aside class="note" aria-label="Read this with care">
+			<p><strong>Read this with care.</strong> {res.value.meta.caveat}</p>
 			<p>
 				It's also coarse. Buckets are a few yards wide, so 4th and 1 at the opponent's 34 and at
 				their 40 count as the same spot. Score and clock enter only through the competitive-game
 				filter (win probability 5–95%). Real decision models, like the nflfastR 4th-down bot,
-				simulate each option exactly.
+				simulate each option exactly. Still, the direction is robust: on short yardage almost
+				everywhere past a team's own 20, going for it has paid off more than kicking it away.
 			</p>
-			<p class="muted">
-				Still, the direction is robust: on short yardage almost everywhere past a team's own 20,
-				going for it has paid off more than kicking it away.
-			</p>
-		</div>
+		</aside>
 	</div>
 	<div class="card">
+		<h2>Every team's 4th-down calls, {prefs.season}</h2>
 		<DataTable
 			{rows}
 			{columns}
@@ -266,3 +286,20 @@
 		/>
 	</div>
 {/if}
+
+<style>
+	.note {
+		margin-top: 1rem;
+		padding-top: 0.8rem;
+		border-top: 1px solid var(--border);
+		font-size: 0.86rem;
+		color: var(--text-secondary);
+	}
+	.note p {
+		margin: 0 0 0.5rem;
+		max-width: 85ch;
+	}
+	.note p:last-child {
+		margin-bottom: 0;
+	}
+</style>

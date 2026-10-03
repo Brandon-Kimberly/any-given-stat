@@ -1,30 +1,40 @@
 <script lang="ts">
+	// The forecast leads: next week's lines (round 3, the site's forecast) and what drives each
+	// one, then how accurate it is, then the ledger, then the beat-the-line experiments (collapsed).
 	import { base } from '$app/paths';
 	import CountUp from '$lib/components/CountUp.svelte';
 	import DataTable, { type Column } from '$lib/components/DataTable.svelte';
+	import ForecastFactors from '$lib/components/ForecastFactors.svelte';
 	import PlotFigure from '$lib/components/Plot.svelte';
 	import LoadError from '$lib/components/LoadError.svelte';
 	import PageToc from '$lib/components/PageToc.svelte';
 	import Round2 from '$lib/components/Round2.svelte';
 	import Round3 from '$lib/components/Round3.svelte';
+	import SampleWarning from '$lib/components/SampleWarning.svelte';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import { load } from '$lib/data';
 	import { num, pct, signed, spread } from '$lib/format';
-	import { gridX, gridY, Plot, plotStyle, thinTicks } from '$lib/plot';
+	import { kickoffKey, kickoffLabelFromKey } from '$lib/kickoff';
+	import { gridX, gridY, Plot, plotStyle } from '$lib/plot';
+	import { prefs, savePrefs } from '$lib/prefs.svelte';
 	import type {
 		BacktestStats,
+		BetScore,
 		GamePrediction,
 		Lab,
 		Lab2,
 		Lab3,
 		LabRow,
+		Meta,
 		Predictions
 	} from '$lib/types';
+	import { onMount } from 'svelte';
 
 	let data = $state.raw<Predictions>();
 	let lab = $state.raw<Lab>();
 	let lab2 = $state.raw<Lab2>();
 	let lab3 = $state.raw<Lab3>();
+	let meta = $state.raw<Meta>();
 	let error = $state<string | null>(null);
 	load('predictions')
 		.then((p) => (data = p))
@@ -38,6 +48,9 @@
 	load('lab3')
 		.then((l) => (lab3 = l))
 		.catch(() => {});
+	load('meta')
+		.then((m) => (meta = m))
+		.catch(() => {});
 
 	const test = $derived(data?.summary.find((s) => s.split === 'test'));
 	const [t0, t1] = $derived(data?.params.test_seasons ?? [0, 0]);
@@ -49,11 +62,12 @@
 
 	type Pick = GamePrediction & {
 		matchup: string;
+		kick: string;
 		model_line: string;
 		vegas_line: string;
 		best_line: string;
 		diff: number | null;
-		favorite_wp: string;
+		best_wp: string;
 		qb_note: string;
 	};
 
@@ -70,115 +84,173 @@
 				.join(', ') || '–'
 		);
 	}
+	/** "NYG 55%": the favored side and its win probability. */
+	const favWp = (g: GamePrediction, homeWp: number) =>
+		homeWp >= 0.5 ? `${g.home} ${pct(homeWp, 0)}` : `${g.away} ${pct(1 - homeWp, 0)}`;
+	const matchup = (g: GamePrediction) => `${g.away} ${g.neutral ? 'vs' : '@'} ${g.home}`;
+
+	const nextWeek = $derived(data?.upcoming[0]);
+	// This week's games, plus the next game of teams that already played this week (Thursday).
 	const picks = $derived<Pick[]>(
-		(data?.upcoming ?? []).map((g) => ({
+		[...(data?.upcoming ?? []), ...(data?.next_games ?? [])].map((g) => ({
 			...g,
-			matchup: `${g.away} ${g.neutral ? 'vs' : '@'} ${g.home}`,
+			matchup: g.week === nextWeek?.week ? matchup(g) : `Wk ${g.week}: ${matchup(g)}`,
+			kick: kickoffKey(g.gameday, g.gametime),
 			model_line: spread(g.model, g.home, g.away),
 			vegas_line: spread(g.vegas, g.home, g.away),
 			best_line: g.blend == null ? '–' : spread(g.blend, g.home, g.away),
 			diff: g.vegas == null ? null : Math.abs(g.model - g.vegas),
-			favorite_wp:
-				g.home_wp >= 0.5 ? `${g.home} ${pct(g.home_wp, 0)}` : `${g.away} ${pct(1 - g.home_wp, 0)}`,
+			best_wp: favWp(g, g.blend_wp ?? g.home_wp),
 			qb_note: qbNote(g)
 		}))
 	);
-	const nextWeek = $derived(data?.upcoming[0]);
+	const blendK = $derived(data?.params.blend_k ?? lab3?.blend_k);
+	const factorGames = $derived(lab3?.upcoming ?? []);
+
 	const tocItems = $derived(
 		[
 			nextWeek && { id: 'this-week', label: `Week ${nextWeek.week}` },
-			lab3 && { id: 'round3', label: 'The forecast' },
+			factorGames.length && { id: 'factors', label: 'Factor by factor' },
 			test && { id: 'accuracy', label: 'Accuracy' },
-			lab && { id: 'lab', label: 'Round 1' },
-			lab2 && { id: 'round2', label: 'Round 2' },
 			{ id: 'every', label: 'Every pick' },
+			(lab || lab2 || lab3) && { id: 'experiments', label: 'Experiments' },
 			{ id: 'how', label: 'How it works' }
 		].filter((i): i is { id: string; label: string } => !!i)
 	);
 
-	const pickColumns: Column<Pick>[] = [
+	const pickColumns = $derived<Column<Pick>[]>([
 		{ key: 'matchup', label: 'Game', sticky: true },
-		{ key: 'gameday', label: 'Date' },
-		{ key: 'model_line', label: 'Model line' },
-		{ key: 'vegas_line', label: 'Vegas line' },
+		{
+			key: 'model_line',
+			label: 'Model',
+			title: 'The site’s forecast: team ratings, starting QB, injuries and home field'
+		},
+		{ key: 'vegas_line', label: 'Vegas', title: 'The latest Vegas line' },
 		{
 			key: 'best_line',
 			label: 'Best estimate',
-			title:
-				'The Vegas line moved partway toward the model. In tests, about as accurate as the line alone.'
+			title: `The Vegas line moved ${blendK == null ? 'partway' : `${Math.round(blendK * 100)}% of the way`} toward the model. In tests, about as accurate as the line alone.`
 		},
 		{
+			key: 'best_wp',
+			label: 'Win prob',
+			title: 'The favorite’s chance to win under the best estimate'
+		},
+		{ key: 'kick', label: 'Kickoff (ET)', fmt: kickoffLabelFromKey },
+		{
 			key: 'diff',
-			label: 'Disagreement',
+			label: 'Model vs Vegas',
 			fmt: (v) => (v == null ? '–' : `${num(v, 1)} pts`),
 			title: 'Gap between the model and the Vegas line, in points'
 		},
-		{ key: 'favorite_wp', label: 'Model win prob' },
 		{
 			key: 'qb_note',
 			label: 'QB adjustment',
 			title:
 				"Points added for the listed starter vs the QBs behind the team's rating (injury, rest, return)"
 		}
-	];
+	]);
 
-	function maeChart(width: number) {
-		const rows = (data?.by_season ?? []).flatMap((s) => [
-			{ season: s.season, mae: s.model_mae, who: 'Model' },
-			{ season: s.season, mae: s.vegas_mae, who: 'Vegas closing line' }
-		]);
-		const seasons = data!.by_season.map((s) => s.season);
+	// Accuracy by season (RMSE): the forecast, Vegas and round 1. A season in progress gets a
+	// hollow point, a dashed segment and a "thru wk N" label.
+	// Only the latest season can be in progress (2022 reads as incomplete: one game was cancelled).
+	const liveStatus = $derived.by(() => {
+		const s = meta?.seasons.at(-1);
+		return s && !s.complete ? s : undefined;
+	});
+	const WHO = ['Forecast (round 3)', 'Vegas closing line', 'Round 1 model'];
+	function seasonChart(width: number) {
+		const by = lab3!.by_season;
+		const rows = by
+			.flatMap((s) => [
+				{ season: s.season, rmse: s.round3, who: WHO[0] },
+				{ season: s.season, rmse: s.vegas, who: WHO[1] },
+				{ season: s.season, rmse: s.round1, who: WHO[2] }
+			])
+			.filter((r): r is { season: number; rmse: number; who: string } => r.rmse != null);
+		const seasons = by.map((s) => s.season);
+		const first = Math.min(...seasons);
+		const last = Math.max(...seasons);
+		const live = liveStatus && seasons.includes(liveStatus.season) ? liveStatus.season : null;
+		const prev = live == null ? null : Math.max(...seasons.filter((s) => s < live));
+		const done = rows.filter((r) => r.season !== live);
+		const partial = rows.filter((r) => r.season === live);
+		const bridge = rows.filter((r) => r.season === live || r.season === prev);
+		const tickStep = Math.max(1, Math.ceil((seasons.length * 40) / Math.max(1, width - 70)));
+		const liveTop = partial.length ? Math.max(...partial.map((r) => r.rmse)) : 0;
 		return Plot.plot({
 			width,
 			height: 300,
 			style: plotStyle,
-			marginRight: 120,
-			x: { label: null, tickFormat: 'd', ticks: thinTicks(seasons, width, 40) },
-			y: { label: '↓ Average miss (points, lower is better)', zero: false },
+			marginRight: 16,
+			x: {
+				label: null,
+				tickFormat: 'd',
+				// Every season that fits, counting back from the latest so it always has a tick.
+				ticks: seasons.filter((s) => (last - s) % tickStep === 0),
+				domain: [first - 0.4, last + 0.4]
+			},
+			y: { label: '↓ Typical miss, RMSE (points; lower is better)', nice: true },
 			color: {
-				domain: ['Model', 'Vegas closing line'],
-				range: ['var(--series-1)', 'var(--series-2)'],
+				domain: WHO,
+				range: ['var(--series-1)', 'var(--series-2)', 'var(--series-3)'],
 				legend: true
 			},
 			marks: [
-				Plot.rectX([0], {
-					x1: oos0 - 0.5,
-					x2: Math.max(t1, ...seasons) + 0.5,
-					fill: 'var(--surface-2)'
-				}),
+				Plot.rectX([0], { x1: oos0 - 0.5, x2: last + 0.4, fill: 'var(--surface-2)' }),
 				Plot.text(['Out of sample'], {
-					x: (oos0 + Math.max(t1, ...seasons)) / 2,
-					frameAnchor: 'top',
-					dy: 4,
+					x: (oos0 - 0.5 + last + 0.4) / 2,
+					frameAnchor: 'bottom',
+					dy: -6,
 					fill: 'var(--text-muted)',
 					fontSize: 11
 				}),
 				gridY(),
-				Plot.line(rows, { x: 'season', y: 'mae', stroke: 'who', strokeWidth: 2 }),
-				Plot.dot(rows, {
+				Plot.line(done, { x: 'season', y: 'rmse', stroke: 'who', strokeWidth: 2 }),
+				Plot.line(bridge, {
 					x: 'season',
-					y: 'mae',
+					y: 'rmse',
+					stroke: 'who',
+					strokeWidth: 2,
+					strokeDasharray: '4 3'
+				}),
+				Plot.dot(done, {
+					x: 'season',
+					y: 'rmse',
 					fill: 'who',
 					r: 4,
 					stroke: 'var(--surface)',
+					strokeWidth: 1.5
+				}),
+				Plot.dot(partial, {
+					x: 'season',
+					y: 'rmse',
+					stroke: 'who',
+					fill: 'var(--surface)',
+					r: 4,
 					strokeWidth: 2
 				}),
-				Plot.text(rows.slice(-2), {
-					x: 'season',
-					y: 'mae',
-					text: 'who',
-					dx: 8,
-					textAnchor: 'start',
-					fill: 'var(--text-secondary)'
-				}),
+				...(live != null && liveStatus
+					? [
+							Plot.text([`thru wk ${liveStatus.last_week}`], {
+								x: live,
+								y: liveTop,
+								dy: -13,
+								dx: 6,
+								textAnchor: 'end',
+								fill: 'var(--text-secondary)',
+								fontSize: 11
+							})
+						]
+					: []),
 				Plot.tip(
 					rows,
 					Plot.pointer({
-						lineWidth: 40,
 						x: 'season',
-						y: 'mae',
-						title: (d: { season: number; mae: number; who: string }) =>
-							`${d.season} ${d.who}: misses by ${num(d.mae, 2)} pts on average`
+						y: 'rmse',
+						title: (d: (typeof rows)[number]) =>
+							`${d.season} ${d.who}: typical miss ${num(d.rmse, 2)} pts` +
+							(d.season === live ? `\nThrough week ${liveStatus?.last_week} only` : '')
 					})
 				)
 			]
@@ -207,11 +279,11 @@
 	function calibrationChart(width: number) {
 		return Plot.plot({
 			width,
-			height: Math.min(360, width * 0.8),
+			height: Math.min(300, width * 0.8),
 			style: plotStyle,
 			x: { domain: [0, 1], label: 'Model home win probability →', tickFormat: '.0%' },
 			y: { domain: [0, 1], label: '↑ Home team actually won', tickFormat: '.0%' },
-			r: { range: [3, 12] },
+			r: { range: [4, 12] },
 			marks: [
 				gridX(),
 				gridY(),
@@ -244,9 +316,15 @@
 		});
 	}
 
-	let season = $state<number | null>(null);
+	// The ledger follows the site-wide season (prefs.season), falling back to the latest season
+	// with predictions when that one has none (e.g. 2016, before the first predicted season).
 	const backtestSeasons = $derived([...new Set((data?.games ?? []).map((g) => g.season))].sort());
-	const shownSeason = $derived(season ?? backtestSeasons.at(-1) ?? 0);
+	const shownSeason = $derived(
+		prefs.season != null && backtestSeasons.includes(prefs.season)
+			? prefs.season
+			: (backtestSeasons.at(-1) ?? 0)
+	);
+	const shownStatus = $derived(meta?.seasons.find((s) => s.season === shownSeason));
 	type Past = Pick & { final: string; model_err: number; vegas_err: number | null; ats: string };
 	const past = $derived<Past[]>(
 		(data?.games ?? [])
@@ -256,12 +334,13 @@
 				const actual = g.vegas == null ? 0 : Math.sign(g.result - g.vegas);
 				return {
 					...g,
-					matchup: `Wk ${g.week}: ${g.away} ${g.neutral ? 'vs' : '@'} ${g.home}`,
+					matchup: `Wk ${g.week}: ${matchup(g)}`,
+					kick: kickoffKey(g.gameday, g.gametime),
 					model_line: spread(g.model, g.home, g.away),
 					vegas_line: spread(g.vegas, g.home, g.away),
 					best_line: g.blend == null ? '–' : spread(g.blend, g.home, g.away),
 					diff: g.vegas == null ? null : Math.abs(g.model - g.vegas),
-					favorite_wp: '',
+					best_wp: '',
 					qb_note: qbNote(g),
 					final:
 						g.result === 0 ? 'Tie' : `${g.result > 0 ? g.home : g.away} by ${Math.abs(g.result)}`,
@@ -323,6 +402,23 @@
 				'Average miss minus the closing line’s average miss (negative = more accurate than Vegas)'
 		}
 	];
+
+	// Experiments are collapsed; their contents render on first open. A link to one (#lab,
+	// #round2, #round3-chosen) opens it.
+	let open = $state<Record<string, boolean>>({});
+	const EXPERIMENTS = ['round3-chosen', 'lab', 'round2'];
+	function openFromHash() {
+		const id = location.hash.slice(1);
+		if (!EXPERIMENTS.includes(id)) return;
+		open[id] = true;
+		requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView());
+	}
+	onMount(() => {
+		openFromHash();
+		addEventListener('hashchange', openFromHash);
+		return () => removeEventListener('hashchange', openFromHash);
+	});
+	const record = (s: BetScore) => `${s.wins}–${s.bets - s.wins}`;
 </script>
 
 <svelte:head><title>Predictions · Any Given Stat</title></svelte:head>
@@ -331,15 +427,11 @@
 	<div class="eyebrow">Games</div>
 	<h1>Predictions vs Vegas</h1>
 	<p class="lede">
-		Point spreads from two opponent-adjusted <a href="{base}/ratings/">team ratings</a> (EPA per
-		play and final scores), the starting quarterback and the injury report, next to the Vegas line.
-		Every game is predicted using only games played before it.
-		{#if data}
-			Coefficients were fit on {data.params.fit_seasons.join('–')}, choices made on
-			{data.params.validate_seasons.join('–')}, and {t0}–{t1} was held back as a final test.
-		{/if}
-		The honest result: it gets close to the closing line but doesn't beat it. See
-		<a href="#round3">how accurate it is</a> and <a href="#lab">the attempts to beat the line</a>.
+		This week's point spreads from two opponent-adjusted <a href="{base}/ratings/">team ratings</a>
+		(EPA per play and final scores), the starting quarterback and the injury report, next to the Vegas
+		line. Every game is predicted using only games played before it. The honest result: it gets close
+		to the closing line but doesn't beat it. See <a href="#accuracy">how accurate it is</a> and
+		<a href="#experiments">the attempts to beat the line</a>.
 	</p>
 </section>
 
@@ -351,145 +443,130 @@
 	<PageToc items={tocItems} />
 
 	{#if nextWeek}
-		<div class="card" id="this-week">
+		<section class="card" id="this-week">
 			<h2>Week {nextWeek.week}, {nextWeek.season}</h2>
 			<p class="sub">
-				Sorted by disagreement with Vegas. Win probabilities assume the real margin misses the
-				prediction by about {num(data.params.sigma, 1)} points (one standard deviation).
+				<b>Model</b> is the site's forecast; <b>best estimate</b> moves the Vegas line
+				{blendK == null ? 'partway' : `${Math.round(blendK * 100)}%`} toward it, and its win probability
+				assumes the real margin misses by about {num(data.params.sigma, 1)} points (one standard deviation).
+				In order of kickoff{data.next_games?.length
+					? '; teams that already played this week show their next game'
+					: ''}.
 			</p>
 			<DataTable
 				rows={picks}
 				columns={pickColumns}
-				sortKey="diff"
+				sortKey="kick"
+				sortDesc={false}
 				showIndex={false}
 				filename="predictions-week-{nextWeek.week}"
 				href={(r) => `${base}/game/?id=${r.game_id}`}
 			/>
-		</div>
+		</section>
 	{/if}
 
-	{#if lab3}<Round3 lab={lab3} />{/if}
+	{#if factorGames.length}
+		<section class="card" id="factors">
+			<h2>Week {factorGames[0].week}, factor by factor</h2>
+			<p class="sub">
+				What moves each model line, in points toward the home team or the visitor. The factors add
+				up to the Model column above.
+			</p>
+			<ForecastFactors
+				games={factorGames}
+				schedule={data.upcoming}
+				injuriesIn={lab2 && {
+					filed: lab2.protocol.teams_with_final_statuses,
+					playing: lab2.protocol.teams_playing
+				}}
+			/>
+		</section>
+	{/if}
 
 	{#if test}
-		<div class="tiles" id="accuracy">
-			<div class="card tile">
-				<div class="label">Average miss, {t0}–{t1} test seasons</div>
-				<div class="value"><CountUp text={`${num(test.model_mae, 2)} pts`} /></div>
-				<div class="note">Vegas: {num(test.vegas_mae, 2)} pts ({test.games} games)</div>
+		<div class="stack" id="accuracy">
+			<div class="part-head">
+				<div class="eyebrow">Accuracy</div>
+				<h2>Close to the line, not better</h2>
 			</div>
-			<div class="card tile">
-				<div class="label">Picked the winner</div>
-				<div class="value"><CountUp text={pct(test.model_su)} /></div>
-				<div class="note">Vegas favorite won {pct(test.vegas_su)}</div>
-			</div>
-			<div class="card tile">
-				<div class="label">Against the spread</div>
-				<div class="value"><CountUp text={`${test.ats_w}–${test.ats_l}`} /></div>
-				<div class="note">
-					{pct(atsPct(test))}; {pct(BREAKEVEN)} needed to profit at −110
+			<div class="tiles">
+				<div class="card tile">
+					<div class="label">Average miss, {t0}–{t1} test seasons</div>
+					<div class="value"><CountUp text={`${num(test.model_mae, 2)} pts`} /></div>
+					<div class="note">Vegas: {num(test.vegas_mae, 2)} pts ({test.games} games)</div>
+				</div>
+				<div class="card tile">
+					<div class="label">Picked the winner</div>
+					<div class="value"><CountUp text={pct(test.model_su)} /></div>
+					<div class="note">Vegas favorite won {pct(test.vegas_su)}</div>
+				</div>
+				<div class="card tile">
+					<div class="label">Against the spread</div>
+					<div class="value"><CountUp text={`${test.ats_w}–${test.ats_l}`} /></div>
+					<div class="note">
+						{pct(atsPct(test))}; {pct(BREAKEVEN)} needed to profit at −110
+					</div>
+				</div>
+				<div class="card tile">
+					<div class="label">When it disagrees by 3+ points</div>
+					<div class="value"><CountUp text={`${test.edge3_w}–${test.edge3_l}`} /></div>
+					<div class="note">
+						{pct(test.edge3_w / (test.edge3_w + test.edge3_l))}, vs {pct(BREAKEVEN)} needed to profit
+					</div>
 				</div>
 			</div>
-			<div class="card tile">
-				<div class="label">When it disagrees by 3+ points</div>
-				<div class="value"><CountUp text={`${test.edge3_w}–${test.edge3_l}`} /></div>
-				<div class="note">
-					{pct(test.edge3_w / (test.edge3_w + test.edge3_l))}, vs {pct(BREAKEVEN)} needed to profit
-				</div>
+
+			{#if lab3}<Round3 lab={lab3} part="scorecard" />{/if}
+
+			<div class="grid-2">
+				{#if lab3}
+					<section class="card">
+						<h2>Accuracy by season</h2>
+						<p class="sub">
+							Each season is predicted using only earlier games. {lab3.protocol.fit_seasons.join(
+								'–'
+							)} also set the coefficients, so those years flatter the model; shaded seasons didn't.
+						</p>
+						<PlotFigure
+							label="Forecast error by season: the forecast, Vegas and round 1"
+							render={seasonChart}
+						/>
+					</section>
+				{/if}
+				<section class="card">
+					<h2>Are the win probabilities honest?</h2>
+					<p class="sub">
+						Test-season games ({t0}–{t1}), grouped by the model's home win probability. Dots on the
+						diagonal mean 70% picks won about 70% of the time. Dot size = games.
+					</p>
+					{#if calibration.length}<PlotFigure
+							label="Calibration of predicted win probabilities"
+							render={calibrationChart}
+						/>{/if}
+				</section>
 			</div>
+
+			{#if lab3}<Round3 lab={lab3} part="weights" />{/if}
 		</div>
 	{/if}
 
-	<div class="grid-2">
-		<div class="card">
-			<h2>Model vs Vegas, by season</h2>
-			<p class="sub">
-				Average miss on the final margin, in points. Shaded seasons weren't used to fit the
-				coefficients.
-			</p>
-			<PlotFigure label="Model and Vegas average error by season" render={maeChart} />
-		</div>
-		<div class="card">
-			<h2>Are the win probabilities honest?</h2>
-			<p class="sub">
-				Test-season games ({t0}–{t1}), grouped by the model's home win probability. Dots on the
-				diagonal mean 70% picks won about 70% of the time. Dot size = games.
-			</p>
-			{#if calibration.length}<PlotFigure
-					label="Calibration of predicted win probabilities"
-					render={calibrationChart}
-				/>{/if}
-		</div>
-	</div>
-
-	{#if lab}
-		<div class="card" id="lab">
-			<div class="eyebrow">Round 1</div>
-			<h2>Can anything here beat Vegas?</h2>
-			<p class="sub">
-				Round 1 fixed its rules before looking at results. {Object.keys(lab.variants).length} model variants
-				were fit on {lab.protocol.fit_seasons.join('–')} and scored on
-				{lab.protocol.validate_seasons.join('–')}, betting every game or only when the model and the
-				closing line disagreed by {lab.protocol.thresholds.filter((t) => t).join(', ')}+ points. The
-				variant with the best validation win rate (min {lab.protocol.min_validate_bets} bets) got one
-				look at {lab.protocol.test_seasons.join('–')}. Break-even at −110 is
-				{pct(lab.protocol.breakeven)}.
-			</p>
-			{#if lab.chosen && lab.test}
-				<div class="tiles" style="margin-bottom: 1rem">
-					<div class="card tile">
-						<div class="label">Chosen on validation</div>
-						<div class="value" style="font-size: 1.15rem">{lab.chosen.variant}</div>
-						<div class="note">
-							{lab.chosen.threshold
-								? `bet only ${lab.chosen.threshold}+ point disagreements`
-								: 'bet every game'}
-						</div>
-					</div>
-					<div class="card tile">
-						<div class="label">Final test, {lab.protocol.test_seasons.join('–')}</div>
-						<div class="value">
-							<CountUp text={`${lab.test.wins}–${lab.test.bets - lab.test.wins}`} />
-						</div>
-						<div class="note">
-							{pct(lab.test.win_rate)}, p = {num(lab.test.p_value, 2)}:
-							{(lab.test.win_rate ?? 0) > lab.protocol.breakeven && (lab.test.p_value ?? 1) < 0.05
-								? 'beat the line'
-								: 'no evidence of an edge'}
-						</div>
-					</div>
-				</div>
-			{/if}
-			<DataTable
-				rows={labRows}
-				columns={labColumns}
-				sortKey="val_win_rate"
-				highlight={(r) => r.chosen}
-			/>
-			<p class="muted" style="margin-top: 0.75rem">
-				“Market” variants use the closing line itself as an input and ask whether EPA, the QB
-				change, rest or division games add anything to it. They give the line about 95% of the
-				weight and end up within a few hundredths of a point of it: whatever those factors know, the
-				line already knows. The QB adjustment does make the stats-only model more accurate, but not
-				more accurate than the market.
-			</p>
-		</div>
-	{/if}
-
-	{#if lab2}<Round2 lab={lab2} />{/if}
-
-	<div class="card" id="every">
+	<section class="card" id="every">
 		<div class="toolbar" style="margin-bottom: 0.5rem">
 			<h2 style="margin: 0">Every prediction</h2>
 			<label class="field">
 				Season
 				<select
 					value={shownSeason}
-					onchange={(e) => (season = +(e.currentTarget as HTMLSelectElement).value)}
+					onchange={(e) => {
+						prefs.season = +(e.currentTarget as HTMLSelectElement).value;
+						savePrefs();
+					}}
 				>
 					{#each [...backtestSeasons].reverse() as s (s)}<option value={s}>{s}</option>{/each}
 				</select>
 			</label>
 		</div>
+		<SampleWarning status={shownStatus} />
 		{#key shownSeason}
 			<DataTable
 				rows={past}
@@ -502,9 +579,128 @@
 				href={(r) => `${base}/game/?id=${r.game_id}`}
 			/>
 		{/key}
-	</div>
+	</section>
 
-	<div class="card" id="how">
+	{#if lab || lab2 || lab3}
+		<div class="stack" id="experiments">
+			<div class="part-head">
+				<div class="eyebrow">Experiments</div>
+				<h2>Trying to beat the line</h2>
+				<p class="sub">
+					Three pre-registered rounds, each with its rules fixed before the results were seen.
+					Rounds 1 and 2 hunted for bets against the closing line; round 3 built the forecast above.
+				</p>
+			</div>
+
+			{#if lab3}
+				<details class="exp" id="round3-chosen" bind:open={open['round3-chosen']}>
+					<summary class="card">
+						<span class="eyebrow">Round 3</span>
+						<span class="t">How the forecast was chosen</span>
+						<span class="v"
+							>{lab3.selection.length} candidates; frozen {lab3.protocol.freeze_date}: {lab3.chosen
+								.variant}</span
+						>
+					</summary>
+					{#if open['round3-chosen']}
+						<div class="stack"><Round3 lab={lab3} part="candidates" /></div>
+					{/if}
+				</details>
+			{/if}
+
+			{#if lab}
+				<details class="exp" id="lab" bind:open={open.lab}>
+					<summary class="card">
+						<span class="eyebrow">Round 1</span>
+						<span class="t">Can anything here beat Vegas?</span>
+						{#if lab.test}<span class="v"
+								>Final test {lab.protocol.test_seasons.join('–')}: {lab.test.wins}–{lab.test.bets -
+									lab.test.wins}, {pct(lab.test.win_rate)}
+								{(lab.test.win_rate ?? 0) > lab.protocol.breakeven && (lab.test.p_value ?? 1) < 0.05
+									? '(beat the line)'
+									: '(no evidence of an edge)'}</span
+							>{/if}
+					</summary>
+					{#if open.lab}
+						<div class="stack">
+							<section class="card">
+								<p class="sub">
+									Round 1 fixed its rules before looking at results. {Object.keys(lab.variants)
+										.length}
+									model variants were fit on {lab.protocol.fit_seasons.join('–')} and scored on
+									{lab.protocol.validate_seasons.join('–')}, betting every game or only when the
+									model and the closing line disagreed by {lab.protocol.thresholds
+										.filter((t) => t)
+										.join(', ')}+ points. The variant with the best validation win rate (min {lab
+										.protocol.min_validate_bets} bets) got one look at {lab.protocol.test_seasons.join(
+										'–'
+									)}. Break-even at −110 is {pct(lab.protocol.breakeven)}.
+								</p>
+								{#if lab.chosen && lab.test}
+									<div class="tiles" style="margin-bottom: 1rem">
+										<div class="card tile">
+											<div class="label">Chosen on validation</div>
+											<div class="value" style="font-size: 1.15rem">{lab.chosen.variant}</div>
+											<div class="note">
+												{lab.chosen.threshold
+													? `bet only ${lab.chosen.threshold}+ point disagreements`
+													: 'bet every game'}
+											</div>
+										</div>
+										<div class="card tile">
+											<div class="label">Final test, {lab.protocol.test_seasons.join('–')}</div>
+											<div class="value">
+												<CountUp text={`${lab.test.wins}–${lab.test.bets - lab.test.wins}`} />
+											</div>
+											<div class="note">
+												{pct(lab.test.win_rate)}, p = {num(lab.test.p_value, 2)}:
+												{(lab.test.win_rate ?? 0) > lab.protocol.breakeven &&
+												(lab.test.p_value ?? 1) < 0.05
+													? 'beat the line'
+													: 'no evidence of an edge'}
+											</div>
+										</div>
+									</div>
+								{/if}
+								<DataTable
+									rows={labRows}
+									columns={labColumns}
+									sortKey="val_win_rate"
+									highlight={(r) => r.chosen}
+								/>
+								<p class="muted" style="margin-top: 0.75rem">
+									“Market” variants use the closing line itself as an input and ask whether EPA, the
+									QB change, rest or division games add anything to it. They give the line about 95%
+									of the weight and end up within a few hundredths of a point of it: whatever those
+									factors know, the line already knows. The QB adjustment does make the stats-only
+									model more accurate, but not more accurate than the market.
+								</p>
+							</section>
+						</div>
+					{/if}
+				</details>
+			{/if}
+
+			{#if lab2}
+				<details class="exp" id="round2" bind:open={open.round2}>
+					<summary class="card">
+						<span class="eyebrow">Round 2</span>
+						<span class="t">Injuries, travel, weather, stakes</span>
+						<span class="v"
+							>Live test after the freeze: {lab2.live.sealed.bets
+								? record(lab2.live.sealed)
+								: 'no bets yet'}; reused test {record(lab2.test)}</span
+						>
+					</summary>
+					{#if open.round2}
+						<div class="stack"><Round2 lab={lab2} /></div>
+					{/if}
+				</details>
+			{/if}
+		</div>
+	{/if}
+
+	<section class="card" id="how">
 		<h2>How the model works</h2>
 		<p>
 			<strong>EPA ratings.</strong> Each team-game becomes a row: the offense's EPA/play, explained
@@ -537,14 +733,75 @@
 		</p>
 		<p>
 			<strong>Putting it together.</strong> A regression of the final margin on both rating gaps,
-			the QB adjustment, injuries and home field turns them into points{#if lab3}
-				(weights in <a href="#round3">round 3</a>){/if}. Win probabilities assume the real margin
-			misses that by about {num(data.params.sigma, 1)} points (one standard deviation).
+			the QB adjustment, injuries and home field turns them into points{#if lab3}{' '}(weights under
+				<a href="#accuracy">accuracy</a>){/if}. Win probabilities assume the real margin misses that
+			by about {num(data.params.sigma, 1)} points (one standard deviation). The best estimate moves the
+			Vegas line partway toward the model; the weight was fit on
+			{data.params.fit_seasons.join('–')}.
 		</p>
 		<p class="muted">
 			Travel, rest, weather and late-season stakes were tested in <a href="#round2">round 2</a>.
 			What no public dataset has: the pooled knowledge of everyone betting, and the early lines
 			sharp bettors beat before the market settles.
 		</p>
-	</div>
+	</section>
 {/if}
+
+<style>
+	.part-head {
+		margin-top: 0.75rem;
+	}
+	.part-head h2 {
+		margin: 0.15rem 0 0;
+		font-stretch: 108%;
+		font-size: 1.45rem;
+	}
+	.part-head .sub {
+		margin: 0.35rem 0 0;
+		max-width: 75ch;
+	}
+	.exp > .stack {
+		margin-top: 1.1rem;
+	}
+	.exp > summary {
+		list-style: none;
+		cursor: pointer;
+		display: grid;
+		grid-template-columns: 1fr auto;
+		grid-template-areas: 'eyebrow chev' 't chev' 'v chev';
+		align-items: center;
+		column-gap: 1rem;
+	}
+	.exp > summary::-webkit-details-marker {
+		display: none;
+	}
+	.exp > summary::after {
+		content: '';
+		grid-area: chev;
+		width: 9px;
+		height: 9px;
+		border-right: 2px solid var(--text-secondary);
+		border-bottom: 2px solid var(--text-secondary);
+		transform: rotate(45deg);
+		transition: transform 0.15s;
+	}
+	.exp[open] > summary::after {
+		transform: rotate(-135deg);
+	}
+	.exp > summary:hover {
+		border-color: var(--border-strong);
+	}
+	.exp .eyebrow {
+		grid-area: eyebrow;
+	}
+	.exp .t {
+		grid-area: t;
+		font: 700 1.1rem var(--display);
+		color: var(--text-primary);
+	}
+	.exp .v {
+		grid-area: v;
+		font-size: 0.85rem;
+		color: var(--text-secondary);
+	}
+</style>

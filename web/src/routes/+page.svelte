@@ -1,142 +1,232 @@
 <script lang="ts">
+	import { ratingsWeek } from '$lib/season';
 	import { base } from '$app/paths';
-	import CountUp from '$lib/components/CountUp.svelte';
 	import FavoriteCard from '$lib/components/FavoriteCard.svelte';
+	import HomeHero, { type HeroStat } from '$lib/components/HomeHero.svelte';
+	import WeekBoard from '$lib/components/WeekBoard.svelte';
+	import NewsFeed from '$lib/components/NewsFeed.svelte';
 	import PlotFigure from '$lib/components/Plot.svelte';
+	import SampleWarning from '$lib/components/SampleWarning.svelte';
 	import Ticker, { type TickerItem } from '$lib/components/Ticker.svelte';
 	import TeamBadge from '$lib/components/TeamBadge.svelte';
-	import { corr, epa, num, pct, signed, spread, wlt } from '$lib/format';
-	import { navGroups } from '$lib/nav';
-	import { isNarrow, Plot, plotStyle } from '$lib/plot';
+	import { epa, num, signed, spread, wlt } from '$lib/format';
+	import { Plot, plotStyle } from '$lib/plot';
+	import { loadPath } from '$lib/data';
 	import { resource, seasonResource } from '$lib/resource.svelte';
-	import { excitement, excitementPercentile, loadSeasonGames } from '$lib/games';
+	import { hasPlayerPage } from '$lib/playerPages.svelte';
+	import {
+		kickoffLabel,
+		lastGame,
+		nextGame,
+		played,
+		records,
+		resultsWeek,
+		upset,
+		weekLabel
+	} from '$lib/standings';
 	import { favorite } from '$lib/favorite.svelte';
-	import { heroColors, teamColor, teamName } from '$lib/teams.svelte';
-	import type { GameDetail, GamePrediction, Rating } from '$lib/types';
+	import { heroColors, teamColor, teamMeta, teamName } from '$lib/teams.svelte';
+	import type { GamePrediction, PlayoffOdds, QBGame, Rating, ScheduleGame } from '$lib/types';
 
 	const meta = resource('meta');
-	const oddsIndex = resource('playoff_odds/index');
-	const preds = resource('predictions');
-	const luck = resource('luck');
-	const qbs = resource('qbs');
-	const stab = resource('stability');
-	const gameIndex = resource('games/index');
+	const up = resource('upcoming');
 
 	const latest = $derived(meta.value?.seasons.at(-1));
 	const season = $derived(latest?.season ?? 0);
 	const inProgress = $derived(latest ? !latest.complete : false);
 	const ratings = seasonResource<Rating>('ratings', () => season || null);
-	const simulated = $derived(
-		(oddsIndex.value ?? []).reduce((a, s) => a + s.weeks.length, 0) * 10000
-	);
+	const schedule = seasonResource<ScheduleGame>('schedule', () => season || null);
+	const qbGames = seasonResource<QBGame>('qb_games', () => season || null);
 
-	// This season's games, for the ticker's latest finals.
-	let seasonGames = $state.raw<GameDetail[]>([]);
+	// Playoff odds: one small file per season (no `odds` for the first simulated season).
+	let odds = $state.raw<PlayoffOdds | null>(null);
 	$effect(() => {
 		if (!season) return;
-		loadSeasonGames(season)
-			.then((g) => (seasonGames = g))
-			.catch(() => (seasonGames = []));
+		loadPath<PlayoffOdds>(`playoff_odds/${season}`)
+			.then((o) => (odds = o))
+			.catch(() => (odds = null));
 	});
-	const totalGames = $derived((gameIndex.value ?? []).reduce((a, s) => a + s.games, 0));
+
+	const games = $derived(schedule.value ?? []);
+	const recs = $derived(records(games));
+	const results = $derived(resultsWeek(games, latest));
+
+	// Predictions (the site's forecast) for every coming game, by id.
+	const preds = $derived(
+		new Map<string, GamePrediction>(
+			[...(up.value?.upcoming ?? []), ...(up.value?.next_games ?? [])].map((g) => [g.game_id, g])
+		)
+	);
+	const test = $derived(up.value?.summary.find((s) => s.split === 'test'));
+
+	// This week: every game of the next week with an unplayed game, Thursday finals included.
+	const kick = (g: ScheduleGame) => `${g.gameday} ${g.gametime ?? ''}`;
+	const thisWeek = $derived.by(() => {
+		const open = games.filter((g) => !played(g));
+		if (!open.length) return [];
+		const first = [...open].sort((a, b) => kick(a).localeCompare(kick(b)))[0];
+		return games
+			.filter((g) => g.week === first.week && g.game_type === first.game_type)
+			.sort((a, b) => kick(a).localeCompare(kick(b)) || a.home.localeCompare(b.home));
+	});
+
+	// Results: the last full week, upsets first.
+	const resultRows = $derived(
+		[...(results?.games ?? [])].sort((a, b) => Number(upset(b)) - Number(upset(a)))
+	);
 
 	const ticker = $derived.by<TickerItem[]>(() => {
-		const finals = seasonGames.filter((g) => g.home_score != null && g.season_type === 'REG');
-		const lastWk = Math.max(0, ...finals.map((g) => g.week));
-		const recent = finals
-			.filter((g) => g.week === lastWk)
-			.map((g) => ({ g, ex: excitementPercentile(excitement(g)) }))
-			.sort((a, b) => b.ex - a.ex)
-			.map<TickerItem>(({ g, ex }) => {
-				const homeWon = g.home_score! > g.away_score!;
-				const w = homeWon ? g.home : g.away;
-				const l = homeWon ? g.away : g.home;
-				const ws = Math.max(g.home_score!, g.away_score!);
-				const ls = Math.min(g.home_score!, g.away_score!);
+		const final = (g: ScheduleGame): TickerItem => {
+			const homeWon = g.home_score! >= g.away_score!;
+			const [w, l] = homeWon ? [g.home, g.away] : [g.away, g.home];
+			const [ws, ls] = homeWon ? [g.home_score!, g.away_score!] : [g.away_score!, g.home_score!];
+			const surprise = upset(g);
+			return {
+				key: g.game_id,
+				href: `/game/?id=${g.game_id}`,
+				tag: `${weekLabel(g)} ${surprise ? '· upset' : 'final'}`,
+				text: `${w} ${ws}, ${l} ${ls}`,
+				hot: surprise
+			};
+		};
+		const later = games.filter((g) => played(g) && results && g.week > results.week);
+		const lines = thisWeek
+			.filter((g) => !played(g))
+			.map<TickerItem>((g) => {
+				const p = preds.get(g.game_id);
+				const best = p?.blend_wp != null ? ` · ${favoredBy(p)}` : '';
 				return {
 					key: g.game_id,
 					href: `/game/?id=${g.game_id}`,
-					tag: ex >= 0.85 ? `Wk ${g.week} · thriller` : `Wk ${g.week} final`,
-					text: `${w} ${ws}, ${l} ${ls}`,
-					hot: ex >= 0.85
+					tag: `${weekLabel(g)} line`,
+					text: `${g.away} ${g.neutral ? 'vs' : '@'} ${g.home} · ${spread(g.vegas, g.home, g.away)}${best}`
 				};
 			});
-		const next = (preds.value?.upcoming ?? []).map<TickerItem>((g) => ({
-			key: g.game_id,
-			href: `/game/?id=${g.game_id}`,
-			tag: `Wk ${g.week} line`,
-			text: `${g.away} ${g.neutral ? 'vs' : '@'} ${g.home} · ${spread(g.vegas, g.home, g.away)} (model ${spread(g.model, g.home, g.away)})`
-		}));
-		return [...recent, ...next];
+		return [...resultRows.map(final), ...later.map(final), ...lines];
 	});
 
-	// Power ratings now, and a week earlier for movers.
+	/** "NYG 55%": the best estimate's favorite and its win chance. */
+	function favoredBy(p: GamePrediction): string {
+		const wp = p.blend_wp ?? p.home_wp;
+		return wp >= 0.5 ? `${p.home} ${num(wp * 100)}%` : `${p.away} ${num((1 - wp) * 100)}%`;
+	}
+
+	// Power ratings now and a week earlier.
 	const seasonRatings = $derived((ratings.value ?? []).filter((r) => r.season === season));
 	const lastWeek = $derived(
-		Math.max(
-			0,
-			...seasonRatings
-				.map((r) => r.week)
-				.filter((w) => !inProgress || !latest || w <= latest.last_week)
+		ratingsWeek(
+			seasonRatings.map((r) => r.week),
+			latest
 		)
 	);
 	const now = $derived(
 		seasonRatings.filter((r) => r.week === lastWeek).sort((a, b) => a.rank - b.rank)
 	);
-	const movers = $derived.by(() => {
+	const ratingDelta = $derived.by(() => {
 		const prev = new Map(
-			seasonRatings.filter((r) => r.week === lastWeek - 1).map((r) => [r.team, r])
+			seasonRatings.filter((r) => r.week === lastWeek - 1).map((r) => [r.team, r.points])
 		);
-		return now
-			.map((r) => ({ r, delta: prev.has(r.team) ? r.points - prev.get(r.team)!.points : 0 }))
-			.sort((a, b) => b.delta - a.delta);
+		return new Map(
+			now.filter((r) => prev.has(r.team)).map((r) => [r.team, r.points - prev.get(r.team)!])
+		);
+	});
+	const movers = $derived(
+		now
+			.filter((r) => ratingDelta.has(r.team))
+			.map((r) => ({ r, delta: ratingDelta.get(r.team)! }))
+			.sort((a, b) => b.delta - a.delta)
+	);
+
+	// Playoff odds after the same week as everything else, and the week before.
+	const oddsWeek = $derived(odds ? ratingsWeek(odds.weeks, latest) : 0);
+	const oddsNow = $derived(odds?.rows.filter((r) => r.week === oddsWeek) ?? []);
+	const oddsPrev = $derived(
+		odds && oddsWeek > 0 ? odds.rows.filter((r) => r.week === oddsWeek - 1) : []
+	);
+	const oddsBy = $derived(new Map(oddsNow.map((r) => [r.team, r])));
+	const prevBy = $derived(new Map(oddsPrev.map((r) => [r.team, r])));
+	const favorites = $derived([...oddsNow].sort((a, b) => b.p_sb - a.p_sb).slice(0, 5));
+
+	// Division standings: record, then division odds as the tiebreak stand-in.
+	const standings = $derived.by(() => {
+		const by = new Map<string, string[]>();
+		for (const t of Object.values(teamMeta.byTeam)) {
+			by.set(t.division, [...(by.get(t.division) ?? []), t.team]);
+		}
+		const pctOf = (t: string) => {
+			const r = recs.get(t);
+			return r && r.games ? r.wins / r.games : 0;
+		};
+		return [...by]
+			.sort(([a], [b]) => a.localeCompare(b))
+			.map(([division, teams]) => ({
+				division,
+				teams: teams.sort(
+					(a, b) =>
+						pctOf(b) - pctOf(a) ||
+						(oddsBy.get(b)?.p_division ?? 0) - (oddsBy.get(a)?.p_division ?? 0)
+				)
+			}));
 	});
 
-	const games = $derived(
-		[...(preds.value?.upcoming ?? [])].sort(
-			(a, b) => Math.abs(b.model - (b.vegas ?? b.model)) - Math.abs(a.model - (a.vegas ?? a.model))
-		)
-	);
-	const test = $derived(preds.value?.summary.find((s) => s.split === 'test'));
-
+	// Luck: wins vs what point differential predicts, from the same schedule.
 	const luckRows = $derived(
-		(luck.value ?? [])
-			.filter((l) => l.season === season)
-			.sort((a, b) => b.wins_over_pythag - a.wins_over_pythag)
-	);
-	const minDb = $derived(Math.max(40, ((latest?.reg_games ?? 272) / 16) * 12));
-	const topQbs = $derived(
-		(qbs.value ?? [])
-			.filter((q) => q.season === season && q.scope === 'no_garbage' && q.dropbacks >= minDb)
-			.sort((a, b) => b.epa_db - a.epa_db)
-			.slice(0, 6)
-	);
-	const noise = $derived(
-		[...(stab.value?.metrics ?? [])]
-			.filter((m) => m.split_half_r != null)
-			.sort((a, b) => (a.split_half_r ?? 0) - (b.split_half_r ?? 0))
+		[...recs.values()]
+			.map((r) => ({ ...r, over: r.wins - r.pythag }))
+			.sort((a, b) => b.over - a.over)
 	);
 
-	function qbNote(g: GamePrediction): string | null {
-		const sides = [
-			[g.home, g.home_qb_pts, g.home_qb],
-			[g.away, g.away_qb_pts, g.away_qb]
-		] as const;
-		const big = sides.filter(([, p]) => Math.abs(p) >= 1.5);
-		return big.length
-			? big.map(([t, p, n]) => `${t} ${signed(p)} (${n ?? 'QB change'})`).join(' · ')
-			: null;
-	}
+	// QBs: the best games of the results week, and season leaders (min ~12 dropbacks a game).
+	const qbWeek = $derived(
+		(qbGames.value ?? [])
+			.filter((q) => results && q.week === results.week && q.dropbacks >= 15)
+			.sort((a, b) => b.epa_db - a.epa_db)
+			.slice(0, 5)
+	);
+	const qbLeaders = $derived.by(() => {
+		const by = new Map<
+			string,
+			{ id: string; name: string; team: string; db: number; epa: number; games: number }
+		>();
+		for (const q of qbGames.value ?? []) {
+			const r = by.get(q.player_id) ?? {
+				id: q.player_id,
+				name: q.name,
+				team: q.team,
+				db: 0,
+				epa: 0,
+				games: 0
+			};
+			r.db += q.dropbacks;
+			r.epa += q.epa_db * q.dropbacks;
+			r.games += 1;
+			r.team = q.team;
+			by.set(q.player_id, r);
+		}
+		// Weeks played (a Thursday game in the next week doesn't count), else the most games.
+		const teamGames =
+			latest && !latest.complete
+				? Math.max(1, latest.last_week)
+				: Math.max(1, ...[...recs.values()].map((r) => r.games));
+		const min = 12 * teamGames;
+		return [...by.values()]
+			.filter((r) => r.db >= min)
+			.map((r) => ({ ...r, epa: r.epa / r.db, min }))
+			.sort((a, b) => b.epa - a.epa)
+			.slice(0, 5);
+	});
+	const playerHref = (id: string) =>
+		hasPlayerPage(id) ? `${base}/player/?id=${id}&season=${season}` : null;
 
 	function powerChart(width: number) {
 		const top = now.slice(0, 10);
 		const narrow = width < 400;
 		return Plot.plot({
 			width,
-			height: top.length * 30 + 30,
+			height: top.length * 30 + 10,
 			style: plotStyle,
 			marginLeft: narrow ? 46 : 150,
-			marginRight: 44,
+			marginRight: 52,
 			x: { label: null, axis: null },
 			y: {
 				domain: top.map((r) => r.team),
@@ -175,482 +265,360 @@
 			]
 		});
 	}
+	const q = $derived(`season=${season}`);
+	const weekNoun = $derived(results ? weekLabel(results.games[0]) : '');
+
 	// Your team's colors light the hero (darkened so white text stays readable).
 	const tint = $derived(heroColors(favorite.team));
-	// The hero's looping animations pause while it's scrolled out of view.
-	let heroEl = $state<HTMLElement>();
-	let heroHidden = $state(false);
-	$effect(() => {
-		if (!heroEl) return;
-		const io = new IntersectionObserver(([e]) => (heroHidden = !e.isIntersecting));
-		io.observe(heroEl);
-		return () => io.disconnect();
-	});
+	const highlight = resource('highlight');
+	const heroStats = $derived<HeroStat[]>([
+		now[0]
+			? {
+					label: 'Best team',
+					value: now[0].team,
+					figure: signed(now[0].points),
+					href: `/team/?t=${now[0].team}&${q}`
+				}
+			: { label: 'Best team', value: '–' },
+		favorites[0]
+			? {
+					label: 'Super Bowl favorite',
+					value: favorites[0].team,
+					figure: `${num(favorites[0].p_sb * 100)}%`,
+					href: `/odds/?${q}`
+				}
+			: { label: 'Super Bowl favorite', value: '–' },
+		thisWeek.length
+			? {
+					label: weekLabel(thisWeek[0]),
+					value: `${thisWeek.filter((g) => !played(g)).length} games`,
+					href: '/predictions/'
+				}
+			: { label: 'Next game', value: latest ? 'Offseason' : '–' }
+	]);
 </script>
 
 <svelte:head><title>Any Given Stat · NFL analytics</title></svelte:head>
 
-<section
-	bind:this={heroEl}
-	class="hero"
-	class:paused={heroHidden}
-	class:team-tint={!!tint}
-	style:--hero-from={tint?.from}
-	style:--hero-to={tint?.to}
->
-	<div class="aurora" aria-hidden="true"><span></span><span></span><span></span></div>
-	<div class="turf" aria-hidden="true"></div>
-	<div class="eyebrow" style="color: rgba(255,255,255,0.75)">
-		{season}
-		{#if latest}· {inProgress ? `through week ${latest.last_week}` : 'final'}{/if}
-	</div>
-	<h1>Know which numbers <span class="glow">matter.</span></h1>
-	<p class="lede">
-		Every NFL play since 2016, turned into opponent-adjusted ratings, win probability charts,
-		predictions honestly scored against Vegas, and a running check on which stats are real and which
-		are noise.
-	</p>
-	<div class="hero-actions">
-		<a class="hero-btn primary" href="{base}/predictions/">This week's lines</a>
-		<a class="hero-btn" href="{base}/learn/">How football works, in numbers</a>
-	</div>
-	<dl class="hero-stats">
-		<div>
-			<dt>Games charted</dt>
-			<dd><CountUp text={totalGames ? num(totalGames) : '0'} duration={1100} /></dd>
-		</div>
-		<div>
-			<dt>Seasons</dt>
-			<dd><CountUp text={String(meta.value?.seasons.length ?? 0)} duration={1100} /></dd>
-		</div>
-		<div>
-			<dt>Seasons simulated</dt>
-			<dd><CountUp text={num(simulated)} duration={1100} /></dd>
-		</div>
-	</dl>
-	<svg class="ball" viewBox="0 0 160 100" aria-hidden="true">
-		<path class="trail" d="M-70 70h70M-90 52h82M-60 34h58" />
-		<path class="hide" d="M8 50C30 8 130 8 152 50 130 92 30 92 8 50Z" />
-		<path class="seam" d="M30 26c8 16 8 32 0 48M130 26c-8 16-8 32 0 48" />
-		<path class="lace" d="M55 50h50M62 43v14M72 43v14M82 43v14M92 43v14M100 44v12" />
-	</svg>
-</section>
+<HomeHero
+	eyebrow={season
+		? `${season} · ${inProgress ? `through week ${latest?.last_week}` : 'final'}`
+		: ' '}
+	highlight={highlight.value}
+	stats={heroStats}
+	{tint}
+/>
 
 <Ticker items={ticker} label="Latest scores and lines" />
 
-<FavoriteCard ratings={now} luck={luckRows} upcoming={preds.value?.upcoming ?? []} />
+<SampleWarning status={latest} />
+
+<FavoriteCard
+	{season}
+	ratings={now}
+	{ratingDelta}
+	records={recs}
+	odds={oddsNow}
+	{oddsPrev}
+	last={(t) => lastGame(games, t)}
+	next={(t) => nextGame(games, t)}
+	prediction={(id) => preds.get(id)}
+/>
 
 <div class="dash">
 	<!-- This week -->
-	<section class="card week">
+	<section class="card week" aria-labelledby="week-title">
 		<div class="card-head">
-			<h2>{games[0] ? `Week ${games[0].week}` : 'This week'}: model vs Vegas</h2>
-			<a href="{base}/predictions/">All games →</a>
+			<h2 id="week-title">{thisWeek[0] ? weekLabel(thisWeek[0]) : 'This week'}</h2>
+			<a href="{base}/predictions/">Forecast details →</a>
 		</div>
-		<p class="sub">Biggest disagreements first. The line usually wins; ask what it knows.</p>
-		{#if games.length}
-			<ul class="games">
-				{#each games.slice(0, 7) as g (g.game_id)}
-					{@const note = qbNote(g)}
-					<li>
-						<a href="{base}/game/?id={g.game_id}">
-							<span class="matchup">
-								<TeamBadge team={g.away} />
-								<span class="at">{g.neutral ? 'vs' : '@'}</span>
-								<TeamBadge team={g.home} />
-							</span>
-							<span class="lines">
-								<span><span class="k">Model</span> {spread(g.model, g.home, g.away)}</span>
-								<span><span class="k">Vegas</span> {spread(g.vegas, g.home, g.away)}</span>
-							</span>
-							{#if note}<span class="qb">{note}</span>{/if}
-						</a>
-					</li>
-				{/each}
-			</ul>
-		{:else if preds.value}
-			<p class="muted">No upcoming games in the data (offseason or end of the regular season).</p>
-		{:else if !preds.error}
-			<div class="skeleton" style="height: 240px"></div>
-		{/if}
-		{#if test}
-			<p class="foot-note">
-				Test seasons ({preds.value?.params.test_seasons.join('–')}): the model misses by {num(
-					test.model_mae,
-					1
-				)} pts a game on average; Vegas by
-				{num(test.vegas_mae, 1)}.
+		{#if thisWeek.length}
+			<WeekBoard games={thisWeek} predictions={preds} />
+			{#if test}
+				<p class="foot-note">
+					On held-out test seasons the model misses by {num(test.model_mae, 1)} points a game and Vegas
+					by {num(test.vegas_mae, 1)}; the blend ties Vegas. Nothing here beats the line.
+				</p>
+			{/if}
+		{:else if schedule.value && latest}
+			<p class="muted">
+				No games left on the {season} schedule. See how the season ended in the
+				<a href="{base}/records/">record book</a> and how the forecasts did on
+				<a href="{base}/predictions/">Predictions</a>.
 			</p>
+		{:else}
+			<div class="skeleton" style="height: 520px"></div>
 		{/if}
 	</section>
 
-	<!-- Power ratings -->
-	<section class="card power">
+	<div class="rail">
+		<!-- Results -->
+		<section class="card results" aria-labelledby="results-title">
+			<div class="card-head">
+				<h2 id="results-title">{weekNoun ? `${weekNoun} results` : 'Results'}</h2>
+				<a href="{base}/games/?{q}{results ? `&week=${results.week}` : ''}">Game charts →</a>
+			</div>
+			{#if resultRows.length}
+				<p class="sub">Upsets (the Vegas underdog won) first.</p>
+				<ul class="scores">
+					{#each resultRows as g (g.game_id)}
+						{@const homeWon = g.home_score! > g.away_score!}
+						{@const surprise = upset(g)}
+						{@const line = g.vegas == null ? null : Math.abs(g.vegas)}
+						<li>
+							<a href="{base}/game/?id={g.game_id}" class:upset={surprise}>
+								<span class="side" class:won={!homeWon && g.home_score !== g.away_score}>
+									<TeamBadge team={g.away} /><b>{g.away_score}</b>
+								</span>
+								<span class="side" class:won={homeWon}>
+									<TeamBadge team={g.home} /><b>{g.home_score}</b>
+								</span>
+								<span class="note">
+									{#if surprise}
+										<svg viewBox="0 0 16 16" aria-hidden="true"
+											><path d="M9.2 1 3 9.1h4.3L6.4 15l6.6-8.6H8.6z" /></svg
+										>
+										<span
+											title={line != null ? `Won as a ${num(line, 1)}-point underdog` : undefined}
+											><b>Upset</b>{#if line != null}
+												{` · +${num(line, 1)}`}<span class="sr-only">-point underdog</span
+												>{/if}</span
+										>
+									{:else if line != null && line > 0}
+										<span>Favorite by {num(line, 1)} won</span>
+									{:else}
+										<span>Pick'em</span>
+									{/if}
+								</span>
+							</a>
+						</li>
+					{/each}
+				</ul>
+			{:else if schedule.value}
+				<p class="muted">No games played yet this season.</p>
+			{:else}
+				<div class="skeleton" style="height: 520px"></div>
+			{/if}
+		</section>
+
+		<!-- QBs of the week -->
+		<section class="card qbs" aria-labelledby="qbweek-title">
+			<div class="card-head">
+				<h2 id="qbweek-title">{weekNoun ? `${weekNoun}'s best QB games` : 'Best QB games'}</h2>
+				<a href="{base}/qbs/?{q}">All QBs →</a>
+			</div>
+			<p class="sub">EPA per dropback, min 15 dropbacks.</p>
+			{#if qbWeek.length}
+				<ol class="list ranked">
+					{#each qbWeek as g (g.game_id + g.player_id)}
+						{@const href = playerHref(g.player_id)}
+						<li>
+							<span class="who">
+								{#if href}<a class="qb-name" {href}>{g.name}</a>{:else}<span class="qb-name"
+										>{g.name}</span
+									>{/if}
+								<a class="muted small" href="{base}/game/?id={g.game_id}"
+									>{g.game_id.endsWith(`_${g.team}`) ? 'vs' : '@'} {g.opp}</a
+								>
+							</span>
+							<span class="muted small tnum"
+								>{num(g.pass_yards)} yds · {g.tds} TD · {g.ints} INT</span
+							>
+							<span class="tnum strong">{epa(g.epa_db, 2)}</span>
+						</li>
+					{/each}
+				</ol>
+			{:else if qbGames.value}
+				<p class="muted">No QB games yet.</p>
+			{:else}
+				<div class="skeleton" style="height: 220px"></div>
+			{/if}
+		</section>
+
+		<!-- QB leaders -->
+		<section class="card qbs" aria-labelledby="qblead-title">
+			<div class="card-head">
+				<h2 id="qblead-title">QB efficiency leaders</h2>
+				<a href="{base}/qbs/?{q}">With intervals →</a>
+			</div>
+			<p class="sub">
+				Season EPA per dropback{qbLeaders[0] ? `, min ${qbLeaders[0].min} dropbacks` : ''}. The QBs
+				page adds confidence intervals and strips garbage time.
+			</p>
+			{#if qbLeaders.length}
+				<ol class="list ranked">
+					{#each qbLeaders as r (r.id)}
+						{@const href = playerHref(r.id)}
+						<li>
+							<span class="who">
+								{#if href}<a class="qb-name" {href}>{r.name}</a>{:else}<span class="qb-name"
+										>{r.name}</span
+									>{/if}
+								<TeamBadge team={r.team} link {season} />
+							</span>
+							<span class="muted small tnum">{num(r.db)} dropbacks</span>
+							<span class="tnum strong">{epa(r.epa, 2)}</span>
+						</li>
+					{/each}
+				</ol>
+			{:else if qbGames.value}
+				<p class="muted">Leaders show once QBs reach the dropback minimum.</p>
+			{:else}
+				<div class="skeleton" style="height: 220px"></div>
+			{/if}
+		</section>
+	</div>
+	<!-- Standings + playoff odds -->
+	<section class="card standings" aria-labelledby="standings-title">
 		<div class="card-head">
-			<h2>Power ratings: top 10</h2>
-			<a href="{base}/ratings/">All 32 →</a>
+			<h2 id="standings-title">Standings and playoff odds</h2>
+			<a href="{base}/odds/?{q}">Playoff odds →</a>
 		</div>
-		<p class="sub">Points better than an average team on a neutral field, after week {lastWeek}.</p>
+		<p class="sub">
+			Playoff chances from 10,000 simulated seasons{oddsWeek ? ` after week ${oddsWeek}` : ''}, with
+			the change since the week before.
+			{#if favorites.length}
+				Super Bowl favorites:
+				{#each favorites as f, i (f.team)}<a href="{base}/team/?t={f.team}&{q}">{f.team}</a>
+					{num(f.p_sb * 100)}%{i < favorites.length - 1 ? ', ' : '.'}
+				{/each}
+			{/if}
+		</p>
+		{#if schedule.value && standings.length}
+			<div class="divisions">
+				{#each standings as d (d.division)}
+					<table>
+						<caption>{d.division}</caption>
+						<thead>
+							<tr>
+								<th scope="col">Team</th>
+								<th scope="col" class="r">Record</th>
+								<th scope="col" class="r"
+									><abbr title="Chance to make the playoffs">Playoffs</abbr></th
+								>
+								<th scope="col" class="r"
+									><abbr title="Change since last week, in points">±</abbr></th
+								>
+							</tr>
+						</thead>
+						<tbody>
+							{#each d.teams as t (t)}
+								{@const r = recs.get(t)}
+								{@const o = oddsBy.get(t)}
+								{@const pr = prevBy.get(t)}
+								{@const delta = o && pr ? (o.p_playoffs - pr.p_playoffs) * 100 : null}
+								<tr class:fav={favorite.team === t}>
+									<th scope="row"><TeamBadge team={t} name="nick" link {season} /></th>
+									<td class="r tnum">{r ? wlt(r.wins, r.games) : '0–0'}</td>
+									<td class="r tnum strong">{o ? `${num(o.p_playoffs * 100)}%` : '–'}</td>
+									<td
+										class="r tnum delta"
+										class:up={delta != null && delta >= 1}
+										class:down={delta != null && delta <= -1}
+									>
+										{delta == null ? '' : Math.abs(delta) < 1 ? '·' : signed(delta, 0)}
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				{/each}
+			</div>
+		{:else}
+			<div class="skeleton" style="height: 420px"></div>
+		{/if}
+	</section>
+
+	<!-- News -->
+	<div class="headlines">
+		<NewsFeed
+			limit={6}
+			compact
+			title="Latest news"
+			sub="Headlines, plus game-status changes for skill players."
+			filter={(i) =>
+				i.kind === 'news' ||
+				(['QB', 'RB', 'WR', 'TE'].includes(i.position ?? '') && !i.preliminary)}
+			more="/news/"
+		/>
+	</div>
+
+	<!-- Power ratings -->
+	<section class="card power" aria-labelledby="power-title">
+		<div class="card-head">
+			<h2 id="power-title">Power ratings: top 10</h2>
+			<a href="{base}/ratings/?{q}">All 32 →</a>
+		</div>
+		<p class="sub">
+			Points better than an average team on a neutral field{lastWeek
+				? `, after week ${lastWeek}`
+				: ''}.
+		</p>
 		{#if now.length}
 			<PlotFigure label="Top 10 power ratings" render={powerChart} />
 		{:else}
-			<div class="skeleton" style="height: 300px"></div>
+			<div class="skeleton" style="height: 310px"></div>
 		{/if}
 	</section>
 
 	<!-- Movers -->
-	<section class="card movers">
+	<section class="card movers" aria-labelledby="movers-title">
 		<div class="card-head">
-			<h2>Biggest movers</h2>
-			<a href="{base}/ratings/">Trajectories →</a>
+			<h2 id="movers-title">Biggest movers</h2>
+			<a href="{base}/ratings/?{q}">Trajectories →</a>
 		</div>
-		<p class="sub">Change in power rating since last week, in points.</p>
+		<p class="sub">Change in power rating over the last week, in points.</p>
 		{#if movers.length}
 			<ul class="list">
 				{#each [...movers.slice(0, 3), ...movers.slice(-3)] as m (m.r.team)}
 					<li>
-						<TeamBadge team={m.r.team} name="nick" link />
+						<TeamBadge team={m.r.team} name="nick" link {season} />
 						<span class="chip {m.delta >= 0 ? 'good' : 'bad'}"
 							>{m.delta >= 0 ? '▲' : '▼'} {signed(m.delta)}</span
 						>
 					</li>
 				{/each}
 			</ul>
+		{:else if ratings.value}
+			<p class="muted">Movement shows after the second week of ratings.</p>
 		{:else}
-			<div class="skeleton" style="height: 180px"></div>
+			<div class="skeleton" style="height: 240px"></div>
 		{/if}
 	</section>
 
 	<!-- Luck -->
-	<section class="card luck">
+	<section class="card luck" aria-labelledby="luck-title">
 		<div class="card-head">
-			<h2>Regression watch</h2>
-			<a href="{base}/luck/">Luck →</a>
+			<h2 id="luck-title">Regression watch</h2>
+			<a href="{base}/luck/?{q}">Luck →</a>
 		</div>
-		<p class="sub">Wins vs what point differential predicts (Pythagorean wins).</p>
+		<p class="sub">Wins minus the wins their point differential predicts (Pythagorean).</p>
 		{#if luckRows.length}
 			<ul class="list">
 				{#each [...luckRows.slice(0, 3), ...luckRows.slice(-3)] as l (l.team)}
 					<li>
-						<TeamBadge team={l.team} name="nick" link />
+						<TeamBadge team={l.team} name="nick" link {season} />
 						<span class="tnum muted">{wlt(l.wins, l.games)}</span>
-						<span class="chip {l.wins_over_pythag > 0 ? 'bad' : 'good'}"
-							>{signed(l.wins_over_pythag)} W</span
-						>
+						<span class="chip neutral tnum">{signed(l.over)} W</span>
 					</li>
 				{/each}
 			</ul>
-			<p class="foot-note">Plus = more wins than their points earned. Expect a correction.</p>
+			<p class="foot-note">
+				Plus = more wins than their points earned; history says those gaps close.
+				{#if inProgress && latest && latest.last_week < 6}
+					After {latest.last_week} weeks, one bounce decides most of this.
+				{/if}
+			</p>
+		{:else if schedule.value}
+			<p class="muted">Shows once games are played.</p>
 		{:else}
-			<div class="skeleton" style="height: 180px"></div>
-		{/if}
-	</section>
-
-	<!-- Noise -->
-	<section class="card noise">
-		<div class="card-head">
-			<h2>Stats to stop quoting</h2>
-			<a href="{base}/stability/">Signal vs noise →</a>
-		</div>
-		<p class="sub">
-			How well each stat predicts itself within a season (1 = perfectly, 0 = pure noise). The four
-			noisiest, then the two steadiest.
-		</p>
-		{#if noise.length}
-			<ul class="list">
-				{#each noise.slice(0, 4) as m (m.key)}
-					<li>
-						<span>{m.label}</span>
-						<span class="chip bad">r = {corr(m.split_half_r)}</span>
-					</li>
-				{/each}
-				{#each noise.slice(-2).reverse() as m (m.key)}
-					<li>
-						<span>{m.label}</span>
-						<span class="chip good">r = {corr(m.split_half_r)}</span>
-					</li>
-				{/each}
-			</ul>
-		{:else}
-			<div class="skeleton" style="height: 180px"></div>
-		{/if}
-	</section>
-	<!-- QBs -->
-	<section class="card qbs">
-		<div class="card-head">
-			<h2>QB efficiency leaders</h2>
-			<a href="{base}/qbs/">All QBs →</a>
-		</div>
-		<p class="sub">
-			EPA per dropback, no garbage time, with a 95% interval (min {Math.round(minDb)} dropbacks).
-		</p>
-		{#if topQbs.length}
-			<ul class="list qb-list">
-				{#each topQbs as q (q.player_id)}
-					<li>
-						<a class="qb-name" href="{base}/player/?id={q.player_id}">{q.full_name ?? q.name}</a>
-						<TeamBadge team={q.team} />
-						<span class="tnum strong">{epa(q.epa_db)}</span>
-						<span class="tnum muted small">{epa(q.epa_db_lo, 2)} to {epa(q.epa_db_hi, 2)}</span>
-					</li>
-				{/each}
-			</ul>
-		{:else}
-			<div class="skeleton" style="height: 200px"></div>
+			<div class="skeleton" style="height: 240px"></div>
 		{/if}
 	</section>
 </div>
 
-<section class="explore">
-	<h2>Explore</h2>
-	<div class="grid-3">
-		{#each navGroups as g (g.label)}
-			{#each g.items as item (item.href)}
-				<a class="card tile-link" href="{base}{item.href}">
-					<span class="eyebrow">{g.label}</span>
-					<span class="t">{item.label}</span>
-					<span class="b">{item.blurb}</span>
-				</a>
-			{/each}
-		{/each}
-	</div>
-</section>
-
 <style>
-	/* ---------- Hero: a stadium under the lights ---------- */
-	.hero {
-		min-height: 400px;
-		padding-bottom: clamp(1.5rem, 1rem + 3vw, 3rem);
-		background:
-			radial-gradient(120% 90% at 85% -10%, rgba(255, 255, 255, 0.16), transparent 55%),
-			linear-gradient(135deg, var(--hero-from), var(--hero-to));
-		box-shadow:
-			0 30px 60px -30px color-mix(in srgb, var(--hero-to) 70%, transparent),
-			var(--shadow-md);
-		transition: background 0.6s var(--ease);
-	}
-	.hero > :not(.aurora):not(.turf):not(.ball) {
-		position: relative;
-		z-index: 2;
-	}
-	.hero h1 {
-		font-size: clamp(2.2rem, 1.3rem + 3.6vw, 3.9rem);
-		font-stretch: 118%;
-		line-height: 1.02;
-		max-width: 16ch;
-		margin-bottom: 0.7rem;
-		text-shadow: 0 2px 30px rgba(0, 0, 0, 0.25);
-	}
-	/* Gradient text (light end stays ≥ 7:1 against the dark hero). */
-	.glow {
-		background: linear-gradient(100deg, #ffffff 10%, #a5f3fc 55%, #c4b5fd 95%);
-		-webkit-background-clip: text;
-		background-clip: text;
-		color: transparent;
-		background-size: 200% 100%;
-		animation: glow-pan 8s ease-in-out infinite alternate;
-	}
-	@keyframes glow-pan {
-		to {
-			background-position: 100% 0;
-		}
-	}
-	/* Aurora: three blurred lights drifting over the gradient. */
-	.aurora {
-		position: absolute;
-		inset: 0;
-		z-index: 0;
-		overflow: hidden;
-		pointer-events: none;
-	}
-	.aurora span {
-		position: absolute;
-		width: 46%;
-		aspect-ratio: 1;
-		border-radius: 50%;
-		filter: blur(60px);
-		opacity: 0.55;
-		mix-blend-mode: screen;
-	}
-	.aurora span:nth-child(1) {
-		left: -8%;
-		top: -30%;
-		background: radial-gradient(circle, #22d3ee, transparent 65%);
-		animation: drift-a 19s ease-in-out infinite alternate;
-	}
-	.aurora span:nth-child(2) {
-		right: -6%;
-		top: -20%;
-		background: radial-gradient(circle, #8b5cf6, transparent 65%);
-		animation: drift-b 23s ease-in-out infinite alternate;
-	}
-	.aurora span:nth-child(3) {
-		left: 30%;
-		bottom: -45%;
-		background: radial-gradient(circle, #3b82f6, transparent 65%);
-		animation: drift-c 27s ease-in-out infinite alternate;
-	}
-	.team-tint .aurora span {
-		opacity: 0.32;
-	}
-	@keyframes drift-a {
-		to {
-			transform: translate(35%, 25%) scale(1.2);
-		}
-	}
-	@keyframes drift-b {
-		to {
-			transform: translate(-30%, 35%) scale(0.9);
-		}
-	}
-	@keyframes drift-c {
-		to {
-			transform: translate(20%, -25%) scale(1.15);
-		}
-	}
-	/* The field: yard lines in perspective, receding to the horizon and rolling toward you. */
-	.turf {
-		position: absolute;
-		left: -30%;
-		right: -30%;
-		bottom: -2px;
-		height: 78%;
-		z-index: 1;
-		pointer-events: none;
-		background:
-			repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.34) 0 2px, transparent 2px 64px),
-			repeating-linear-gradient(
-				90deg,
-				transparent 0 calc(5% - 1px),
-				rgba(255, 255, 255, 0.13) calc(5% - 1px) 5%
-			);
-		transform: perspective(520px) rotateX(64deg);
-		transform-origin: 50% 100%;
-		mask-image: linear-gradient(to top, #000 0%, rgba(0, 0, 0, 0.55) 40%, transparent 75%);
-		-webkit-mask-image: linear-gradient(to top, #000 0%, rgba(0, 0, 0, 0.55) 40%, transparent 75%);
-		animation: roll 5s linear infinite;
-	}
-	@keyframes roll {
-		to {
-			background-position:
-				0 64px,
-				0 0;
-		}
-	}
-	.hero-stats {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.5rem 2rem;
-		margin: 1.4rem 0 0;
-	}
-	.hero-stats dt {
-		font-size: 0.72rem;
-		text-transform: uppercase;
-		letter-spacing: 0.08em;
-		color: rgba(255, 255, 255, 0.75);
-	}
-	.hero-stats dd {
-		margin: 0;
-		font: 800 clamp(1.4rem, 1.1rem + 1.2vw, 2rem) / 1.1 var(--display);
-	}
-	/* A football drifting across the field behind the copy. */
-	.ball {
-		position: absolute;
-		right: 7%;
-		top: 14%;
-		z-index: 1;
-		width: clamp(120px, 16vw, 210px);
-		overflow: visible;
-		transform: rotate(-28deg);
-		animation: spiral 7s ease-in-out infinite;
-		pointer-events: none;
-		filter: drop-shadow(0 22px 26px rgba(0, 0, 0, 0.3))
-			drop-shadow(0 0 30px rgba(165, 243, 252, 0.25));
-	}
-	.ball .trail {
-		fill: none;
-		stroke: rgba(255, 255, 255, 0.35);
-		stroke-width: 2.5;
-		stroke-linecap: round;
-		stroke-dasharray: 40 200;
-		animation: streak 1.8s linear infinite;
-	}
-	@keyframes streak {
-		to {
-			stroke-dashoffset: -240;
-		}
-	}
-	.ball .hide {
-		fill: rgba(255, 255, 255, 0.1);
-		stroke: rgba(255, 255, 255, 0.45);
-		stroke-width: 2.5;
-	}
-	.ball .seam {
-		fill: none;
-		stroke: rgba(255, 255, 255, 0.3);
-		stroke-width: 3;
-	}
-	.ball .lace {
-		fill: none;
-		stroke: rgba(255, 255, 255, 0.7);
-		stroke-width: 3;
-		stroke-linecap: round;
-	}
-	@keyframes spiral {
-		50% {
-			transform: translate(-18px, 10px) rotate(-20deg);
-		}
-	}
-	@media (max-width: 640px) {
-		.ball {
-			display: none;
-		}
-	}
-	.hero-actions {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.6rem;
-		margin-top: 1rem;
-	}
-	.hero-btn {
-		display: inline-flex;
-		align-items: center;
-		padding: 0.55rem 1rem;
-		border-radius: 10px;
-		font-weight: 600;
-		text-decoration: none;
-		background: rgba(255, 255, 255, 0.12);
-		border: 1px solid rgba(255, 255, 255, 0.25);
-		transition:
-			background 0.15s,
-			transform 0.15s;
-	}
-	.hero-btn:hover {
-		background: rgba(255, 255, 255, 0.2);
-		transform: translateY(-1px);
-	}
-	.hero-btn {
-		backdrop-filter: blur(8px);
-		-webkit-backdrop-filter: blur(8px);
-	}
-	.hero-btn.primary {
-		background: #fff;
-		color: #0f2a4f !important;
-		border-color: #fff;
-		box-shadow: 0 10px 30px -10px rgba(165, 243, 252, 0.6);
-	}
-	.hero.paused :global(*),
-	.hero.paused::before {
-		animation-play-state: paused !important;
-	}
-	@media (prefers-reduced-motion: reduce) {
-		.aurora span,
-		.turf,
-		.glow,
-		.ball .trail {
-			animation: none;
-		}
-	}
+	/* ---------- Dashboard ---------- */
 	.dash {
 		display: grid;
 		gap: 1rem;
@@ -658,34 +626,45 @@
 	}
 	.week {
 		grid-column: span 7;
+		align-self: start;
+	}
+	.rail {
+		grid-column: span 5;
+		display: grid;
+		gap: 1rem;
+		align-content: start;
+	}
+	.standings,
+	.headlines {
+		grid-column: span 12;
 	}
 	.power {
-		grid-column: span 5;
+		grid-column: span 6;
 	}
 	.movers,
-	.luck,
-	.noise {
-		grid-column: span 4;
-	}
-	.qbs {
-		grid-column: span 12;
+	.luck {
+		grid-column: span 3;
 	}
 	@media (max-width: 1100px) {
 		.week,
 		.power {
 			grid-column: span 12;
 		}
+		.rail {
+			grid-column: span 12;
+			grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+		}
+		.rail .results {
+			grid-column: 1 / -1;
+		}
 		.movers,
-		.luck,
-		.noise {
+		.luck {
 			grid-column: span 6;
 		}
 	}
-	@media (max-width: 640px) {
+	@media (max-width: 760px) {
 		.movers,
-		.luck,
-		.qbs,
-		.noise {
+		.luck {
 			grid-column: span 12;
 		}
 	}
@@ -693,59 +672,157 @@
 		font-size: 0.85rem;
 		white-space: nowrap;
 	}
-	.games {
+	.foot-note {
+		font-size: 0.8rem;
+		color: var(--text-muted);
+		margin: 0.6rem 0 0;
+	}
+
+	/* Results */
+	.scores {
 		list-style: none;
 		margin: 0;
 		padding: 0;
 		display: grid;
-		gap: 0.35rem;
+		grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr));
+		gap: 0.5rem;
 	}
-	.games a {
+	.scores a {
+		position: relative;
 		display: grid;
-		grid-template-columns: auto 1fr;
-		align-items: center;
-		gap: 0.15rem 1rem;
-		padding: 0.55rem 0.7rem;
-		border-radius: 10px;
+		gap: 0.15rem;
+		padding: 0.45rem 0.65rem;
 		border: 1px solid var(--border);
+		border-radius: 10px;
 		color: inherit;
 		text-decoration: none;
-		transition:
-			background 0.15s,
-			border-color 0.15s;
 	}
-	.games a:hover {
+	.scores a:hover {
 		background: var(--surface-2);
 		border-color: var(--border-strong);
 	}
-	.matchup {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.35rem;
-	}
-	.at {
-		color: var(--text-muted);
-		font-size: 0.8rem;
-	}
-	.lines {
+	.side {
 		display: flex;
-		flex-wrap: wrap;
-		gap: 0.25rem 1rem;
-		justify-content: flex-end;
-		font-size: 0.85rem;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+		color: var(--text-secondary);
 		font-variant-numeric: tabular-nums;
-		font-weight: 600;
 	}
-	.k {
-		font-weight: 500;
+	.side.won {
+		color: var(--text-primary);
+	}
+	.side.won b::after {
+		content: ' ◂';
+		font-size: 0.7em;
+	}
+	/* The card's footer says how the result relates to the line; an upset gets a gold edge and
+	   a bolt, built into the card rather than stuck on it. */
+	.note {
+		display: flex;
+		align-items: center;
+		gap: 0.3rem;
+		margin-top: 0.2rem;
+		padding-top: 0.3rem;
+		border-top: 1px solid var(--grid);
+		font-size: 0.72rem;
 		color: var(--text-muted);
-		margin-right: 0.2rem;
 	}
-	.qb {
-		grid-column: 1 / -1;
-		font-size: 0.78rem;
+	.scores a.upset {
+		border-color: color-mix(in srgb, var(--fav) 55%, var(--border));
+		box-shadow: inset 3px 0 0 var(--fav);
+	}
+	.upset .note {
 		color: var(--text-secondary);
 	}
+	.upset .note b {
+		color: var(--text-primary);
+		letter-spacing: 0.02em;
+	}
+	.note svg {
+		width: 0.85rem;
+		height: 0.85rem;
+		flex: none;
+		fill: var(--fav);
+	}
+
+	/* Standings */
+	.divisions {
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		gap: 0.9rem 1.2rem;
+	}
+	.divisions table {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: 0.86rem;
+	}
+	.divisions caption {
+		text-align: left;
+		font: 700 0.72rem/1 inherit;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: var(--text-secondary);
+		padding-bottom: 0.35rem;
+	}
+	.divisions thead th {
+		font-size: 0.7rem;
+		font-weight: 600;
+		color: var(--text-muted);
+		text-align: left;
+		padding: 0 0 0.2rem;
+	}
+	.divisions abbr {
+		text-decoration: none;
+	}
+	.divisions tbody th,
+	.divisions td {
+		padding: 0.28rem 0;
+		border-top: 1px solid var(--grid);
+		font-weight: 400;
+		text-align: left;
+	}
+	.divisions .r {
+		text-align: right;
+		padding-left: 0.5rem;
+	}
+	.divisions tr.fav th {
+		box-shadow: inset 3px 0 0 var(--fav);
+		padding-left: 0.4rem;
+	}
+	.delta {
+		width: 3.1rem;
+		white-space: nowrap;
+		font-size: 0.78rem;
+		color: var(--text-muted);
+	}
+	.delta.up,
+	.delta.down {
+		color: var(--text-primary);
+		font-weight: 600;
+	}
+	.delta.up::before {
+		content: '▲ ';
+		font-size: 0.65em;
+		color: var(--good);
+	}
+	.delta.down::before {
+		content: '▼ ';
+		font-size: 0.65em;
+		color: var(--bad);
+	}
+	@media (max-width: 1100px) {
+		.divisions {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+	}
+	@media (max-width: 560px) {
+		.divisions {
+			grid-template-columns: 1fr;
+		}
+	}
+
+	/* Lists */
 	.list {
 		list-style: none;
 		margin: 0;
@@ -768,6 +845,28 @@
 		flex: 1;
 		min-width: 0;
 	}
+	.ranked {
+		counter-reset: rank;
+	}
+	.ranked li::before {
+		counter-increment: rank;
+		content: counter(rank);
+		width: 1.2rem;
+		font-weight: 700;
+		color: var(--text-muted);
+		font-variant-numeric: tabular-nums;
+	}
+	.ranked li > .who {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+	.chip.neutral {
+		background: var(--surface-2);
+		border: 1px solid var(--border);
+	}
 	.qb-name {
 		color: inherit;
 		font-weight: 600;
@@ -776,58 +875,13 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.qb-name:hover {
+	a.qb-name:hover {
 		text-decoration: underline;
-	}
-	.qb-list {
-		grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr));
-		column-gap: 2rem;
 	}
 	.strong {
 		font-weight: 700;
 	}
 	.small {
-		font-size: 0.75rem;
-	}
-	.foot-note {
-		font-size: 0.8rem;
-		color: var(--text-muted);
-		margin: 0.6rem 0 0;
-	}
-	.explore h2 {
-		margin-bottom: 0.6rem;
-	}
-	.tile-link {
-		display: grid;
-		gap: 0.15rem;
-	}
-	.tile-link .eyebrow {
-		margin: 0;
-	}
-	.t {
-		font: 700 1.05rem var(--display);
-	}
-	.b {
-		color: var(--text-secondary);
-		font-size: 0.875rem;
-	}
-	/* Phones: a compact two-column index (the footer site map repeats it with groups). */
-	@media (max-width: 640px) {
-		.explore .grid-3 {
-			grid-template-columns: 1fr 1fr;
-			gap: 0.5rem;
-		}
-		.tile-link {
-			padding: 0.65rem 0.8rem;
-			min-height: 44px;
-			align-content: center;
-		}
-		.tile-link .eyebrow,
-		.b {
-			display: none;
-		}
-		.t {
-			font-size: 0.95rem;
-		}
+		font-size: 0.78rem;
 	}
 </style>

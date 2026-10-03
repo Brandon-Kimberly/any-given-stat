@@ -1,6 +1,9 @@
 <script lang="ts">
 	// Referee crews: penalty volume and home/away lean, with funnels showing how much of the
 	// spread between crews is just sample size.
+	import { afterNavigate } from '$app/navigation';
+	import { setParam } from '$lib/url';
+	import { page } from '$app/state';
 	import DataTable, { type Column } from '$lib/components/DataTable.svelte';
 	import LoadError from '$lib/components/LoadError.svelte';
 	import PlotFigure from '$lib/components/Plot.svelte';
@@ -13,6 +16,16 @@
 
 	const res = resource('referees');
 	let minGames = $state(48);
+
+	// ?q= pre-filters the table and rings the matching referee in the charts, so other pages
+	// can deep-link (/referees/?q=Hochuli). The filter boxes and the URL stay in sync.
+	let q = $state(page.url.searchParams.get('q') ?? '');
+	afterNavigate(() => (q = page.url.searchParams.get('q') ?? ''));
+	$effect(() => setParam('q', q.trim()));
+	const matches = (name: string) => {
+		const t = q.trim().toLowerCase();
+		return !!t && name.toLowerCase().includes(t);
+	};
 
 	const careers = $derived(
 		(res.value?.careers ?? [])
@@ -73,12 +86,15 @@
 		);
 		const ys = careers.map(opts.y);
 		const pad = 0.02;
+		const hit = careers.filter((r) => matches(r.referee));
 		return Plot.plot({
 			width,
 			height: 340,
 			style: plotStyle,
 			marginLeft: 44,
-			x: { label: opts.xLabel, domain: [lo, hi] },
+			marginRight: 28,
+			marginTop: 28,
+			x: { label: opts.xLabel, domain: [lo, hi], inset: 10 },
 			y: {
 				label: opts.yLabel,
 				tickFormat: '.0%',
@@ -105,11 +121,27 @@
 					fill: 'var(--series-1)',
 					fillOpacity: 0.8
 				}),
+				Plot.dot(hit, {
+					x: opts.x,
+					y: opts.y,
+					r: 7,
+					stroke: 'var(--text-primary)',
+					strokeWidth: 2
+				}),
+				Plot.text(hit, {
+					x: opts.x,
+					y: opts.y,
+					text: (d: Row) => lastName(d.referee),
+					dy: -13,
+					fill: 'var(--text-primary)',
+					fontWeight: 700,
+					className: 'declutter'
+				}),
 				Plot.text(opts.out, {
 					x: opts.x,
 					y: opts.y,
 					text: (d: Row) => lastName(d.referee),
-					dy: -10,
+					dy: -11,
 					fill: 'var(--text-primary)',
 					fontWeight: 600,
 					className: 'declutter'
@@ -185,6 +217,18 @@
 {:else if !res.value}
 	<Skeleton height={480} />
 {:else}
+	<div class="toolbar">
+		<label class="field">
+			Min games
+			<select bind:value={minGames}>
+				{#each [1, 16, 48, 96] as g (g)}<option value={g}>{g}</option>{/each}
+			</select>
+		</label>
+		<label class="field">
+			Find a referee
+			<input type="search" placeholder="e.g. Hochuli" bind:value={q} />
+		</label>
+	</div>
 	<div class="grid-2">
 		<section class="card">
 			<h2>Who gets flagged: home or away?</h2>
@@ -206,25 +250,21 @@
 		</section>
 	</div>
 
-	<div class="toolbar">
-		<label class="field">
-			Min games
-			<select bind:value={minGames}>
-				{#each [1, 16, 48, 96] as g (g)}<option value={g}>{g}</option>{/each}
-			</select>
-		</label>
-	</div>
-	<DataTable
-		rows={careers}
-		columns={cols}
-		sortKey="penalties_pg"
-		search="referee"
-		filename="referees"
-	/>
-	<p class="muted small">
-		Regular-season games the referee led since 2016. Penalties are plays flagged in play-by-play,
-		including declined and offsetting ones.
-	</p>
+	<section class="card" id="table">
+		<h2>Every crew chief, {minGames}+ games</h2>
+		<DataTable
+			rows={careers}
+			columns={cols}
+			sortKey="penalties_pg"
+			search="referee"
+			bind:query={q}
+			filename="referees"
+		/>
+		<p class="muted small">
+			Regular-season games the referee led since 2016. Penalties are plays flagged in play-by-play,
+			including declined and offsetting ones.
+		</p>
+	</section>
 {/if}
 
 <style>

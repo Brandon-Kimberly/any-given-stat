@@ -1,14 +1,17 @@
 <script lang="ts">
 	import LoadError from '$lib/components/LoadError.svelte';
 	import FantasyRecords from '$lib/components/FantasyRecords.svelte';
+	import PageToc from '$lib/components/PageToc.svelte';
 	import RecordList, { type RecordItem } from '$lib/components/RecordList.svelte';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import { epa, num, pct, signed } from '$lib/format';
+	import { playSummary } from '$lib/playText';
 	import { resource } from '$lib/resource.svelte';
 	import { teamName } from '$lib/teams.svelte';
 	import type { RecordGame, RecordPlayer, RecordTeam } from '$lib/types';
 
 	const res = resource('records');
+
 	const r = $derived(res.value);
 
 	const record = (t: RecordTeam) => `${t.wins}–${t.losses}${t.ties ? `–${t.ties}` : ''}`;
@@ -163,7 +166,8 @@
 									key: `${p.game_id}-${p.qtr}-${p.time}`,
 									href: `/game/?id=${p.game_id}`,
 									team: p.wpa >= 0 ? p.posteam : p.defteam,
-									title: p.desc.replace(/^\(\d+:\d+\)\s*/, ''),
+									title: playSummary(p.desc),
+									tip: p.desc,
 									sub: `${p.posteam} vs ${p.defteam} · ${gameLabel(p)} · Q${p.qtr > 4 ? 'OT' : p.qtr} ${p.time ?? ''}`,
 									stat: `${Math.round(Math.abs(p.wpa) * 100)}% WP`
 								}))
@@ -191,10 +195,12 @@
 {:else if !r}
 	<Skeleton height={500} />
 {:else}
-	<nav class="jump" aria-label="Sections">
-		{#each sections as s (s.id)}<a class="chip" href="#{s.id}">{s.label}</a>{/each}
-		<a class="chip" href="#fantasy">Fantasy</a>
-	</nav>
+	<PageToc
+		items={[
+			...sections.map((s) => ({ id: s.id, label: s.label })),
+			{ id: 'fantasy', label: 'Fantasy' }
+		]}
+	/>
 	{#each sections as s (s.id)}
 		<h2 class="section" id={s.id}>{s.label}</h2>
 		<div class="grid-2">
@@ -216,15 +222,6 @@
 {/if}
 
 <style>
-	.jump {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.4rem;
-		margin-bottom: 0.5rem;
-	}
-	.jump a {
-		text-decoration: none;
-	}
 	/* Section titles with a brand-gradient rule fading out to the right. */
 	.section {
 		display: flex;
@@ -233,7 +230,7 @@
 		font-size: 1.5rem;
 		font-stretch: 112%;
 		margin: 1.75rem 0 0.85rem;
-		scroll-margin-top: 80px;
+		scroll-margin-top: 7.5rem; /* clear the header and the sticky "On this page" bar */
 	}
 	.section::after {
 		content: '';

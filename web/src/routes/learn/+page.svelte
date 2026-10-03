@@ -128,6 +128,15 @@
 					fill: 'wp',
 					inset: 0.5
 				}),
+				// The cell the Lead / Time left sliders pick.
+				Plot.cell(wpCell ? [wpCell] : [], {
+					x: 'minutes_left',
+					y: 'score_diff',
+					fill: 'none',
+					stroke: 'var(--text-primary)',
+					strokeWidth: 2.5,
+					inset: 0.5
+				}),
 				Plot.tip(
 					c!.wp_grid,
 					Plot.pointer({
@@ -158,7 +167,7 @@
 			height: rows.length * 26 + 60,
 			style: plotStyle,
 			marginLeft: 76,
-			x: { label: 'EPA per play →', tickFormat: '+.2f', grid: true },
+			x: { label: 'EPA per play →', tickFormat: '+.2f', grid: true, nice: true },
 			y: { domain: rows.map(sitLabel), label: null },
 			color: {
 				domain: ['Pass', 'Run'],
@@ -215,7 +224,15 @@
 			marks: [
 				gridY(),
 				Plot.ruleX([0], { stroke: 'var(--axis)' }),
-				Plot.areaY(data, { x: 'mid', y: 'share', fill: 'kind', fillOpacity: 0.12, curve: 'step' }),
+				// y1/y2 overlay the two distributions; plain y would stack them.
+				Plot.areaY(data, {
+					x: 'mid',
+					y1: 0,
+					y2: 'share',
+					fill: 'kind',
+					fillOpacity: 0.12,
+					curve: 'step'
+				}),
 				Plot.line(data, { x: 'mid', y: 'share', stroke: 'kind', strokeWidth: 2, curve: 'step' }),
 				Plot.tip(
 					data,
@@ -280,7 +297,19 @@
 			]
 		});
 	}
+	// Field goals: distances with fewer than 20 kicks are dropped, and the line is a 5-yard
+	// rolling make rate (pooled kicks), so a lucky handful of long kicks can't bend it.
+	const FG_MIN = 20;
 	function fgChart(width: number) {
+		const bins = c!.fourth.field_goals.filter((d) => d.attempts >= FG_MIN);
+		const rolling = bins
+			.map((d) => {
+				const near = bins.filter((o) => Math.abs(o.distance - d.distance) <= 2);
+				const att = near.reduce((a, o) => a + o.attempts, 0);
+				const made = near.reduce((a, o) => a + o.attempts * o.made_rate, 0);
+				return { distance: d.distance, rate: made / att, att };
+			})
+			.filter((d) => d.att >= 150); // the far edge pools too few kicks to draw a trend
 		return Plot.plot({
 			width,
 			height: 260,
@@ -290,22 +319,21 @@
 			y: { label: '↑ Made', domain: [0, 1], tickFormat: '.0%' },
 			marks: [
 				gridY(),
-				Plot.line(c!.fourth.field_goals, {
+				Plot.dot(bins, {
 					x: 'distance',
 					y: 'made_rate',
-					stroke: 'var(--series-2)',
-					strokeWidth: 2,
-					curve: 'monotone-x'
-				}),
-				Plot.dot(c!.fourth.field_goals, {
-					x: 'distance',
-					y: 'made_rate',
-					r: (d: { attempts: number }) => Math.max(2, Math.sqrt(d.attempts) / 3),
+					r: (d: { attempts: number }) => Math.max(4, Math.sqrt(d.attempts) / 2.6),
 					fill: 'var(--series-2)',
-					fillOpacity: 0.5
+					fillOpacity: 0.35
+				}),
+				Plot.line(rolling, {
+					x: 'distance',
+					y: 'rate',
+					stroke: 'var(--series-2)',
+					strokeWidth: 2
 				}),
 				Plot.tip(
-					c!.fourth.field_goals,
+					bins,
 					Plot.pointerX({
 						lineWidth: 40,
 						x: 'distance',
@@ -320,8 +348,12 @@
 
 	const DECISION = { go: 'Go for it', punt: 'Punt', fg: 'Field goal' } as const;
 	const SHORT = { go: 'GO', punt: 'P', fg: 'FG' } as const;
-	const clear = (d: FourthBucket) => d.margin == null || d.margin >= 0.3;
 	function decisionChart(width: number) {
+		// Labels use the primary text token on every cell, so the fill stays light enough for it:
+		// dark text on light-mode washes, white text on dark-mode ones (capped so white passes AA).
+		const [lo, hi] = theme.dark ? [0.25, 0.72] : [0.3, 0.85];
+		const strength = (d: FourthBucket) =>
+			d.margin == null ? lo : lo + (hi - lo) * Math.min(1, d.margin / 0.65);
 		const b = fourthRes.value!.buckets.filter((x) => x.best);
 		const narrow = isNarrow(width);
 		const fields = [...new Map(b.map((x) => [x.field_ord, x.field])).entries()]
@@ -352,8 +384,7 @@
 					x: 'field',
 					y: 'distance',
 					fill: (d: FourthBucket) => DECISION[d.best!],
-					fillOpacity: (d: FourthBucket) =>
-						d.margin == null ? 0.35 : Math.min(1, 0.35 + d.margin),
+					fillOpacity: strength,
 					inset: 1.5,
 					rx: 4
 				}),
@@ -361,7 +392,7 @@
 					x: 'field',
 					y: 'distance',
 					text: (d: FourthBucket) => (narrow ? SHORT[d.best!] : DECISION[d.best!]),
-					fill: '#fff',
+					fill: 'var(--text-primary)',
 					fontWeight: 700,
 					fontSize: narrow ? 9 : 10.5
 				}),
@@ -518,14 +549,18 @@
 			<div>
 				<h3>Field goal range</h3>
 				<PlotFigure label="Field goal make rate by distance" render={fgChart} />
+				<p class="muted small">
+					Dots: each distance, sized by kicks (under {FG_MIN} kicks left out). Line: make rate pooled
+					over a 5-yard window, drawn where that window has 150+ kicks.
+				</p>
 			</div>
 		</div>
 		{#if fourthRes.value}
 			<h3 style="margin-top: 1rem">What actually paid off</h3>
 			<p class="muted small">
 				For each distance and field position, the decision with the highest average EPA over
-				{fourthRes.value.meta.reference_seasons?.join('–')}. Darker = a bigger edge. Faint = a close
-				call (under 0.3 EPA) or only one option with data.
+				{fourthRes.value.meta.reference_seasons?.join('–')}. Stronger color = a bigger edge. Faint =
+				a close call (under 0.3 EPA) or only one option with data.
 				{fourthRes.value.meta.caveat}
 			</p>
 			<PlotFigure
@@ -540,7 +575,7 @@
 		{/if}
 	</section>
 
-	<section class="card lesson">
+	<section class="card next">
 		<h2>Next: which numbers to trust</h2>
 		<p>
 			These ideas tell you what matters. <a href="{base}/stability/">Signal vs noise</a> tells you
@@ -573,7 +608,8 @@
 		position: relative;
 		padding-left: clamp(1.15rem, 0.8rem + 3vw, 4rem);
 	}
-	.lesson > p {
+	.lesson > p,
+	.next > p {
 		max-width: 78ch;
 	}
 	.num-badge {

@@ -144,3 +144,34 @@ def season_games(con: duckdb.DuckDBPyConnection, season: int) -> list[dict]:
             "away": box.get((gid, g["away"])),
         }
     return games
+
+
+def highlight(season_games: list[dict], week: int) -> dict | None:
+    """The most exciting game of ``week`` (total win-probability movement), for the home hero.
+
+    Carries the full WP series (about 200 points) so the page can draw it without loading the
+    season's game file.
+    """
+    pool = [g for g in season_games if g["week"] == week and len(g.get("wp") or []) > 1]
+    if not pool:
+        return None
+
+    def movement(g: dict) -> float:
+        return sum(abs(b[1] - a[1]) for a, b in zip(g["wp"], g["wp"][1:], strict=False))
+
+    best = max(pool, key=movement)
+    wps = [p[1] for p in best["wp"]]
+    flips = sum((a - 0.5) * (b - 0.5) < 0 for a, b in zip(wps, wps[1:], strict=False))
+    return {
+        "game_id": best["game_id"],
+        "season": best["season"],
+        "week": best["week"],
+        "season_type": best.get("season_type"),
+        "home": best["home"],
+        "away": best["away"],
+        "home_score": best["home_score"],
+        "away_score": best["away_score"],
+        "excitement": round(movement(best), 3),
+        "favorite_changes": flips,
+        "wp": [[t, round(w, 3)] for t, w in best["wp"]],
+    }

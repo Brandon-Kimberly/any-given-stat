@@ -4,6 +4,7 @@ import type {
 	Concepts,
 	FourthDowns,
 	GameIndexEntry,
+	Highlight,
 	Lab,
 	Lab2,
 	Lab3,
@@ -13,6 +14,7 @@ import type {
 	TeamMeta,
 	Luck,
 	Meta,
+	NewsFeed,
 	Predictions,
 	QB,
 	Rating,
@@ -23,7 +25,8 @@ import type {
 	Stability,
 	TeamSeason,
 	TeamSplit,
-	TeamWeek
+	TeamWeek,
+	Upcoming
 } from './types';
 
 export interface Datasets {
@@ -36,6 +39,8 @@ export interface Datasets {
 	rushers: Rusher[];
 	stability: Stability;
 	predictions: Predictions;
+	upcoming: Upcoming;
+	highlight: Highlight | null;
 	ratings: Rating[];
 	team_splits: TeamSplit[];
 	lab: Lab;
@@ -51,6 +56,7 @@ export interface Datasets {
 	records: Records;
 	coaches: Coaches;
 	referees: Referees;
+	news: NewsFeed;
 }
 
 const cache = new Map<string, Promise<unknown>>();

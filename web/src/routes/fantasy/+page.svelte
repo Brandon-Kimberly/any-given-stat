@@ -1,9 +1,11 @@
 <script lang="ts">
+	import { hasPlayerPage } from '$lib/playerPages.svelte';
 	import { base } from '$app/paths';
 	import Controls from '$lib/components/Controls.svelte';
 	import CountUp from '$lib/components/CountUp.svelte';
 	import DataTable, { type Column } from '$lib/components/DataTable.svelte';
 	import LeagueConnect from '$lib/components/LeagueConnect.svelte';
+	import NewsFeed from '$lib/components/NewsFeed.svelte';
 	import LoadError from '$lib/components/LoadError.svelte';
 	import PlotFigure from '$lib/components/Plot.svelte';
 	import SampleWarning from '$lib/components/SampleWarning.svelte';
@@ -27,6 +29,8 @@
 	import { fantasy } from '$lib/fantasy/league.svelte';
 	import type { FantasyPos } from '$lib/fantasy/statline';
 	import { num, pct, signed } from '$lib/format';
+	import { fantasyRelevant } from '$lib/news';
+	import { loadNews } from '$lib/news.svelte';
 	import { gridY, isNarrow, Plot, plotStyle } from '$lib/plot';
 	import { prefs } from '$lib/prefs.svelte';
 	import { resource } from '$lib/resource.svelte';
@@ -40,6 +44,11 @@
 	const lineup = $derived(currentLineup());
 	const owners = $derived(ids.value ? fantasy.ownership(ids.value) : null);
 	const label = $derived(scoringLabel());
+	// News for the visitor's roster (gsis ids of their team), else fantasy-relevant news.
+	const mySet = $derived(
+		owners ? new Set([...owners].filter(([, o]) => o.mine).map(([id]) => id)) : null
+	);
+	loadNews().catch(() => {}); // start the feed download alongside the season's stat lines
 
 	const positions = $derived<FantasyPos[]>(startsIdp(lineup) ? [...OFFENSE, ...IDP] : OFFENSE);
 	let position = $state<'All' | FantasyPos>('All');
@@ -70,8 +79,8 @@
 	const hrefFor = (r: Row) =>
 		r.pos === 'DEF'
 			? `${base}/team/?t=${r.id}`
-			: ['QB', 'RB', 'WR', 'TE'].includes(r.pos)
-				? `${base}/player/?id=${r.id}`
+			: hasPlayerPage(r.id)
+				? `${base}/player/?id=${r.id}&season=${prefs.season}`
 				: '';
 
 	const columns = $derived<Column<Row>[]>([
@@ -106,24 +115,30 @@
 		...(owners ? [{ key: 'owner', label: 'Manager' } as Column<Row>] : [])
 	]);
 
-	// Tiles.
-	const best = $derived(
-		[...allRows].sort((a, b) => b.vor - a.vor).find((r) => r.games >= 3) ?? null
-	);
-	const steadiest = $derived(
-		[...allRows]
-			.filter((r) => r.games >= Math.max(3, (result?.weeksPlayed ?? 0) * 0.6) && r.pos !== 'K')
-			.sort((a, b) => b.starterRate - a.starterRate || b.ppg - a.ppg)[0] ?? null
-	);
-	const replacementText = $derived(
-		(['QB', 'RB', 'WR', 'TE'] as const)
-			.filter((p) => result?.replacement[p] != null)
-			.map((p) => `${p} ${result!.replacement[p]!.toFixed(1)}`)
-			.join(' · ')
+	// Tiles: the most valuable player at each main position (total points over replacement).
+	const TILE_POS = ['QB', 'RB', 'WR', 'TE'] as const;
+	const topByPos = $derived(
+		TILE_POS.flatMap((pos) => {
+			const minGames = Math.min(3, result?.weeksPlayed ?? 3);
+			const top = allRows
+				.filter((r) => r.pos === pos && r.games >= minGames)
+				.sort((a, b) => b.vor - a.vor)[0];
+			return top ? [{ pos, row: top, rep: result?.replacement[pos] ?? null }] : [];
+		})
 	);
 
 	// Positional value curves: points per game by positional rank, QB/RB/WR/TE.
 	const CURVE: FantasyPos[] = ['QB', 'RB', 'WR', 'TE'];
+	const CURVE_H = 400;
+	// Side by side, the matchups table scrolls within the chart card's height so the pair ends
+	// level (the tools row above the table is about TOOLS_H px).
+	const TOOLS_H = 57;
+	let pairW = $state(0);
+	let valueH = $state(0);
+	let headH = $state(0);
+	const tableCap = $derived(
+		pairW >= 860 && valueH > headH ? `${Math.max(280, valueH - headH - TOOLS_H)}px` : '460px'
+	);
 	const SERIES = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)'];
 	function curveChart(width: number) {
 		const narrow = isNarrow(width);
@@ -147,7 +162,7 @@
 		});
 		return Plot.plot({
 			width,
-			height: narrow ? 300 : 360,
+			height: narrow ? 300 : CURVE_H,
 			style: plotStyle,
 			marginRight: narrow ? 12 : 40,
 			x: { label: 'Rank at position →', domain: [1, depth], ticks: narrow ? 5 : 8 },
@@ -155,7 +170,7 @@
 			color: { domain: CURVE, range: SERIES, legend: true },
 			marks: [
 				gridY(),
-				Plot.line(pts, { x: 'rank', y: 'ppg', stroke: 'pos', strokeWidth: 2, curve: 'monotone-x' }),
+				Plot.line(pts, { x: 'rank', y: 'ppg', stroke: 'pos', strokeWidth: 2, curve: 'linear' }),
 				Plot.dot(cuts, {
 					x: 'rank',
 					y: 'ppg',
@@ -237,7 +252,7 @@
 	];
 </script>
 
-<svelte:head><title>Fantasy · Any Given Stat</title></svelte:head>
+<svelte:head><title>Fantasy {prefs.season} · Any Given Stat</title></svelte:head>
 
 <section class="page-head">
 	<div class="eyebrow">Fantasy</div>
@@ -278,32 +293,17 @@
 	<Skeleton height={420} />
 {:else}
 	<div class="tiles">
-		<div class="card tile">
-			<div class="label">Scoring</div>
-			<div class="value small-value">{label}</div>
-			<div class="note">
-				{lineup.teams} teams{fantasy.league ? '' : ' (typical lineup)'}
-			</div>
-		</div>
-		{#if best}
+		{#each topByPos as t (t.pos)}
 			<div class="card tile">
-				<div class="label">Most value over replacement</div>
-				<div class="value"><CountUp text={signed(best.vor, 0)} /></div>
-				<div class="note">{best.name}, {best.pos} · {num(best.points, 1)} points</div>
+				<div class="label">Top {t.pos} over replacement</div>
+				<div class="value"><CountUp text={signed(t.row.vor, 0)} /></div>
+				<div class="note">
+					{t.row.name} · {num(t.row.ppg, 1)} a game{t.rep != null
+						? ` vs ${num(t.rep, 1)} on waivers`
+						: ''}
+				</div>
 			</div>
-		{/if}
-		{#if steadiest}
-			<div class="card tile">
-				<div class="label">Steadiest starter</div>
-				<div class="value"><CountUp text={pct(steadiest.starterRate, 0)} /></div>
-				<div class="note">{steadiest.name} ({steadiest.pos}): weeks as a starter</div>
-			</div>
-		{/if}
-		<div class="card tile">
-			<div class="label">Replacement level, per game</div>
-			<div class="value small-value">{replacementText || '–'}</div>
-			<div class="note">What the waiver wire gives you</div>
-		</div>
+		{/each}
 	</div>
 
 	{#if myRows.length}
@@ -331,10 +331,35 @@
 		</section>
 	{/if}
 
+	{#if mySet?.size}
+		<NewsFeed
+			players={mySet}
+			mine={mySet}
+			compact
+			limit={8}
+			title="Roster news"
+			sub="Headlines and injury report updates for the players on your team."
+			more="{base}/news/?view=mine"
+			empty="No news or injury updates for your players right now."
+		/>
+	{:else}
+		<NewsFeed
+			filter={fantasyRelevant}
+			compact
+			limit={8}
+			title="Fantasy news"
+			sub={fantasy.league
+				? 'Player headlines and skill-position injury updates. Pick your team above to see news for your roster.'
+				: 'Player headlines and skill-position injury updates. Connect your league to see news for your roster.'}
+		/>
+	{/if}
+
 	<section class="card">
 		<div class="card-head">
 			<h2>Leaderboard</h2>
-			<span class="muted small">{label} · regular season</span>
+			<span class="muted small"
+				>{label} · {lineup.teams} teams{fantasy.league ? '' : ' (typical lineup)'} · regular season</span
+			>
 		</div>
 		<DataTable
 			{rows}
@@ -347,28 +372,36 @@
 		/>
 	</section>
 
-	<div class="grid-2">
+	<div class="grid-2" bind:clientWidth={pairW}>
 		<section class="card">
-			<h2>Where the value is</h2>
-			<p class="sub">
-				Points per game by rank at each position. Dots mark the last weekly starter in a league this
-				size: a steep curve before the dot means scarce talent worth drafting early; a flat one
-				means you can wait.
-			</p>
-			<PlotFigure label="Fantasy points per game by positional rank" render={curveChart} />
+			<div bind:clientHeight={valueH}>
+				<h2>Where the value is</h2>
+				<p class="sub">
+					Points per game by rank at each position. Dots mark the last weekly starter in a league
+					this size: a steep curve before the dot means scarce talent worth drafting early; a flat
+					one means you can wait.
+				</p>
+				<PlotFigure
+					label="Fantasy points per game by positional rank"
+					render={curveChart}
+					minHeight={CURVE_H + 30}
+				/>
+			</div>
 		</section>
 		<section class="card">
-			<h2>Matchups: points allowed</h2>
-			<p class="sub">
-				Fantasy points per game each defense allowed to each position, under your scoring. The
-				stronger the shading, the more it gives up: a better matchup for your players.
-			</p>
+			<div bind:clientHeight={headH}>
+				<h2>Matchups: points allowed</h2>
+				<p class="sub">
+					Fantasy points per game each defense allowed to each position, under your scoring. The
+					stronger the shading, the more it gives up: a better matchup for your players.
+				</p>
+			</div>
 			<DataTable
 				rows={allowedRows}
 				columns={allowedCols}
 				sortKey="RB"
 				showIndex={false}
-				maxHeight="460px"
+				maxHeight={tableCap}
 				filename="fantasy-points-allowed-{prefs.season}"
 				href={(r) => `${base}/team/?t=${r.team}`}
 			/>
@@ -398,10 +431,6 @@
 		font-size: 0.9rem;
 		color: var(--text-secondary);
 		cursor: pointer;
-	}
-	.small-value {
-		font-size: 1.15rem;
-		line-height: 1.35;
 	}
 	.roster {
 		list-style: none;

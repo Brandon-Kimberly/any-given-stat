@@ -45,15 +45,17 @@
 			width,
 			height: Math.min(520, Math.max(340, width * 0.6)),
 			style: plotStyle,
-			x: { label: 'Target share →', tickFormat: '.0%' },
-			y: { label: '↑ Air yards share', tickFormat: '.0%' },
+			// Margin + insets keep names on edge dots inside the card and off the tick labels.
+			marginRight: narrow ? 24 : 48,
+			x: { label: 'Target share →', tickFormat: '.0%', inset: narrow ? 18 : 28 },
+			y: { label: '↑ Air yards share', tickFormat: '.0%', insetTop: 16, insetBottom: 8 },
 			marks: [
 				gridX(),
 				gridY(),
 				Plot.dot(data, {
 					x: 'target_share',
 					y: 'air_yards_share',
-					r: narrow ? 3.5 : 4.5,
+					r: narrow ? 4 : 4.5,
 					fill: (d: Receiver) => teamColor(d.team),
 					fillOpacity: 0.85,
 					stroke: 'var(--surface)',

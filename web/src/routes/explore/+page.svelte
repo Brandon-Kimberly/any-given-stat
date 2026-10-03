@@ -15,10 +15,12 @@
 	let busy = $state(false);
 	let engine = $state<'idle' | 'loading' | 'ready'>('idle');
 
+	// Open with an answer, not an empty box: run the first preset on the latest complete season.
 	load('meta').then((m) => {
 		meta = m;
 		const complete = m.seasons.filter((s) => s.complete).map((s) => s.season);
 		picked = [complete.at(-1) ?? m.seasons.at(-1)!.season];
+		if (!result && !busy) execute();
 	});
 
 	const files = $derived(
@@ -235,6 +237,18 @@
 					{/if}
 				</div>
 				<PlotFigure label="Chart of query result" render={chart} />
+			</div>
+		{/if}
+
+		{#if !result && !error}
+			<!-- Reserved space while the first preset runs on load. -->
+			<div class="card pending" aria-live="polite">
+				<p class="muted small">
+					{busy || !meta
+						? `Running “${presets.find((p) => p.sql === sql)?.title ?? 'your query'}”…`
+						: 'Pick a preset or write a query, then Run.'}
+				</p>
+				<div class="skeleton" style="height: 220px"></div>
 			</div>
 		{/if}
 

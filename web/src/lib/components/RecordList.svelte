@@ -6,12 +6,16 @@
 		title: string;
 		sub: string;
 		stat: string;
+		/** Hover text for the row link (e.g. the full play description behind a summary). */
+		tip?: string;
 	}
 </script>
 
 <script lang="ts">
-	// A ranked leaderboard: #1 as a medal row, then the rest, with a show-all toggle.
+	// A ranked leaderboard: #1 as a medal row, then the rest, with a show-all toggle. Phones
+	// start with 5 rows so a page of lists stays scannable.
 	import { base } from '$app/paths';
+	import { MediaQuery } from 'svelte/reactivity';
 	import TeamBadge from './TeamBadge.svelte';
 
 	let {
@@ -21,7 +25,9 @@
 		show = 10
 	}: { title: string; blurb: string; items: RecordItem[]; show?: number } = $props();
 	let all = $state(false);
-	const shown = $derived(all ? items : items.slice(0, show));
+	const narrow = new MediaQuery('max-width: 560px');
+	const limit = $derived(narrow.current ? Math.min(5, show) : show);
+	const shown = $derived(all ? items : items.slice(0, limit));
 </script>
 
 <section class="card rl">
@@ -31,7 +37,7 @@
 		{#each shown as it, i (it.key)}
 			<li class:first={i === 0} style:animation-delay="{Math.min(i, 12) * 30}ms">
 				<span class="rank">{i + 1}</span>
-				<a href="{base}{it.href}">
+				<a href="{base}{it.href}" title={it.tip}>
 					{#if it.team}<TeamBadge team={it.team} size={i === 0 ? 'md' : 'sm'} />{/if}
 					<span class="txt">
 						<span class="t">{it.title}</span>
@@ -42,7 +48,7 @@
 			</li>
 		{/each}
 	</ol>
-	{#if items.length > show}
+	{#if items.length > limit}
 		<button class="ghost more" onclick={() => (all = !all)}
 			>{all ? 'Show fewer' : `Show all ${items.length}`}</button
 		>
@@ -135,10 +141,10 @@
 		margin-top: 0.5rem;
 		font-size: 0.85rem;
 	}
+	/* Transform only: faded text would fail contrast while it animates. */
 	@keyframes row-in {
 		from {
-			opacity: 0;
-			transform: translateY(4px);
+			transform: translateY(6px);
 		}
 	}
 </style>

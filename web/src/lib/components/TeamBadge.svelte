@@ -7,12 +7,15 @@
 		team,
 		name = false,
 		size = 'sm',
-		link = false
+		link = false,
+		season
 	}: {
 		team: string;
 		name?: boolean | 'nick';
 		size?: 'sm' | 'md' | 'lg';
 		link?: boolean;
+		/** Open the team page at this season (else the site's current season). */
+		season?: number | null;
 	} = $props();
 
 	const meta = $derived(teamMeta.byTeam[team]);
@@ -21,7 +24,11 @@
 </script>
 
 {#if link}
-	<a class="team {size}" href="{base}/team/?t={team}" title={meta?.name ?? team}>
+	<a
+		class="team {size}"
+		href="{base}/team/?t={team}{season ? `&season=${season}` : ''}"
+		title={meta?.name ?? team}
+	>
 		<span class="badge" class:fav={favorite.team === team} {style}>{team}</span>{#if name}<span
 				class="name">{label}</span
 			>{/if}
