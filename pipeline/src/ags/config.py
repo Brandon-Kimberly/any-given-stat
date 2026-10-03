@@ -25,7 +25,8 @@ PLAYER_IDS_URL = (
 
 # Bump when the build writes new datasets the site needs: `ags up` rebuilds older data.
 # 2: box scores in per-game files, fantasy/<season>.json, fantasy_ids.json.
-DATA_VERSION = 2
+# 3: team logo tiles (/data/logos) and player headshots in players.json.
+DATA_VERSION = 3
 
 # CPOE / xYAC / xpass exist from 2006 on; 2016+ keeps downloads (~20MB/season) reasonable.
 DEFAULT_FIRST_SEASON = 2016

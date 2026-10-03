@@ -1,11 +1,14 @@
 <script lang="ts">
+	import '@fontsource-variable/inter/opsz.css';
+	import '@fontsource-variable/archivo/wdth.css';
 	import '../app.css';
-	import { afterNavigate, replaceState } from '$app/navigation';
+	import { afterNavigate, onNavigate, replaceState } from '$app/navigation';
 	import { base } from '$app/paths';
 	import { navigating, page } from '$app/state';
 	import CommandPalette from '$lib/components/CommandPalette.svelte';
 	import Shortcuts from '$lib/components/Shortcuts.svelte';
 	import BackToTop from '$lib/components/BackToTop.svelte';
+	import { startMotion } from '$lib/motion';
 	import { pushRecent } from '$lib/recent';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import SyncControl from '$lib/components/SyncControl.svelte';
@@ -43,6 +46,21 @@
 
 	const path = $derived(page.url.pathname.slice(base.length) || '/');
 	const activeGroup = $derived(groupFor(path));
+	let scrollY = $state(0);
+	$effect(() => startMotion());
+
+	// Page-to-page navigation crossfades (View Transitions; the header stays put). Same-page
+	// changes (filters, seasons, another game) stay instant.
+	onNavigate((nav) => {
+		if (!document.startViewTransition || nav.from?.url.pathname === nav.to?.url.pathname) return;
+		if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+		return new Promise((resolve) => {
+			document.startViewTransition(async () => {
+				resolve();
+				await nav.complete;
+			});
+		});
+	});
 	const latest = $derived(meta?.seasons.at(-1));
 
 	// Keep ?season=&scope= in the address bar so any view can be shared as a link.
@@ -91,7 +109,7 @@
 	}
 </script>
 
-<svelte:window onclick={onWindowClick} onkeydown={onWindowKey} />
+<svelte:window onclick={onWindowClick} onkeydown={onWindowKey} bind:scrollY />
 
 <svelte:head>
 	<title>Any Given Stat</title>
@@ -99,33 +117,35 @@
 
 <a class="skip" href="#main">Skip to content</a>
 
-<header>
+<header class:scrolled={scrollY > 8}>
 	{#if navigating.to}<div class="nav-progress" aria-hidden="true"></div>{/if}
 	<div class="bar">
 		<a class="brand" href="{base}/" aria-label="Any Given Stat home">
 			<svg viewBox="0 0 32 32" aria-hidden="true"
 				><rect width="32" height="32" rx="8" fill="url(#g)" /><defs
 					><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"
-						><stop offset="0" stop-color="#1c5cab" /><stop
-							offset="1"
-							stop-color="#0f2a4f"
-						/></linearGradient
+						><stop offset="0" stop-color="#2a78d6" /><stop
+							offset="0.55"
+							stop-color="#1c4f9c"
+						/><stop offset="1" stop-color="#3b2a8f" /></linearGradient
 					></defs
-				><ellipse
-					cx="16"
-					cy="16"
-					rx="10.5"
-					ry="6.5"
-					fill="none"
-					stroke="#fff"
-					stroke-width="2.2"
-					transform="rotate(-35 16 16)"
-				/><path
-					d="M12.5 19.5l7-7M13.6 15.4l3 3M15.6 13.4l3 3"
-					stroke="#fff"
-					stroke-width="1.8"
-					stroke-linecap="round"
-				/></svg
+				><g class="ball"
+					><ellipse
+						cx="16"
+						cy="16"
+						rx="10.5"
+						ry="6.5"
+						fill="none"
+						stroke="#fff"
+						stroke-width="2.2"
+						transform="rotate(-35 16 16)"
+					/><path
+						d="M12.5 19.5l7-7M13.6 15.4l3 3M15.6 13.4l3 3"
+						stroke="#fff"
+						stroke-width="1.8"
+						stroke-linecap="round"
+					/></g
+				></svg
 			>
 			<span>Any Given <b>Stat</b></span>
 		</a>
@@ -196,7 +216,7 @@
 			</button>
 			<button
 				class="icon-btn"
-				onclick={toggleTheme}
+				onclick={(e) => toggleTheme(e)}
 				aria-label={theme.dark ? 'Switch to light mode' : 'Switch to dark mode'}
 				title={theme.dark ? 'Light mode' : 'Dark mode'}
 			>
@@ -327,10 +347,12 @@
 	.nav-progress {
 		position: absolute;
 		left: 0;
-		top: 0;
+		bottom: -1px;
 		height: 3px;
 		width: 100%;
-		background: linear-gradient(90deg, var(--series-1), var(--series-3), var(--series-4));
+		background: var(--brand-gradient);
+		box-shadow: 0 0 12px color-mix(in srgb, var(--brand-b) 70%, transparent);
+		border-radius: 0 3px 3px 0;
 		transform-origin: left;
 		animation: nav-load 1.2s var(--ease) forwards;
 		animation-delay: 80ms;
@@ -342,13 +364,36 @@
 		}
 	}
 	header {
+		view-transition-name: site-header;
 		position: sticky;
 		top: 0;
 		z-index: 50;
 		background: var(--header-bg);
-		backdrop-filter: saturate(1.6) blur(14px);
-		-webkit-backdrop-filter: saturate(1.6) blur(14px);
+		backdrop-filter: saturate(1.8) blur(16px);
+		-webkit-backdrop-filter: saturate(1.8) blur(16px);
 		border-bottom: 1px solid var(--border);
+		transition:
+			box-shadow 0.25s var(--ease),
+			background 0.25s var(--ease);
+	}
+	/* Once the page scrolls, the bar lifts off it and gains a brand-gradient hairline. */
+	header::after {
+		content: '';
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: -1px;
+		height: 1px;
+		background: var(--brand-gradient);
+		opacity: 0;
+		transition: opacity 0.3s var(--ease);
+		pointer-events: none;
+	}
+	header.scrolled {
+		box-shadow: 0 8px 30px -18px rgba(0, 0, 0, 0.45);
+	}
+	header.scrolled::after {
+		opacity: 0.55;
 	}
 	.bar {
 		max-width: 1280px;
@@ -373,6 +418,21 @@
 		width: 30px;
 		height: 30px;
 		flex: none;
+		border-radius: 8px;
+		box-shadow: 0 4px 14px -6px color-mix(in srgb, var(--accent) 70%, transparent);
+		transition: transform 0.3s var(--ease);
+	}
+	.brand .ball {
+		transform-origin: 16px 16px;
+		transition: transform 0.6s cubic-bezier(0.3, 1.4, 0.5, 1);
+	}
+	@media (prefers-reduced-motion: no-preference) {
+		.brand:hover svg {
+			transform: translateY(-1px) scale(1.05);
+		}
+		.brand:hover .ball {
+			transform: rotate(360deg);
+		}
 	}
 	.brand b {
 		font-weight: 800;
@@ -417,8 +477,17 @@
 	.menu-btn.current {
 		color: var(--text-primary);
 		font-weight: 650;
-		box-shadow: inset 0 -2px 0 var(--accent);
-		border-radius: 8px 8px 2px 2px;
+		position: relative;
+	}
+	.menu-btn.current::after {
+		content: '';
+		position: absolute;
+		left: 0.6rem;
+		right: 0.6rem;
+		bottom: -2px;
+		height: 2px;
+		border-radius: 2px;
+		background: var(--brand-gradient);
 	}
 	.panel {
 		position: absolute;
@@ -426,13 +495,16 @@
 		left: 0;
 		min-width: 300px;
 		padding: 0.4rem;
-		background: var(--surface);
+		background: color-mix(in srgb, var(--surface) 86%, transparent);
+		backdrop-filter: blur(18px) saturate(1.6);
+		-webkit-backdrop-filter: blur(18px) saturate(1.6);
 		border: 1px solid var(--border-strong);
 		border-radius: 14px;
 		box-shadow: var(--shadow-md);
 		display: grid;
 		gap: 2px;
-		animation: drop 0.16s var(--ease);
+		transform-origin: top left;
+		animation: drop 0.22s cubic-bezier(0.2, 1.2, 0.4, 1);
 	}
 	.panel a {
 		display: grid;
@@ -607,8 +679,33 @@
 		gap: 1.1rem;
 	}
 	footer {
+		position: relative;
 		border-top: 1px solid var(--border);
-		background: var(--surface);
+		background:
+			radial-gradient(
+				60% 120% at 50% 0%,
+				color-mix(in srgb, var(--accent) 7%, transparent),
+				transparent 70%
+			),
+			var(--surface);
+	}
+	/* A brand-gradient seam along the top of the footer. */
+	footer::before {
+		content: '';
+		position: absolute;
+		left: 10%;
+		right: 10%;
+		top: -1px;
+		height: 1px;
+		background: linear-gradient(
+			90deg,
+			transparent,
+			var(--brand-a),
+			var(--brand-b),
+			var(--brand-c),
+			transparent
+		);
+		opacity: 0.7;
 	}
 	.sitemap {
 		max-width: 1280px;
@@ -681,7 +778,7 @@
 	@keyframes drop {
 		from {
 			opacity: 0;
-			transform: translateY(-4px);
+			transform: translateY(-6px) scale(0.97);
 		}
 	}
 	@keyframes slide {

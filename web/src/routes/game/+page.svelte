@@ -11,6 +11,7 @@
 	import PlotFigure from '$lib/components/Plot.svelte';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import TeamBadge from '$lib/components/TeamBadge.svelte';
+	import TeamLogo from '$lib/components/TeamLogo.svelte';
 	import { epa, num, pct, signed, spread } from '$lib/format';
 	import {
 		elapsedAt,
@@ -211,7 +212,8 @@
 					y2: (d) => Math.max(d.wp, 0.5),
 					fill: hc,
 					fillOpacity: fade,
-					curve: 'step-after'
+					curve: 'step-after',
+					className: 'wp-area-home'
 				}),
 				Plot.areaY(pts, {
 					x: 't',
@@ -219,7 +221,8 @@
 					y2: (d) => Math.min(d.wp, 0.5),
 					fill: ac,
 					fillOpacity: fade,
-					curve: 'step-after'
+					curve: 'step-after',
+					className: 'wp-area-away'
 				}),
 				Plot.ruleY([0.5], { stroke: 'var(--axis)', strokeWidth: 1.5 }),
 				Plot.line(pts, {
@@ -292,6 +295,49 @@
 		});
 		const x = chart.scale('x');
 		wpX = x?.apply ? (v: number) => x.apply!(v) as number : null;
+		// Gradient fills: each side is strongest at certainty and fades into the 50% line.
+		const yS = chart.scale('y');
+		if (yS?.apply) {
+			const y = (v: number) => yS.apply!(v) as number;
+			const ns = 'http://www.w3.org/2000/svg';
+			const svg = chart.tagName.toLowerCase() === 'svg' ? chart : chart.querySelector('svg');
+			const defs = document.createElementNS(ns, 'defs');
+			const uid = Math.random().toString(36).slice(2, 8);
+			const gradient = (id: string, color: string, from: number, to: number) => {
+				const g = document.createElementNS(ns, 'linearGradient');
+				g.setAttribute('id', id);
+				g.setAttribute('gradientUnits', 'userSpaceOnUse');
+				g.setAttribute('x1', '0');
+				g.setAttribute('x2', '0');
+				g.setAttribute('y1', String(y(from)));
+				g.setAttribute('y2', String(y(to)));
+				const strong = Math.min(0.75, fade * 2.6);
+				for (const [offset, op] of [
+					['0', strong],
+					['1', fade * 0.25]
+				] as const) {
+					const stop = document.createElementNS(ns, 'stop');
+					stop.setAttribute('offset', offset);
+					// Style, not attributes: the color may be a CSS variable (series fallback).
+					stop.style.stopColor = color;
+					stop.style.stopOpacity = String(op);
+					g.appendChild(stop);
+				}
+				defs.appendChild(g);
+			};
+			gradient(`wp-h-${uid}`, hc, 1, 0.5);
+			gradient(`wp-a-${uid}`, ac, 0, 0.5);
+			svg?.prepend(defs);
+			for (const [cls, id] of [
+				['wp-area-home', `wp-h-${uid}`],
+				['wp-area-away', `wp-a-${uid}`]
+			]) {
+				for (const path of chart.querySelectorAll(`.${cls} path`)) {
+					path.setAttribute('fill', `url(#${id})`);
+					path.setAttribute('fill-opacity', '1');
+				}
+			}
+		}
 		return chart;
 	}
 
@@ -355,7 +401,7 @@
 		No game with id <code>{id}</code>. <a href="{base}/games/">Browse games</a>.
 	</div>
 {:else}
-	<section class="scoreboard card">
+	<section class="scoreboard card" style:--away={sideColors.away} style:--home={sideColors.home}>
 		<div class="meta-line">
 			<a href="{base}/games/?season={season}">{season}</a> ·
 			{game?.season_type === 'POST' ? 'Playoffs' : `Week ${game?.week ?? line?.week}`}
@@ -364,21 +410,29 @@
 		</div>
 		<div class="teams">
 			<div class="side" class:dim={played && homeWon}>
-				<TeamBadge team={away} size="lg" link />
+				<a class="logo-link" href="{base}/team/?t={away}" aria-label={teamName(away)}
+					><TeamLogo team={away} size={64} /></a
+				>
 				<div>
 					<div class="name">{teamName(away)}</div>
 					<div class="muted small">Away</div>
 				</div>
-				{#if played}<div class="pts">{game?.away_score}</div>{/if}
+				{#if played}<div class="pts">
+						<CountUp text={String(game?.away_score ?? '')} duration={900} />
+					</div>{/if}
 			</div>
 			<div class="vs">{played ? 'Final' : '@'}</div>
 			<div class="side right" class:dim={played && !homeWon}>
-				{#if played}<div class="pts">{game?.home_score}</div>{/if}
+				{#if played}<div class="pts">
+						<CountUp text={String(game?.home_score ?? '')} duration={900} />
+					</div>{/if}
 				<div>
 					<div class="name">{teamName(home)}</div>
 					<div class="muted small">Home</div>
 				</div>
-				<TeamBadge team={home} size="lg" link />
+				<a class="logo-link" href="{base}/team/?t={home}" aria-label={teamName(home)}
+					><TeamLogo team={home} size={64} /></a
+				>
 			</div>
 		</div>
 		{#if line}
@@ -654,9 +708,40 @@
 		pointer-events: none;
 		box-shadow: 0 0 0 3px var(--accent-soft);
 	}
+	/* Each side of the scoreboard is lit in its team's color. */
 	.scoreboard {
 		display: grid;
 		gap: 0.9rem;
+		position: relative;
+		overflow: hidden;
+		isolation: isolate;
+	}
+	.scoreboard::before {
+		content: '';
+		position: absolute;
+		inset: 0;
+		z-index: -1;
+		background:
+			radial-gradient(
+				60% 140% at 0% 50%,
+				color-mix(in srgb, var(--away) 22%, transparent),
+				transparent 70%
+			),
+			radial-gradient(
+				60% 140% at 100% 50%,
+				color-mix(in srgb, var(--home) 22%, transparent),
+				transparent 70%
+			);
+		pointer-events: none;
+	}
+	.logo-link {
+		display: block;
+		border-radius: 24%;
+	}
+	@media (prefers-reduced-motion: no-preference) {
+		.logo-link:hover :global(.logo) {
+			transform: translateY(-3px) rotate(-3deg) scale(1.05);
+		}
 	}
 	.meta-line {
 		font-size: 0.85rem;
@@ -685,9 +770,14 @@
 		font: 800 clamp(1rem, 0.8rem + 1vw, 1.4rem) var(--display);
 	}
 	.pts {
-		font: 800 clamp(2rem, 1.4rem + 3vw, 3.25rem) / 1 var(--display);
+		font: 800 clamp(2.4rem, 1.5rem + 3.6vw, 4rem) / 1 var(--display);
+		font-stretch: 112%;
 		font-variant-numeric: tabular-nums;
+		letter-spacing: -0.03em;
 		margin: 0 0.5rem;
+	}
+	.side:not(.dim) .pts {
+		text-shadow: 0 6px 30px color-mix(in srgb, var(--accent) 35%, transparent);
 	}
 	.side:not(.right) .pts {
 		margin-left: auto;
@@ -696,10 +786,14 @@
 		margin-right: auto;
 	}
 	.vs {
-		font: 700 0.8rem var(--display);
+		font: 700 0.72rem var(--display);
 		text-transform: uppercase;
-		letter-spacing: 0.08em;
-		color: var(--text-muted);
+		letter-spacing: 0.12em;
+		color: var(--text-secondary);
+		padding: 0.25rem 0.6rem;
+		border: 1px solid var(--border-strong);
+		border-radius: 999px;
+		background: var(--surface-2);
 	}
 	@media (max-width: 640px) {
 		.teams {

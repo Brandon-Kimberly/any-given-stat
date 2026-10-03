@@ -8,6 +8,8 @@
 	import { teamMeta } from '$lib/teams.svelte';
 	import { readRecent } from '$lib/recent';
 	import { toggleTheme } from '$lib/theme.svelte';
+	import Avatar from './Avatar.svelte';
+	import TeamLogo from './TeamLogo.svelte';
 	import { copyLink } from '$lib/toast.svelte';
 
 	let { open = $bindable(false) }: { open?: boolean } = $props();
@@ -20,6 +22,10 @@
 		run?: () => void;
 		/** Lowercased text the query matches against. */
 		key: string;
+		/** Team code: a logo tile for teams, the ring color for players. */
+		team?: string;
+		/** Player headshot (players.json). */
+		photo?: string | null;
 	}
 
 	let query = $state('');
@@ -42,7 +48,7 @@
 			detail: 'Shortcut: t',
 			href: '#theme',
 			key: 'toggle dark light mode theme',
-			run: toggleTheme
+			run: () => toggleTheme()
 		},
 		{
 			kind: 'Action',
@@ -70,7 +76,8 @@
 			label: t.name,
 			detail: `${t.team} · ${t.division}`,
 			href: `/team/?t=${t.team}`,
-			key: `${t.team} ${t.name} ${t.nick}`.toLowerCase()
+			key: `${t.team} ${t.name} ${t.nick}`.toLowerCase(),
+			team: t.team
 		}))
 	);
 
@@ -78,11 +85,13 @@
 		if (loadedPlayers) return;
 		loadedPlayers = true;
 		// Latest season each player appears in, from the three player datasets.
-		const [qbs, rec, rush] = await Promise.all([
+		const [qbs, rec, rush, directory] = await Promise.all([
 			load('qbs').catch(() => []),
 			load('receivers').catch(() => []),
-			load('rushers').catch(() => [])
+			load('rushers').catch(() => []),
+			load('players').catch(() => [])
 		]);
+		const photos = new Map(directory.map((d) => [d.player_id, d.headshot]));
 		const best = new Map<string, { name: string; team: string; season: number; role: string }>();
 		const add = (id: string, name: string, team: string, season: number, role: string) => {
 			const cur = best.get(id);
@@ -98,7 +107,9 @@
 			label: p.name,
 			detail: `${p.role} · ${p.team} · last seen ${p.season}`,
 			href: `/player/?id=${id}`,
-			key: p.name.toLowerCase()
+			key: p.name.toLowerCase(),
+			team: p.team,
+			photo: photos.get(id) ?? null
 		}));
 	}
 
@@ -227,6 +238,16 @@
 						onmouseenter={() => (active = i)}
 						onclick={() => choose(r)}
 					>
+						<span class="media" aria-hidden="true">
+							{#if r.photo !== undefined}<Avatar
+									name={r.label}
+									src={r.photo}
+									team={r.team}
+									size={34}
+								/>
+							{:else if r.team}<TeamLogo team={r.team} size={34} glow={false} />
+							{:else}<span class="glyph">{r.kind === 'Action' ? '›' : '#'}</span>{/if}
+						</span>
 						<span class="kind">{r.kind}</span>
 						<span class="label">{r.label}</span>
 						<span class="detail">{r.detail}</span>
@@ -247,8 +268,8 @@
 		position: fixed;
 		inset: 0;
 		z-index: 100;
-		background: rgba(5, 10, 20, 0.45);
-		backdrop-filter: blur(4px);
+		background: rgba(5, 10, 20, 0.5);
+		backdrop-filter: blur(6px);
 		display: grid;
 		justify-items: center;
 		align-items: start;
@@ -257,12 +278,16 @@
 	}
 	.palette {
 		width: min(640px, 100%);
-		background: var(--surface);
+		background: color-mix(in srgb, var(--surface) 90%, transparent);
+		backdrop-filter: blur(24px) saturate(1.6);
+		-webkit-backdrop-filter: blur(24px) saturate(1.6);
 		border: 1px solid var(--border-strong);
-		border-radius: 16px;
-		box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.5);
+		border-radius: 18px;
+		box-shadow:
+			0 40px 100px -24px rgba(0, 0, 0, 0.6),
+			0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
 		overflow: hidden;
-		animation: pop 0.18s var(--ease);
+		animation: pop 0.26s cubic-bezier(0.2, 1.2, 0.4, 1);
 	}
 	.search {
 		display: flex;
@@ -299,25 +324,55 @@
 		overflow-y: auto;
 	}
 	li {
+		position: relative;
 		display: grid;
-		grid-template-columns: 4.2rem 1fr;
-		grid-template-areas: 'kind label' 'kind detail';
-		column-gap: 0.6rem;
-		padding: 0.5rem 0.65rem;
+		grid-template-columns: 2.4rem 1fr auto;
+		grid-template-areas: 'media label kind' 'media detail kind';
+		column-gap: 0.7rem;
+		align-items: center;
+		padding: 0.45rem 0.65rem;
 		border-radius: 10px;
 		cursor: pointer;
 	}
 	li.active {
 		background: var(--accent-soft);
 	}
+	li.active::before {
+		content: '';
+		position: absolute;
+		left: 0;
+		top: 22%;
+		bottom: 22%;
+		width: 3px;
+		border-radius: 3px;
+		background: var(--brand-gradient);
+	}
+	.media {
+		grid-area: media;
+		display: grid;
+		place-items: center;
+	}
+	.glyph {
+		display: grid;
+		place-items: center;
+		width: 34px;
+		height: 34px;
+		border-radius: 10px;
+		background: var(--surface-2);
+		border: 1px solid var(--border);
+		font-weight: 700;
+		color: var(--accent-ink);
+	}
 	.kind {
 		grid-area: kind;
-		align-self: center;
-		font-size: 0.68rem;
+		font-size: 0.66rem;
 		font-weight: 700;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
 		color: var(--text-muted);
+		padding: 0.1rem 0.45rem;
+		border: 1px solid var(--border);
+		border-radius: 999px;
 	}
 	.label {
 		grid-area: label;
@@ -349,7 +404,7 @@
 	@keyframes pop {
 		from {
 			opacity: 0;
-			transform: translateY(-6px) scale(0.98);
+			transform: translateY(-10px) scale(0.96);
 		}
 	}
 </style>

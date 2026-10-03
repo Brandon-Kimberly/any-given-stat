@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { base } from '$app/paths';
 	import { page } from '$app/state';
+	import Avatar from '$lib/components/Avatar.svelte';
 	import DataTable, { type Column } from '$lib/components/DataTable.svelte';
 	import PlayerFantasy from '$lib/components/PlayerFantasy.svelte';
 	import PlotFigure from '$lib/components/Plot.svelte';
@@ -436,6 +437,7 @@
 {:else}
 	<section class="card head" style="--team: {teamColor(lastTeam)}">
 		<div class="stripe"></div>
+		<Avatar {name} src={info?.headshot} team={lastTeam} size={92} />
 		<div class="who">
 			<div class="eyebrow">
 				{info?.position ?? (role === 'QB' ? 'QB' : role === 'REC' ? 'Receiver' : 'Rusher')}
@@ -584,10 +586,36 @@
 {/if}
 
 <style>
+	/* Player banner: headshot (or initials) in a team-colored ring, the team's glow behind. */
 	.head {
 		position: relative;
 		overflow: hidden;
-		padding-left: 1.6rem;
+		isolation: isolate;
+		display: flex;
+		align-items: center;
+		gap: 1.25rem;
+		padding: 1.25rem 1.25rem 1.25rem 1.6rem;
+	}
+	.head::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		z-index: -1;
+		background: radial-gradient(
+			70% 160% at 0% 50%,
+			color-mix(in srgb, var(--team) 24%, transparent),
+			transparent 70%
+		);
+		pointer-events: none;
+	}
+	.head h1 {
+		font-size: clamp(1.8rem, 1.2rem + 2.4vw, 2.8rem);
+		font-stretch: 116%;
+	}
+	@media (max-width: 480px) {
+		.head :global(.avatar) {
+			--size: 64px !important;
+		}
 	}
 	.stripe {
 		position: absolute;

@@ -15,7 +15,7 @@ def test_contrast_matches_wcag_reference_values():
 
 
 def test_pick_color_takes_first_readable_else_best():
-    light, dark = "#fcfcfb", "#1a1a19"
+    light, dark = "#fcfcfb", "#10141d"
     # Navy is fine on light, unreadable on dark; gold then wins on dark.
     assert pick_color(["#0b162a", "#c83803"], light) == "#0b162a"
     assert pick_color(["#0b162a", "#ffb612"], dark) == "#ffb612"

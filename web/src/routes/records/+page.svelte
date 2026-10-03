@@ -225,10 +225,23 @@
 	.jump a {
 		text-decoration: none;
 	}
+	/* Section titles with a brand-gradient rule fading out to the right. */
 	.section {
-		font-size: 1.4rem;
-		margin: 1.5rem 0 0.75rem;
+		display: flex;
+		align-items: center;
+		gap: 0.9rem;
+		font-size: 1.5rem;
+		font-stretch: 112%;
+		margin: 1.75rem 0 0.85rem;
 		scroll-margin-top: 80px;
+	}
+	.section::after {
+		content: '';
+		flex: 1;
+		height: 2px;
+		border-radius: 2px;
+		background: linear-gradient(90deg, var(--brand-a), var(--brand-b) 30%, transparent);
+		opacity: 0.6;
 	}
 	.small {
 		font-size: 0.8rem;

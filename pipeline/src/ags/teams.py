@@ -12,7 +12,7 @@ import duckdb
 from .db import has_relation, records
 
 LIGHT_BG = "#fcfcfb"
-DARK_BG = "#1a1a19"
+DARK_BG = "#10141d"  # web app.css dark --surface
 MIN_CONTRAST = 2.0
 BADGE_LIGHT_FG = "#ffffff"
 BADGE_DARK_FG = "#0b0b0b"

@@ -70,9 +70,9 @@
 		busy = true;
 		try {
 			download(await chartPng(el, label), `${slug(label)}.png`);
-			toast.show('Chart saved as PNG');
+			toast.show('Chart saved as PNG', 2200, 'ok');
 		} catch (e) {
-			toast.show(e instanceof Error ? e.message : 'Export failed');
+			toast.show(e instanceof Error ? e.message : 'Export failed', 3000, 'error');
 		} finally {
 			busy = false;
 		}

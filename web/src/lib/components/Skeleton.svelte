@@ -3,7 +3,7 @@
 	let { rows = 3, height = 220 }: { rows?: number; height?: number } = $props();
 </script>
 
-<div class="wrap" aria-busy="true" aria-label="Loading">
+<div class="wrap" role="status" aria-busy="true" aria-label="Loading">
 	<div class="skeleton" style="height: 28px; width: 40%"></div>
 	<div class="skeleton" style="height: {height}px"></div>
 	{#each Array(rows) as _, i (i)}

@@ -550,9 +550,24 @@ def web_build_stale(web_dir: Path = WEB_DIR) -> bool:
     return newest_input_mtime(web_dir) > index.stat().st_mtime
 
 
+def deps_stale(web_dir: Path = WEB_DIR) -> bool:
+    """True when node_modules is missing or older than package.json / package-lock.json.
+
+    npm records each install in node_modules/.package-lock.json; a ``git pull`` that adds a
+    dependency leaves the lockfile newer than that record, so the build would fail to
+    resolve the new package without an install first.
+    """
+    stamp = web_dir / "node_modules" / ".package-lock.json"
+    if not stamp.exists():
+        return True
+    manifests = [web_dir / n for n in ("package.json", "package-lock.json")]
+    newest = max((m.stat().st_mtime for m in manifests if m.exists()), default=0.0)
+    return newest > stamp.stat().st_mtime
+
+
 def ensure_web_build(web_dir: Path = WEB_DIR) -> None:
     npm = shutil.which("npm")
-    needs_install = not (web_dir / "node_modules").is_dir()
+    needs_install = deps_stale(web_dir)
     stale = web_build_stale(web_dir)
     if not (needs_install or stale):
         return
@@ -563,6 +578,10 @@ def ensure_web_build(web_dir: Path = WEB_DIR) -> None:
     if needs_install:
         print("Installing web dependencies (npm install)...", flush=True)
         _run([npm, "install"], web_dir, env)
+        # npm may leave its record untouched when nothing changed; mark this install done.
+        stamp = web_dir / "node_modules" / ".package-lock.json"
+        if stamp.exists():
+            os.utime(stamp)
     if stale or needs_install:
         print("Building the web app (npm run build, about a minute)...", flush=True)
         _run([npm, "run", "build"], web_dir, env)

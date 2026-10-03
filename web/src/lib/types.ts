@@ -301,6 +301,8 @@ export interface TeamMeta {
 	color_light: string;
 	color_dark: string;
 	badge_fg: string;
+	/** Logo tile under /data (logos/<TEAM>.png) when the build could fetch it. */
+	logo?: string;
 }
 
 export interface Player {
@@ -313,6 +315,8 @@ export interface Player {
 	draft_round: number | null;
 	draft_pick: number | null;
 	college: string | null;
+	/** NFL.com headshot URL (loaded by the browser; may be missing or blocked). */
+	headshot: string | null;
 }
 
 export interface Concepts {

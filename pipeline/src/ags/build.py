@@ -6,6 +6,7 @@ import contextlib
 import datetime as dt
 import json
 import math
+import shutil
 import sys
 import time
 from decimal import Decimal
@@ -28,7 +29,7 @@ from . import (
     sim,
     statlines,
 )
-from .config import CACHE_DIR, DATA_VERSION, OUT_DIR
+from .config import CACHE_DIR, DATA_VERSION, OUT_DIR, RAW_DIR
 from .db import has_relation
 from .teams import teams_meta
 
@@ -200,6 +201,14 @@ def build_all(con: duckdb.DuckDBPyConnection, out_dir: Path = OUT_DIR, explorer:
     team_meta = teams_meta(con)
     if not team_meta:
         print("teams_colors_logos.csv missing: teams_meta.json is empty", file=sys.stderr)
+    # Logo tiles fetched into data/raw/logos (fetch.fetch_logos) are served with the data.
+    logos = RAW_DIR / "logos"
+    for t in team_meta:
+        src = logos / f"{t['team']}.png"
+        if src.exists():
+            (out_dir / "logos").mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(src, out_dir / "logos" / src.name)
+            t["logo"] = f"logos/{src.name}"
     write_json(out_dir / "teams_meta.json", team_meta)
     write_json(out_dir / "stability.json", datasets.stability(con, complete))
     write_json(out_dir / "concepts.json", datasets.concepts(con, reference))
