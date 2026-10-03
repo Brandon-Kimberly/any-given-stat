@@ -139,6 +139,12 @@
 		setTimeout(() => URL.revokeObjectURL(url), 1000);
 	}
 
+	/** A row's own season (season-by-season tables), so team links open that season. */
+	const rowSeason = (row: T): number | undefined => {
+		const s = (row as Record<string, unknown>).season;
+		return typeof s === 'number' ? s : undefined;
+	};
+
 	function rowClick(e: MouseEvent, row: T) {
 		if ((e.target as HTMLElement).closest('a, button')) return; // the cell control handles it
 		const url = href?.(row);
@@ -209,7 +215,7 @@
 									>{#if c.team}<TeamBadge team={row[c.key]} />{:else}{text}{/if}</button
 								>
 							{:else if c.team && row[c.key]}
-								<TeamBadge team={row[c.key]} />
+								<TeamBadge team={row[c.key]} link season={rowSeason(row)} />
 							{:else}
 								{text}
 							{/if}

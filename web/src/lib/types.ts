@@ -197,6 +197,34 @@ export interface GamePrediction {
 	result?: number;
 	/** Market blend (line + k * (model - line)): the best single estimate. */
 	blend?: number;
+	/** The blend as a home win probability (upcoming games). */
+	blend_wp?: number | null;
+	/** Local kickoff time, "HH:MM" (upcoming games). */
+	gametime?: string | null;
+}
+
+/** schedule/<season>.json: every game of a season, played or not (nflverse schedule). */
+export interface ScheduleGame {
+	game_id: string;
+	season: number;
+	game_type: 'REG' | 'WC' | 'DIV' | 'CON' | 'SB' | string;
+	week: number;
+	gameday: string;
+	gametime: string | null;
+	away: string;
+	home: string;
+	away_score: number | null;
+	home_score: number | null;
+	/** Home margin; null until played. */
+	result: number | null;
+	/** Closing line, home margin (positive = home favored). */
+	vegas: number | null;
+	roof: string | null;
+	stadium: string | null;
+	neutral: boolean;
+	away_coach: string | null;
+	home_coach: string | null;
+	referee: string | null;
 }
 
 export interface BacktestStats {
@@ -231,6 +259,8 @@ export interface Predictions {
 	by_season: (BacktestStats & { season: number })[];
 	games: (GamePrediction & { result: number })[];
 	upcoming: GamePrediction[];
+	/** Each team's next game when it has none in `upcoming` (a bye, or it played Thursday). */
+	next_games?: GamePrediction[];
 }
 
 export interface Rating {

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { ratingsWeek } from '$lib/season';
 	import { goto } from '$app/navigation';
 	import { base } from '$app/paths';
 	import CountUp from '$lib/components/CountUp.svelte';
@@ -67,7 +68,12 @@
 
 	// Power ratings after the last completed week.
 	const seasonRatings = $derived((ratingsRes.value ?? []).filter((r) => r.season === prefs.season));
-	const lastWeek = $derived(Math.max(0, ...seasonRatings.map((r) => r.week)));
+	const lastWeek = $derived(
+		ratingsWeek(
+			seasonRatings.map((r) => r.week),
+			status
+		)
+	);
 	const latest = $derived(
 		new Map(seasonRatings.filter((r) => r.week === lastWeek).map((r) => [r.team, r]))
 	);

@@ -11,7 +11,7 @@ from dataclasses import dataclass
 import duckdb
 
 from .config import ONE_SCORE_MARGIN, PYTHAG_EXPONENT
-from .db import records
+from .db import has_relation, records
 
 # name -> SQL aggregate over scoped_plays rows for one team on one side of the ball.
 TEAM_PLAY_METRICS: dict[str, str] = {
@@ -852,3 +852,27 @@ def concepts(con: duckdb.DuckDBPyConnection, seasons: list[int]) -> dict:
         "epa_hist": epa_hist,
         "fourth": {"conversion": conversion, "field_goals": field_goals},
     }
+
+
+def schedule(con: duckdb.DuckDBPyConnection) -> list[dict]:
+    """Every game of every loaded season, played or not (nflverse schedule): the team page's
+    full schedule and the home page's kickoff times. Team codes match play-by-play."""
+    if not has_relation(con, "schedule"):
+        return []
+    seasons = [r[0] for r in con.execute("select distinct season from pbp").fetchall()]
+    return records(
+        con,
+        """
+        select game_id, season, game_type, week, gameday,
+               substr(cast(gametime as varchar), 1, 5) as gametime,
+               away_team as away, home_team as home,
+               away_score, home_score, result,
+               spread_line as vegas, roof, stadium,
+               location = 'Neutral' as neutral,
+               away_coach, home_coach, referee
+        from schedule
+        where season in (select unnest(?::int[]))
+        order by season, gameday, gametime, game_id
+        """,
+        [seasons],
+    )

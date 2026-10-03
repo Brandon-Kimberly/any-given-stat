@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { ratingsWeek } from '$lib/season';
 	import { base } from '$app/paths';
 	import Controls from '$lib/components/Controls.svelte';
 	import DataTable, { type Column } from '$lib/components/DataTable.svelte';
@@ -24,11 +25,7 @@
 	const status = $derived(meta?.seasons.find((s) => s.season === prefs.season));
 	// In-progress seasons stop at the last fully played week (a lone Thursday game
 	// doesn't move ratings); the slider can still reach the week under way.
-	const lastWeek = $derived(
-		status && !status.complete
-			? (weeks.filter((w) => w <= status.last_week).at(-1) ?? weeks.at(-1) ?? 0)
-			: (weeks.at(-1) ?? 0)
-	);
+	const lastWeek = $derived(ratingsWeek(weeks, status));
 	// Scrub the table back through the season; null = latest.
 	let scrub = $state<number | null>(null);
 	const shownWeek = $derived(scrub != null && weeks.includes(scrub) ? scrub : lastWeek);

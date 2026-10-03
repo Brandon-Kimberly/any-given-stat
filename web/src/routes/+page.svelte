@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { ratingsWeek } from '$lib/season';
 	import { base } from '$app/paths';
 	import CountUp from '$lib/components/CountUp.svelte';
 	import FavoriteCard from '$lib/components/FavoriteCard.svelte';
@@ -73,11 +74,9 @@
 	// Power ratings now, and a week earlier for movers.
 	const seasonRatings = $derived((ratings.value ?? []).filter((r) => r.season === season));
 	const lastWeek = $derived(
-		Math.max(
-			0,
-			...seasonRatings
-				.map((r) => r.week)
-				.filter((w) => !inProgress || !latest || w <= latest.last_week)
+		ratingsWeek(
+			seasonRatings.map((r) => r.week),
+			latest
 		)
 	);
 	const now = $derived(

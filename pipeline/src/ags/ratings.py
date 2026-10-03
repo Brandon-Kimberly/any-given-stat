@@ -172,7 +172,8 @@ def _schedule_games(con: duckdb.DuckDBPyConnection) -> list[dict]:
     return records(
         con,
         """
-        select game_id, season, week, gameday, home_team as home, away_team as away,
+        select game_id, season, week, gameday, substr(cast(gametime as varchar), 1, 5) as gametime,
+               home_team as home, away_team as away,
                case when location = 'Neutral' then 0 else 1 end as home_ind,
                result, spread_line as vegas,
                home_qb_id as home_qb, away_qb_id as away_qb,
@@ -182,6 +183,28 @@ def _schedule_games(con: duckdb.DuckDBPyConnection) -> list[dict]:
         order by season, week, gameday, game_id
         """,
     )
+
+
+def split_upcoming(rows: list[dict]) -> tuple[list[dict], list[dict]]:
+    """(next week's games, each remaining team's next game) from unplayed game rows.
+
+    Only the next unplayed week is a real forecast; later weeks would reuse stale ratings.
+    Teams without a game that week (a bye, or they already played on Thursday) still get
+    their next game, so team cards always have a "next" to show.
+    """
+    if not rows:
+        return [], []
+    next_week = min(r["week"] for r in rows)
+    this_week = [r for r in rows if r["week"] == next_week]
+    covered = {t for r in this_week for t in (r["home"], r["away"])}
+    later: list[dict] = []
+    for r in sorted(rows, key=lambda r: (r["week"], r["gameday"] or "")):
+        if r["week"] == next_week:
+            continue
+        if r["home"] not in covered or r["away"] not in covered:
+            later.append(r)
+            covered |= {r["home"], r["away"]}
+    return this_week, later
 
 
 def evaluate(pred: np.ndarray, vegas: np.ndarray, result: np.ndarray) -> dict:
@@ -286,6 +309,7 @@ def predictions(con: duckdb.DuckDBPyConnection) -> tuple[dict, list[dict]] | Non
             "week": g["week"],
             "game_id": g["game_id"],
             "gameday": g["gameday"],
+            "gametime": g.get("gametime"),
             "home": g["home"],
             "away": g["away"],
             "neutral": not g["home_ind"],
@@ -304,10 +328,7 @@ def predictions(con: duckdb.DuckDBPyConnection) -> tuple[dict, list[dict]] | Non
         else:
             game_rows.append(row | {"result": float(result[i])})
 
-    # Only the next unplayed week is a real forecast; later weeks would reuse stale ratings.
-    if upcoming:
-        next_week = min(u["week"] for u in upcoming)
-        upcoming = [u for u in upcoming if u["week"] == next_week]
+    upcoming, next_games = split_upcoming(upcoming)
 
     span = lambda r: [min(r), max(r)]  # noqa: E731
     payload = {
@@ -326,6 +347,7 @@ def predictions(con: duckdb.DuckDBPyConnection) -> tuple[dict, list[dict]] | Non
         "by_season": by_season,
         "games": game_rows,
         "upcoming": upcoming,
+        "next_games": next_games,
     }
     return payload, weekly_ratings(rows, lam, hl, b_all[0])
 

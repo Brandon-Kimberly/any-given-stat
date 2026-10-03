@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { ratingsWeek } from '$lib/season';
 	import { base } from '$app/paths';
 	import BoxScore from '$lib/components/BoxScore.svelte';
 	import { fantasyIds, scoringLabel } from '$lib/fantasy/data.svelte';
@@ -41,6 +42,7 @@
 	const preds = resource('predictions');
 	const ratings = seasonResource<Rating>('ratings', () => season);
 	const teams = resource('teams');
+	const meta = resource('meta');
 	const ids = fantasyIds();
 
 	let game = $state.raw<GameDetail | null>(null);
@@ -366,7 +368,10 @@
 	// Matchup preview for upcoming games: latest power ratings and season unit stats.
 	const latestRatings = $derived.by(() => {
 		const rs = (ratings.value ?? []).filter((r) => r.season === season);
-		const wk = Math.max(0, ...rs.map((r) => r.week));
+		const wk = ratingsWeek(
+			rs.map((r) => r.week),
+			meta.value?.seasons.find((s) => s.season === season)
+		);
 		return new Map<string, Rating>(rs.filter((r) => r.week === wk).map((r) => [r.team, r]));
 	});
 	const unit = $derived(

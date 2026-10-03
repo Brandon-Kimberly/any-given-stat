@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { hasPlayerPage } from '$lib/playerPages.svelte';
 	import { base } from '$app/paths';
 	import Controls from '$lib/components/Controls.svelte';
 	import CountUp from '$lib/components/CountUp.svelte';
@@ -70,8 +71,8 @@
 	const hrefFor = (r: Row) =>
 		r.pos === 'DEF'
 			? `${base}/team/?t=${r.id}`
-			: ['QB', 'RB', 'WR', 'TE'].includes(r.pos)
-				? `${base}/player/?id=${r.id}`
+			: hasPlayerPage(r.id)
+				? `${base}/player/?id=${r.id}&season=${prefs.season}`
 				: '';
 
 	const columns = $derived<Column<Row>[]>([

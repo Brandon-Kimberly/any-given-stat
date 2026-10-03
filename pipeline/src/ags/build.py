@@ -181,6 +181,7 @@ def build_all(con: duckdb.DuckDBPyConnection, out_dir: Path = OUT_DIR, explorer:
     weeks = datasets.team_weeks(con)
     write_json(out_dir / "team_weeks.json", weeks)
     write_by_season(out_dir, "team_weeks", weeks)
+    write_by_season(out_dir, "schedule", datasets.schedule(con))
     write_json(out_dir / "luck.json", datasets.luck(con))
     qbs = datasets.quarterbacks(con)
     receivers = datasets.receivers(con)

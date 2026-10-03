@@ -28,7 +28,7 @@ export function resource<K extends keyof Datasets>(name: K) {
  * season's rows stay until the next arrive (pages filter by season, so nothing stale shows).
  * A missing file (e.g. no ratings for the first season) reads as no rows. */
 export function seasonResource<T extends { season: number }>(
-	dir: 'ratings' | 'team_splits' | 'team_weeks' | 'qb_games',
+	dir: 'ratings' | 'team_splits' | 'team_weeks' | 'qb_games' | 'schedule',
 	season: () => number | null | undefined
 ) {
 	let value = $state.raw<T[] | undefined>(undefined);
