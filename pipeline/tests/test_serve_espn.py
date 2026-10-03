@@ -181,3 +181,23 @@ def test_data_status_rebuilds_older_data(tmp_path):
     assert data_status(tmp_path) == "outdated"  # built before data_version existed
     (tmp_path / "meta.json").write_text(json.dumps({"data_version": DATA_VERSION}))
     assert data_status(tmp_path) == "ok"
+
+
+def test_deps_stale_after_a_pull_adds_dependencies(tmp_path):
+    import os
+
+    from ags.serve import deps_stale
+
+    web = tmp_path
+    (web / "package.json").write_text("{}")
+    (web / "package-lock.json").write_text("{}")
+    assert deps_stale(web)  # never installed
+    stamp = web / "node_modules" / ".package-lock.json"
+    stamp.parent.mkdir()
+    stamp.write_text("{}")
+    os.utime(web / "package.json", (1_000, 1_000))
+    os.utime(web / "package-lock.json", (1_000, 1_000))
+    os.utime(stamp, (2_000, 2_000))
+    assert not deps_stale(web)  # installed after the last lockfile change
+    os.utime(web / "package-lock.json", (3_000, 3_000))
+    assert deps_stale(web)  # git pull brought a newer lockfile
