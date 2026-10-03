@@ -4,6 +4,7 @@
 	import '../app.css';
 	import { afterNavigate, onNavigate } from '$app/navigation';
 	import { currentUrl, replaceUrl } from '$lib/url';
+	import { SUPPORT_URL } from '$lib/site';
 	import { base } from '$app/paths';
 	import { navigating, page } from '$app/state';
 	import CommandPalette from '$lib/components/CommandPalette.svelte';
@@ -375,6 +376,18 @@
 				ESPN or Sleeper. Team names and logos are trademarks of their owners; headlines link to
 				their publishers.
 			</p>
+			{#if SUPPORT_URL}
+				<p class="support">
+					Free, with no ads or paywall. If it's useful to you,
+					<a href={SUPPORT_URL} target="_blank" rel="noopener"
+						><svg viewBox="0 0 24 24" aria-hidden="true"
+							><path
+								d="M4 8h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5zm13 1h1.5a2.5 2.5 0 0 1 0 5H17M7 4.5c0 1 .8 1.2.8 2.2M10.5 4.5c0 1 .8 1.2.8 2.2M14 4.5c0 1 .8 1.2.8 2.2"
+							/></svg
+						>buy me a coffee on Ko-fi<span class="sr-only"> (opens in a new tab)</span></a
+					>.
+				</p>
+			{/if}
 		</div>
 		<div class="foot-meta">
 			{#if meta && latest}
@@ -819,6 +832,26 @@
 	.small-print {
 		font-size: 0.78rem;
 		max-width: 70ch;
+	}
+	.support {
+		margin: 0.6rem 0 0;
+		font-size: 0.85rem;
+		color: var(--text-secondary);
+	}
+	.support a {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		font-weight: 600;
+	}
+	.support svg {
+		width: 1.05em;
+		height: 1.05em;
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 1.8;
+		stroke-linecap: round;
+		stroke-linejoin: round;
 	}
 	.foot-brand b {
 		font-weight: 800;
