@@ -12,7 +12,7 @@
 	import { favorite } from '$lib/favorite.svelte';
 	import { num, signed } from '$lib/format';
 	import { calibration, oddsPct, skillByWeek } from '$lib/odds';
-	import { gridX, gridY, isNarrow, Plot, plotStyle } from '$lib/plot';
+	import { gridX, gridY, isNarrow, Plot, plotStyle, thinTicks } from '$lib/plot';
 	import { prefs } from '$lib/prefs.svelte';
 	import { resource } from '$lib/resource.svelte';
 	import { teamColor, teamMeta, teamName, teamNick } from '$lib/teams.svelte';
@@ -282,7 +282,15 @@
 			height: 240,
 			style: plotStyle,
 			marginLeft: 48,
-			x: { label: null, tickFormat: 'd', ticks: versions.map((s) => s.season) },
+			x: {
+				label: null,
+				tickFormat: 'd',
+				ticks: thinTicks(
+					versions.map((s) => s.season),
+					width,
+					44
+				)
+			},
 			y: { label: '↓ Brier score, make the playoffs (lower is better)', zero: false },
 			color: {
 				domain: ['Old simulator', 'Current simulator'],

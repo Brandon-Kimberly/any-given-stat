@@ -261,7 +261,8 @@
 		{#if passers.length}
 			<div class="sec">
 				<h3>Passing</h3>
-				<div class="scroll">
+				<!-- svelte-ignore a11y_no_noninteractive_tabindex (scrollable: keyboard users need focus) -->
+				<div class="scroll" tabindex="0" role="region" aria-label="Passing table">
 					<table>
 						<thead>
 							<tr>
@@ -299,7 +300,8 @@
 		{#if rushers.length}
 			<div class="sec">
 				<h3>Rushing</h3>
-				<div class="scroll">
+				<!-- svelte-ignore a11y_no_noninteractive_tabindex (scrollable: keyboard users need focus) -->
+				<div class="scroll" tabindex="0" role="region" aria-label="Rushing table">
 					<table>
 						<thead>
 							<tr>
@@ -344,7 +346,8 @@
 		{#if receivers.length}
 			<div class="sec">
 				<h3>Receiving</h3>
-				<div class="scroll">
+				<!-- svelte-ignore a11y_no_noninteractive_tabindex (scrollable: keyboard users need focus) -->
+				<div class="scroll" tabindex="0" role="region" aria-label="Receiving table">
 					<table>
 						<thead>
 							<tr>
@@ -382,7 +385,8 @@
 		{#if defenders.length}
 			<div class="sec">
 				<h3>Defense</h3>
-				<div class="scroll">
+				<!-- svelte-ignore a11y_no_noninteractive_tabindex (scrollable: keyboard users need focus) -->
+				<div class="scroll" tabindex="0" role="region" aria-label="Defense table">
 					<table>
 						<thead>
 							<tr>
@@ -427,7 +431,8 @@
 				{#if kickers.length}
 					<div>
 						<h3>Kicking</h3>
-						<div class="scroll">
+						<!-- svelte-ignore a11y_no_noninteractive_tabindex (scrollable: keyboard users need focus) -->
+						<div class="scroll" tabindex="0" role="region" aria-label="Kicking table">
 							<table>
 								<thead>
 									<tr>
@@ -456,7 +461,8 @@
 				{#if punters.length}
 					<div>
 						<h3>Punting</h3>
-						<div class="scroll">
+						<!-- svelte-ignore a11y_no_noninteractive_tabindex (scrollable: keyboard users need focus) -->
+						<div class="scroll" tabindex="0" role="region" aria-label="Punting table">
 							<table>
 								<thead>
 									<tr>
@@ -488,7 +494,8 @@
 		{#if returners.length}
 			<div class="sec">
 				<h3>Returns</h3>
-				<div class="scroll">
+				<!-- svelte-ignore a11y_no_noninteractive_tabindex (scrollable: keyboard users need focus) -->
+				<div class="scroll" tabindex="0" role="region" aria-label="Returns table">
 					<table>
 						<thead>
 							<tr>
@@ -523,7 +530,8 @@
 		{#if fantasy && scorers.length}
 			<div class="sec">
 				<h3>Fantasy <span class="muted">· {fantasy.label}</span></h3>
-				<div class="scroll">
+				<!-- svelte-ignore a11y_no_noninteractive_tabindex (scrollable: keyboard users need focus) -->
+				<div class="scroll" tabindex="0" role="region" aria-label="Fantasy table">
 					<table>
 						<thead
 							><tr

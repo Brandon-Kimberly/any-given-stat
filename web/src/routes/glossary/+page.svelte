@@ -310,6 +310,21 @@
 	];
 
 	let q = $state('');
+
+	// Deep links (/glossary/#cpoe, or an alias like #epa-per-play) arrive before the terms exist
+	// (the page renders client-side), so the browser neither scrolls nor sets :target. Do both.
+	let hit = $state('');
+	$effect(() => {
+		const go = () => {
+			const id = decodeURIComponent(location.hash.slice(1));
+			const term = id && document.getElementById(id)?.closest<HTMLElement>('.term');
+			hit = term ? term.id : '';
+			if (term) requestAnimationFrame(() => term.scrollIntoView({ block: 'start' }));
+		};
+		go();
+		addEventListener('hashchange', go);
+		return () => removeEventListener('hashchange', go);
+	});
 	const shown = $derived(
 		groups
 			.map((g) => ({
@@ -349,7 +364,7 @@
 		<h2>{g.name}</h2>
 		<dl>
 			{#each g.terms as t (t.id)}
-				<div class="term" id={t.id}>
+				<div class="term" class:hit={hit === t.id} id={t.id}>
 					<dt>
 						{#each t.aliases ?? [] as a (a)}<span class="alias" id={a}></span>{/each}<a
 							class="anchor"
@@ -395,6 +410,7 @@
 		top: 0;
 		scroll-margin-top: 130px;
 	}
+	.term.hit,
 	.term:target,
 	.term:has(.alias:target) {
 		background: var(--accent-soft);

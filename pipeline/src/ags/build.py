@@ -99,9 +99,13 @@ def season_status(con: duckdb.DuckDBPyConnection) -> list[dict]:
         ):
             if r["done"] and done_week.get(r["season"], r["week"] - 1) == r["week"] - 1:
                 done_week[r["season"]] = r["week"]
+    latest = max((r["season"] for r in rows), default=None)
     for r in rows:
-        # 256 games through 2020, 272 since the 17-game schedule.
-        r["complete"] = r["reg_games"] >= (272 if r["season"] >= 2021 else 256)
+        # 256 games through 2020, 272 since the 17-game schedule. Any season before the latest
+        # is over even if short a game (2022's cancelled BUF-CIN left it at 271).
+        r["complete"] = r["season"] != latest or r["reg_games"] >= (
+            272 if r["season"] >= 2021 else 256
+        )
         if not r["complete"] and r["season"] in done_week:
             r["last_week"] = done_week[r["season"]]
     return rows

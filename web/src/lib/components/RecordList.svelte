@@ -141,10 +141,10 @@
 		margin-top: 0.5rem;
 		font-size: 0.85rem;
 	}
+	/* Transform only: faded text would fail contrast while it animates. */
 	@keyframes row-in {
 		from {
-			opacity: 0;
-			transform: translateY(4px);
+			transform: translateY(6px);
 		}
 	}
 </style>
