@@ -18,6 +18,8 @@ from .config import (
     TEAMS_URL,
 )
 
+RAW_GITHUB = "raw.githubusercontent.com/nflverse/nflverse-pbp/"
+
 
 def pbp_path(season: int, raw_dir: Path = RAW_DIR) -> Path:
     return raw_dir / f"play_by_play_{season}.parquet"
@@ -62,6 +64,30 @@ def fetch_teams(*, force: bool = False, raw_dir: Path = RAW_DIR) -> Path | None:
 def fetch_players(*, force: bool = False, raw_dir: Path = RAW_DIR) -> Path | None:
     """nflverse player directory (positions, draft, college), keyed by gsis_id."""
     return fetch_optional(PLAYERS_URL, "players.parquet", force=force, raw_dir=raw_dir)
+
+
+def fetch_logos(teams_file: Path | None, *, raw_dir: Path = RAW_DIR) -> Path | None:
+    """Team logo tiles (nflverse's squared logos, ~16 KB each) into data/raw/logos, once.
+
+    Optional: badges stand in for any logo that can't be fetched.
+    """
+    if teams_file is None:
+        return None
+    import csv
+
+    dest = raw_dir / "logos"
+    with teams_file.open(newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            url = row.get("team_logo_squared") or ""
+            team = row.get("team_abbr") or ""
+            out = dest / f"{team}.png"
+            if not url.startswith("https://") or not team.isalpha() or out.exists():
+                continue
+            try:
+                _download(url.replace("github.com/nflverse/nflverse-pbp/raw/", RAW_GITHUB), out)
+            except OSError as e:
+                print(f"warning: no logo for {team}: {e}", file=sys.stderr)
+    return dest if dest.exists() else None
 
 
 def fetch_player_ids(*, force: bool = False, raw_dir: Path = RAW_DIR) -> Path | None:

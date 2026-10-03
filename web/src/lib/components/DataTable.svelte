@@ -187,7 +187,9 @@
 					class:fav={isFav(row)}
 					onclick={(e) => rowClick(e, row)}
 				>
-					{#if showIndex}<td class="rank">{i + 1}</td>{/if}
+					{#if showIndex}<td class="rank"
+							>{#if i < 3}<span class="medal m{i + 1}">{i + 1}</span>{:else}{i + 1}{/if}</td
+						>{/if}
 					{#each columns as c, ci (c.key)}
 						{@const text = c.fmt ? c.fmt(row[c.key]) : (row[c.key] ?? '–')}
 						<td
@@ -273,10 +275,13 @@
 		top: 0;
 		background: var(--surface-2);
 		z-index: 2;
-		font-weight: 600;
-		font-size: 0.78rem;
+		font-weight: 700;
+		font-size: 0.7rem;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
 		color: var(--text-secondary);
 		text-align: left;
+		box-shadow: inset 0 -1px 0 var(--border-strong);
 	}
 	.th {
 		all: unset;
@@ -296,6 +301,7 @@
 	.th.sorted .arrow {
 		opacity: 1;
 		color: var(--accent-ink);
+		text-shadow: 0 0 10px color-mix(in srgb, var(--accent) 60%, transparent);
 	}
 	.th:focus-visible {
 		outline: 2px solid var(--accent);
@@ -330,7 +336,36 @@
 		transition: background-color 0.12s;
 	}
 	tbody tr:hover td {
-		background-color: var(--surface-2);
+		background-color: color-mix(in srgb, var(--accent) 7%, var(--surface));
+	}
+	/* The hovered row gets a brand-gradient edge on its first cell. */
+	tbody tr:hover td:first-child {
+		background-image: var(--brand-gradient);
+		background-size: 3px 100%;
+		background-repeat: no-repeat;
+	}
+	/* Top three rows: gold, silver, bronze rank discs. */
+	.medal {
+		display: inline-grid;
+		place-items: center;
+		width: 1.45rem;
+		height: 1.45rem;
+		border-radius: 50%;
+		font-size: 0.72rem;
+		font-weight: 800;
+		color: #1b1405;
+		box-shadow:
+			inset 0 1px 0 rgba(255, 255, 255, 0.55),
+			0 2px 6px -2px rgba(0, 0, 0, 0.35);
+	}
+	.m1 {
+		background: linear-gradient(145deg, #ffe08a, #e0a91b);
+	}
+	.m2 {
+		background: linear-gradient(145deg, #f1f3f6, #b7bec9);
+	}
+	.m3 {
+		background: linear-gradient(145deg, #f3c7a0, #c27c45);
 	}
 	tbody tr:last-child td {
 		border-bottom: 0;

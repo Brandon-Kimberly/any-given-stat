@@ -18,11 +18,14 @@ def players(con: duckdb.DuckDBPyConnection, ids: Iterable[str]) -> list[dict]:
     ids = sorted({i for i in ids if i})
     if not ids or not has_relation(con, "players"):
         return []
+    cols = {r[0] for r in con.execute("describe players").fetchall()}
+    headshot = "headshot" if "headshot" in cols else "null"
     return records(
         con,
-        """
+        f"""
         select gsis_id as player_id, display_name as name, position, position_group,
-               rookie_season, draft_year, draft_round, draft_pick, college_name as college
+               rookie_season, draft_year, draft_round, draft_pick, college_name as college,
+               {headshot} as headshot
         from players
         where gsis_id in (select unnest(?::varchar[]))
         order by gsis_id

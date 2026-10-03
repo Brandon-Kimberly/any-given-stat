@@ -961,3 +961,47 @@ button.primary::after {
 		transform: none;
 	}
 }
+
+/* ---------- Charts: tooltips as floating cards; lines glow softly in dark mode ---------- */
+.plot [aria-label='tip'] path {
+	fill: color-mix(in srgb, var(--surface) 96%, transparent);
+	stroke: var(--border-strong);
+	filter: drop-shadow(0 12px 28px rgba(0, 0, 0, 0.22)) drop-shadow(0 2px 6px rgba(0, 0, 0, 0.1));
+}
+.plot [aria-label='tip'] text {
+	font-size: 12px;
+}
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme='light']) .plot g[aria-label='line'] path {
+		filter: drop-shadow(0 0 5px rgba(140, 180, 255, 0.35));
+	}
+}
+:root[data-theme='dark'] .plot g[aria-label='line'] path {
+	filter: drop-shadow(0 0 5px rgba(140, 180, 255, 0.35));
+}
+
+/* Stat tiles: a lit brand-gradient edge along the top. */
+.card.tile {
+	position: relative;
+	overflow: hidden;
+}
+.card.tile::before {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: 14px;
+	right: 14px;
+	height: 2px;
+	border-radius: 0 0 2px 2px;
+	background: var(--brand-gradient);
+	opacity: 0.55;
+}
+/* The sliding pill reads brighter than its track in dark mode. */
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme='light']) .seg[data-pill]::before {
+		background: var(--surface-3);
+	}
+}
+:root[data-theme='dark'] .seg[data-pill]::before {
+	background: var(--surface-3);
+}

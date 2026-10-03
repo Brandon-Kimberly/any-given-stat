@@ -36,6 +36,7 @@ def run_build(seasons: list[int], refresh: bool = True, explorer: bool = True) -
     from .db import connect
     from .fetch import (
         fetch_context,
+        fetch_logos,
         fetch_player_ids,
         fetch_players,
         fetch_schedule,
@@ -45,10 +46,12 @@ def run_build(seasons: list[int], refresh: bool = True, explorer: bool = True) -
 
     files = fetch_seasons(seasons, refresh_latest=refresh)
     injuries, snaps = fetch_context(seasons, refresh_latest=refresh)
+    teams_file = fetch_teams(force=refresh)
+    fetch_logos(teams_file)
     con = connect(
         files,
         fetch_schedule(force=refresh),
-        teams_file=fetch_teams(force=refresh),
+        teams_file=teams_file,
         players_file=fetch_players(force=refresh),
         player_ids_file=fetch_player_ids(force=refresh),
         injury_files=injuries,

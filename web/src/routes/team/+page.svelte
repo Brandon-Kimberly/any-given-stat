@@ -3,6 +3,8 @@
 	import { base } from '$app/paths';
 	import CountUp from '$lib/components/CountUp.svelte';
 	import TeamFantasy from '$lib/components/TeamFantasy.svelte';
+	import TeamLogo from '$lib/components/TeamLogo.svelte';
+	import { confetti } from '$lib/confetti';
 	import { page } from '$app/state';
 	import { favorite } from '$lib/favorite.svelte';
 	import Controls from '$lib/components/Controls.svelte';
@@ -18,7 +20,7 @@
 	import { prefs } from '$lib/prefs.svelte';
 	import { resource, seasonResource } from '$lib/resource.svelte';
 	import { ranks, rolling } from '$lib/stats';
-	import { teamMeta, teamName } from '$lib/teams.svelte';
+	import { heroColors, teamMeta, teamName, teamPalette } from '$lib/teams.svelte';
 	import type { GameDetail, Rating, TeamSeason, TeamSplit, TeamWeek } from '$lib/types';
 
 	const metaRes = resource('meta');
@@ -411,17 +413,25 @@
 		url.searchParams.set('t', t);
 		goto(url, { keepFocus: true, noScroll: true });
 	}
+	// Banner colors: the team's, darkened just enough for white text.
+	const hero = $derived(heroColors(team));
 </script>
 
 <svelte:head><title>{teamName(team)} {prefs.season} · Any Given Stat</title></svelte:head>
 
 <section
 	class="team-hero"
-	style="--team: {info?.color ?? 'var(--hero-to)'}; --team2: {info?.color2 ?? 'var(--hero-from)'}"
+	style="--team: {hero?.from ?? 'var(--hero-to)'}; --team2: {hero?.to ?? 'var(--hero-from)'}"
 >
+	{#if info?.logo}<img
+			class="watermark"
+			src="{base}/data/{info.logo}"
+			alt=""
+			aria-hidden="true"
+		/>{/if}
 	<div class="crumbs"><a href="{base}/teams/">Teams</a> / {info?.division ?? team}</div>
 	<div class="row">
-		<TeamBadge {team} size="lg" />
+		<TeamLogo {team} size={84} />
 		<div>
 			<h1>{teamName(team)}</h1>
 			<div class="facts">
@@ -434,7 +444,11 @@
 		<button
 			class="fav-btn"
 			aria-pressed={favorite.team === team}
-			onclick={() => favorite.toggle(team)}
+			onclick={(e) => {
+				const adding = favorite.team !== team;
+				favorite.toggle(team);
+				if (adding) confetti(e.clientX, e.clientY, teamPalette(team));
+			}}
 			title="Your team gets a gold ring everywhere on the site and a card on the home page"
 		>
 			<span aria-hidden="true">{favorite.team === team ? '★' : '☆'}</span>
@@ -681,6 +695,26 @@
 				color-mix(in srgb, var(--team2) 60%, #000)
 			);
 		box-shadow: var(--shadow-md);
+	}
+	/* The team's logo, oversized and faded into the right edge of the banner. */
+	.watermark {
+		position: absolute;
+		right: -4%;
+		top: 50%;
+		z-index: -1;
+		width: min(46%, 420px);
+		aspect-ratio: 1;
+		object-fit: cover;
+		transform: translateY(-50%) rotate(-8deg);
+		opacity: 0.22;
+		mix-blend-mode: luminosity;
+		mask-image: radial-gradient(closest-side, #000 40%, transparent);
+		-webkit-mask-image: radial-gradient(closest-side, #000 40%, transparent);
+		pointer-events: none;
+	}
+	.team-hero h1 {
+		font-size: clamp(1.9rem, 1.2rem + 2.6vw, 3rem);
+		font-stretch: 116%;
 	}
 	.team-hero :global(.badge) {
 		box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85);

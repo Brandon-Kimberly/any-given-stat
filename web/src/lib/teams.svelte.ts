@@ -24,6 +24,12 @@ export function loadTeamMeta(): void {
 		});
 }
 
+/** The team's own colors (primary, secondary), for decoration like confetti. */
+export function teamPalette(team: string): string[] {
+	const m = teamMeta.byTeam[team];
+	return m ? [m.color, m.color2, '#ffffff'] : [];
+}
+
 /** Team color that stays visible on the current theme's chart surface. */
 export function teamColor(team: string): string {
 	const m = teamMeta.byTeam[team];

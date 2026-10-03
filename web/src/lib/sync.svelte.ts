@@ -114,12 +114,12 @@ class SyncStore {
 	#announce(s: SyncStatus): void {
 		const manual = s.trigger !== 'auto';
 		if (s.last_result === 'updated') {
-			toast.show('Data updated — reloading', 4000);
+			toast.show('Data updated — reloading', 4000, 'ok');
 			setTimeout(() => location.reload(), 1200);
 		} else if (s.last_result === 'up_to_date' && manual) {
-			toast.show('Already up to date');
+			toast.show('Already up to date', 2200, 'ok');
 		} else if (s.last_result === 'error' && manual) {
-			toast.show(s.message || 'Sync failed', 5000);
+			toast.show(s.message || 'Sync failed', 5000, 'error');
 		}
 	}
 
@@ -132,7 +132,7 @@ class SyncStore {
 				body: JSON.stringify(body)
 			});
 		} catch {
-			toast.show('Sync server not reachable: is `ags up` still running?', 5000);
+			toast.show('Sync server not reachable: is `ags up` still running?', 5000, 'error');
 			return null;
 		} finally {
 			this.pending = false;
@@ -147,7 +147,7 @@ class SyncStore {
 			if (r.status === 409) toast.show('A sync is already running');
 			this.status = s;
 		} else {
-			toast.show(`Sync could not start (HTTP ${r.status})`);
+			toast.show(`Sync could not start (HTTP ${r.status})`, 3000, 'error');
 		}
 		void this.poll();
 	}
@@ -160,7 +160,7 @@ class SyncStore {
 			void this.poll();
 		} else {
 			const err = await r.json().catch(() => ({}));
-			toast.show(`Settings not saved: ${err.error ?? `HTTP ${r.status}`}`);
+			toast.show(`Settings not saved: ${err.error ?? `HTTP ${r.status}`}`, 3000, 'error');
 		}
 	}
 }

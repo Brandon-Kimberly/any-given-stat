@@ -177,12 +177,23 @@
 	}
 	// Your team's colors light the hero (darkened so white text stays readable).
 	const tint = $derived(heroColors(favorite.team));
+	// The hero's looping animations pause while it's scrolled out of view.
+	let heroEl = $state<HTMLElement>();
+	let heroHidden = $state(false);
+	$effect(() => {
+		if (!heroEl) return;
+		const io = new IntersectionObserver(([e]) => (heroHidden = !e.isIntersecting));
+		io.observe(heroEl);
+		return () => io.disconnect();
+	});
 </script>
 
 <svelte:head><title>Any Given Stat · NFL analytics</title></svelte:head>
 
 <section
+	bind:this={heroEl}
 	class="hero"
+	class:paused={heroHidden}
 	class:team-tint={!!tint}
 	style:--hero-from={tint?.from}
 	style:--hero-to={tint?.to}
@@ -627,6 +638,10 @@
 		color: #0f2a4f !important;
 		border-color: #fff;
 		box-shadow: 0 10px 30px -10px rgba(165, 243, 252, 0.6);
+	}
+	.hero.paused :global(*),
+	.hero.paused::before {
+		animation-play-state: paused !important;
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.aurora span,

@@ -3,10 +3,12 @@
 	import { base } from '$app/paths';
 	import { favorite } from '$lib/favorite.svelte';
 	import { signed, spread, wlt, num } from '$lib/format';
-	import { teamMeta, teamName } from '$lib/teams.svelte';
+	import { confetti } from '$lib/confetti';
+	import { teamMeta, teamName, teamPalette } from '$lib/teams.svelte';
 	import type { GamePrediction, Luck, Rating } from '$lib/types';
 	import CountUp from './CountUp.svelte';
 	import TeamBadge from './TeamBadge.svelte';
+	import TeamLogo from './TeamLogo.svelte';
 
 	let { ratings, luck, upcoming }: { ratings: Rating[]; luck: Luck[]; upcoming: GamePrediction[] } =
 		$props();
@@ -32,7 +34,7 @@
 {#if team}
 	<section class="card fav" style="--team: {info?.color ?? 'var(--hero-to)'}">
 		<div class="band">
-			<TeamBadge {team} size="lg" />
+			<TeamLogo {team} size={56} />
 			<div class="who">
 				<div class="eyebrow">Your team</div>
 				<a class="name" href="{base}/team/?t={team}">{teamName(team)}</a>
@@ -93,10 +95,14 @@
 						{#each teams as t (t)}
 							<button
 								class="pick-btn"
-								onclick={() => favorite.set(t)}
+								onclick={(e) => {
+									favorite.set(t);
+									confetti(e.clientX, e.clientY, teamPalette(t));
+								}}
 								aria-label="Pick {teamName(t)}"
 							>
-								<TeamBadge team={t} size="md" />
+								<TeamLogo team={t} size={46} />
+								<span class="abbr">{t}</span>
 							</button>
 						{/each}
 					</div>
@@ -202,18 +208,36 @@
 	.row {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 0.3rem;
+		gap: 0.35rem;
 	}
 	.pick-btn {
-		padding: 2px;
+		display: grid;
+		justify-items: center;
+		gap: 0.2rem;
+		padding: 4px 2px;
 		min-height: 0;
 		border: 0;
 		background: transparent;
-		border-radius: 8px;
-		transition: transform 0.12s var(--ease);
+		border-radius: 12px;
 	}
 	.pick-btn:hover {
-		transform: translateY(-2px) scale(1.06);
+		background: transparent;
+	}
+	.abbr {
+		font-size: 0.68rem;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		color: var(--text-muted);
+		transition: color 0.2s;
+	}
+	@media (prefers-reduced-motion: no-preference) {
+		.pick-btn:hover :global(.logo),
+		.pick-btn:focus-visible :global(.logo) {
+			transform: translateY(-4px) scale(1.08) rotate(-3deg);
+		}
+	}
+	.pick-btn:hover .abbr {
+		color: var(--text-primary);
 	}
 	@media (min-width: 900px) {
 		.fav {

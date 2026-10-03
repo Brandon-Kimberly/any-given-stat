@@ -32,7 +32,7 @@
 				espnS2: espnS2.trim() || undefined,
 				swid: swid.trim() || undefined
 			});
-			toast.show(`Connected ${l.name}`);
+			toast.show(`Connected ${l.name}`, 2200, 'ok');
 		} catch {
 			/* fantasy.error shows it */
 		}
@@ -40,7 +40,7 @@
 	async function refresh() {
 		try {
 			await fantasy.refresh();
-			toast.show('League refreshed');
+			toast.show('League refreshed', 2200, 'ok');
 		} catch {
 			/* shown below */
 		}

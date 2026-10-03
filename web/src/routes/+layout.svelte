@@ -679,8 +679,33 @@
 		gap: 1.1rem;
 	}
 	footer {
+		position: relative;
 		border-top: 1px solid var(--border);
-		background: var(--surface);
+		background:
+			radial-gradient(
+				60% 120% at 50% 0%,
+				color-mix(in srgb, var(--accent) 7%, transparent),
+				transparent 70%
+			),
+			var(--surface);
+	}
+	/* A brand-gradient seam along the top of the footer. */
+	footer::before {
+		content: '';
+		position: absolute;
+		left: 10%;
+		right: 10%;
+		top: -1px;
+		height: 1px;
+		background: linear-gradient(
+			90deg,
+			transparent,
+			var(--brand-a),
+			var(--brand-b),
+			var(--brand-c),
+			transparent
+		);
+		opacity: 0.7;
 	}
 	.sitemap {
 		max-width: 1280px;
