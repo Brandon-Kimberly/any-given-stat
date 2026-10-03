@@ -36,7 +36,12 @@ export const navGroups: NavGroup[] = [
 		items: [
 			{ href: '/qbs/', label: 'Quarterbacks', blurb: 'EPA per dropback, CPOE, how sure we are' },
 			{ href: '/receivers/', label: 'Receivers', blurb: 'Target share, air yards, WOPR' },
-			{ href: '/rushers/', label: 'Rushers', blurb: 'Efficiency on designed runs' }
+			{ href: '/rushers/', label: 'Rushers', blurb: 'Efficiency on designed runs' },
+			{
+				href: '/fantasy/',
+				label: 'Fantasy',
+				blurb: 'Your league’s scoring: rankings, value, matchups'
+			}
 		]
 	},
 	{

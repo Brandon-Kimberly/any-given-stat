@@ -2,6 +2,7 @@
 	import { base } from '$app/paths';
 	import { page } from '$app/state';
 	import DataTable, { type Column } from '$lib/components/DataTable.svelte';
+	import PlayerFantasy from '$lib/components/PlayerFantasy.svelte';
 	import PlotFigure from '$lib/components/Plot.svelte';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import TeamBadge from '$lib/components/TeamBadge.svelte';
@@ -451,6 +452,8 @@
 			</div>
 		</div>
 	</section>
+
+	<PlayerFantasy {id} {seasons} />
 
 	{#if profile}
 		<div class="card">

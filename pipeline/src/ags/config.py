@@ -18,6 +18,10 @@ TEAMS_URL = f"{RELEASES}/teams/teams_colors_logos.csv"
 PLAYERS_URL = f"{RELEASES}/players/players.parquet"
 INJURIES_URL = f"{RELEASES}/injuries/injuries_{{season}}.parquet"
 SNAPS_URL = f"{RELEASES}/snap_counts/snap_counts_{{season}}.parquet"
+# Cross-platform player ids (Sleeper, ESPN, ... -> gsis) for connecting fantasy leagues.
+PLAYER_IDS_URL = (
+    "https://raw.githubusercontent.com/dynastyprocess/data/master/files/db_playerids.csv"
+)
 
 # CPOE / xYAC / xpass exist from 2006 on; 2016+ keeps downloads (~20MB/season) reasonable.
 DEFAULT_FIRST_SEASON = 2016

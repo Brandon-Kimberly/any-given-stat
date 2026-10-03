@@ -34,7 +34,14 @@ def run_build(seasons: list[int], refresh: bool = True, explorer: bool = True) -
     # Imported here so `ags up` starts instantly when the data is already built.
     from .build import build_all
     from .db import connect
-    from .fetch import fetch_context, fetch_players, fetch_schedule, fetch_seasons, fetch_teams
+    from .fetch import (
+        fetch_context,
+        fetch_player_ids,
+        fetch_players,
+        fetch_schedule,
+        fetch_seasons,
+        fetch_teams,
+    )
 
     files = fetch_seasons(seasons, refresh_latest=refresh)
     injuries, snaps = fetch_context(seasons, refresh_latest=refresh)
@@ -43,6 +50,7 @@ def run_build(seasons: list[int], refresh: bool = True, explorer: bool = True) -
         fetch_schedule(force=refresh),
         teams_file=fetch_teams(force=refresh),
         players_file=fetch_players(force=refresh),
+        player_ids_file=fetch_player_ids(force=refresh),
         injury_files=injuries,
         snap_files=snaps,
     )

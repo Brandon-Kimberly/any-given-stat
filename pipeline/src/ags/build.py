@@ -26,6 +26,7 @@ from . import (
     ratings,
     records,
     sim,
+    statlines,
 )
 from .config import CACHE_DIR, OUT_DIR
 from .db import has_relation
@@ -217,18 +218,25 @@ def build_all(con: duckdb.DuckDBPyConnection, out_dir: Path = OUT_DIR, explorer:
         game_summaries.extend(filter(None, map(records.game_summary, season_games)))
     write_json(out_dir / "games" / "index.json", games_index)
 
-    # --- per-game play-by-play and drives (playbyplay.py) ---
+    # --- per-game play-by-play, drives and box scores (playbyplay.py, statlines.py) ---
+    # plus fantasy/<season>.json: the same stat lines, every game of the season in one file.
     with timed("play-by-play files"):
         latest = max(s["season"] for s in status)
         for s in status:
             season_dir = out_dir / "games" / str(s["season"])
             marker = season_dir / ".done"
+            fantasy_file = out_dir / "fantasy" / f"{s['season']}.json"
             # Past seasons don't change: skip them when this version already wrote them.
-            if s["season"] < latest and marker.exists():
+            if s["season"] < latest and marker.exists() and fantasy_file.exists():
                 if marker.read_text().strip() == f"v{playbyplay.VERSION}":
                     continue
+            ids = statlines.player_ids(con, s["season"])
+            lines = statlines.season_lines(con, s["season"], statlines.directory(con, ids))
+            write_json(fantasy_file, statlines.fantasy_season(s["season"], lines))
+            box = statlines.game_boxes(lines)
             n = size = 0
             for game_id, payload in playbyplay.season_games(con, s["season"]):
+                payload["box"] = box.get(game_id)
                 dest = out_dir / "games" / str(s["season"]) / f"{game_id}.json"
                 write_json(dest, payload, quiet=True)
                 n += 1
@@ -239,6 +247,12 @@ def build_all(con: duckdb.DuckDBPyConnection, out_dir: Path = OUT_DIR, explorer:
             )
             if s["season"] < latest:
                 marker.write_text(f"v{playbyplay.VERSION}")
+
+    with timed("fantasy ids"):
+        every = set()
+        for s in status:
+            every |= statlines.player_ids(con, s["season"])
+        write_json(out_dir / "fantasy_ids.json", statlines.fantasy_ids(con, every))
 
     # --- all-time records, coaches, referees (records.py, people.py) ---
     with timed("records"):

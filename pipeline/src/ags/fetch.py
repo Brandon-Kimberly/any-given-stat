@@ -10,6 +10,7 @@ from pathlib import Path
 from .config import (
     INJURIES_URL,
     PBP_URL,
+    PLAYER_IDS_URL,
     PLAYERS_URL,
     RAW_DIR,
     SCHEDULE_URL,
@@ -61,6 +62,11 @@ def fetch_teams(*, force: bool = False, raw_dir: Path = RAW_DIR) -> Path | None:
 def fetch_players(*, force: bool = False, raw_dir: Path = RAW_DIR) -> Path | None:
     """nflverse player directory (positions, draft, college), keyed by gsis_id."""
     return fetch_optional(PLAYERS_URL, "players.parquet", force=force, raw_dir=raw_dir)
+
+
+def fetch_player_ids(*, force: bool = False, raw_dir: Path = RAW_DIR) -> Path | None:
+    """dynastyprocess player id map (Sleeper/ESPN/... ids -> gsis), for fantasy leagues."""
+    return fetch_optional(PLAYER_IDS_URL, "db_playerids.csv", force=force, raw_dir=raw_dir)
 
 
 def fetch_context(

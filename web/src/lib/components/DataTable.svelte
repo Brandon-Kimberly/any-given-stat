@@ -37,7 +37,8 @@
 		sortKey: keyof T & string;
 		sortDesc?: boolean;
 		search?: keyof T & string;
-		/** Makes the first (sticky) cell a link; the whole row is clickable with a mouse. */
+		/** Makes the first (sticky) cell a link; the whole row is clickable with a mouse. An
+		 * empty string leaves that row unlinked. */
 		href?: (row: T) => string;
 		/** Row action without a URL (e.g. toggling a highlight); keyboard users get a button. */
 		onrowclick?: (row: T) => void;
@@ -140,7 +141,8 @@
 
 	function rowClick(e: MouseEvent, row: T) {
 		if ((e.target as HTMLElement).closest('a, button')) return; // the cell control handles it
-		if (href) goto(href(row));
+		const url = href?.(row);
+		if (url) goto(url);
 		else onrowclick?.(row);
 	}
 </script>
@@ -180,7 +182,7 @@
 		<tbody>
 			{#each visible.slice(0, limit) as row, i (i)}
 				<tr
-					class:clickable={!!(href || onrowclick)}
+					class:clickable={!!(href?.(row) || onrowclick)}
 					class:hl={highlight?.(row)}
 					class:fav={isFav(row)}
 					onclick={(e) => rowClick(e, row)}
@@ -193,7 +195,7 @@
 							class:num={!c.sticky && !c.team}
 							style={shade(c, row[c.key])}
 						>
-							{#if ci === 0 && href}
+							{#if ci === 0 && href?.(row)}
 								<a class="cell-link" href={href(row)}
 									>{#if c.team}<TeamBadge team={row[c.key]} />{:else}{text}{/if}</a
 								>
