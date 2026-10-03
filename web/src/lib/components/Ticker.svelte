@@ -40,7 +40,11 @@
 						{#each items as it (it.key)}
 							<li>
 								<a href="{base}{it.href}" tabindex={copy === 1 ? -1 : undefined}>
-									<span class="tag" class:hot={it.hot}>{it.tag}</span>
+									<span class="tag" class:hot={it.hot}
+										>{#if it.hot}<svg viewBox="0 0 16 16" aria-hidden="true"
+												><path d="M9.2 1 3 9.1h4.3L6.4 15l6.6-8.6H8.6z" /></svg
+											>{/if}{it.tag}</span
+									>
 									<span class="text">{it.text}</span>
 								</a>
 							</li>
@@ -125,8 +129,16 @@
 		text-transform: uppercase;
 		color: var(--text-muted);
 	}
+	/* Upsets: the same gold bolt as the home page's results, on ordinary ink. */
 	.tag.hot {
-		color: var(--bad-ink);
+		color: var(--text-primary);
+	}
+	.tag svg {
+		width: 0.8em;
+		height: 0.8em;
+		margin-right: 0.3em;
+		vertical-align: -0.05em;
+		fill: var(--fav);
 	}
 	.text {
 		font-weight: 600;

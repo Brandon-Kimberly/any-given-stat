@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { base } from '$app/paths';
 	import CountUp from '$lib/components/CountUp.svelte';
+	import NewsFeed from '$lib/components/NewsFeed.svelte';
 	import TeamFantasy from '$lib/components/TeamFantasy.svelte';
 	import TeamKeyPlayers from '$lib/components/TeamKeyPlayers.svelte';
 	import TeamSchedule from '$lib/components/TeamSchedule.svelte';
@@ -810,6 +811,14 @@
 		<TeamKeyPlayers {team} season={prefs.season ?? 0} />
 	</div>
 
+	<NewsFeed
+		{team}
+		compact
+		limit={8}
+		id="news"
+		sub="Headlines and this week’s injury report for the {teamName(team)}."
+	/>
+
 	<div class="grid-2">
 		<div class="card">
 			<h2>Week by week</h2>
@@ -920,7 +929,7 @@
 		z-index: -1;
 		width: min(46%, 420px);
 		aspect-ratio: 1;
-		object-fit: cover;
+		object-fit: contain;
 		transform: translateY(-50%) rotate(-8deg);
 		opacity: 0.22;
 		mix-blend-mode: luminosity;

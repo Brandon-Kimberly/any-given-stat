@@ -334,8 +334,11 @@ export interface TeamMeta {
 	color_light: string;
 	color_dark: string;
 	badge_fg: string;
-	/** Logo tile under /data (logos/<TEAM>.png) when the build could fetch it. */
+	/** Logo under /data (logos/<TEAM>.png) when the build could fetch it. */
 	logo?: string;
+	/** "contain" = the full logo on a transparent background (shown whole on a neutral tile);
+	 * "cover" = nflverse's squared tile (already on the team color). */
+	logo_fit?: 'contain' | 'cover';
 }
 
 export interface Player {
@@ -350,6 +353,54 @@ export interface Player {
 	college: string | null;
 	/** NFL.com headshot URL (loaded by the browser; may be missing or blocked). */
 	headshot: string | null;
+}
+
+/** Which page /player/ shows (player_index.json): 0 = a profile from players/<id>.json
+ * (kickers, punters, defenders, anyone without efficiency rows); 1 = the efficiency page
+ * (qbs/receivers/rushers); 2 = the efficiency page plus a profile file (two-way players). */
+export type PlayerPageKind = 0 | 1 | 2;
+
+/** player_index.json row, one per player with a page:
+ * [gsis id, name, position, last team, last season, headshot, page kind].
+ * headshot is 'p:<token>' / 'u:<token>' (NFL.com prefixes, see `headshotUrl`) or a full URL. */
+export type PlayerIndexRow = [
+	string,
+	string,
+	string | null,
+	string,
+	number,
+	string | null,
+	PlayerPageKind
+];
+
+/** One game in players/<id>.json: [game_id, week, postseason (0/1), team, opponent,
+ * home (0/1), stats]. */
+export type PlayerProfileGame = [string, number, 0 | 1, string, string, 0 | 1, StatLine];
+
+/** players/<id>.json: a profile player's bio and every game line (box-score keys). */
+export interface PlayerProfile {
+	player_id: string;
+	name: string;
+	/** nflverse position (e.g. CB, OLB, K), else the site group. */
+	position: string | null;
+	/** Site position group: QB RB WR TE K P DL LB DB OL. */
+	group: FantasyPos | null;
+	position_group: string | null;
+	jersey: string | null;
+	college: string | null;
+	headshot: string | null;
+	/** Inches / pounds. */
+	height: number | null;
+	weight: number | null;
+	birth_date: string | null;
+	rookie_season: number | null;
+	draft_year: number | null;
+	draft_round: number | null;
+	draft_pick: number | null;
+	draft_team: string | null;
+	/** [season, team he played the most games for]. */
+	teams: [number, string][];
+	games: PlayerProfileGame[];
 }
 
 export interface Concepts {
@@ -443,6 +494,24 @@ export interface GameDetail {
 	box: { home: BoxSide | null; away: BoxSide | null };
 }
 
+/** highlight.json: the latest full week's most exciting game, for the home hero. */
+export interface Highlight {
+	game_id: string;
+	season: number;
+	week: number;
+	season_type: string | null;
+	home: string;
+	away: string;
+	home_score: number;
+	away_score: number;
+	/** Total win-probability movement (same as games.ts `excitement`). */
+	excitement: number;
+	/** How many times the win-probability favorite changed sides. */
+	favorite_changes: number;
+	/** [elapsed seconds, home WP] */
+	wp: [number, number][];
+}
+
 export interface GameIndexEntry {
 	season: number;
 	file: string;
@@ -467,7 +536,46 @@ export interface QBGame {
 	sacks: number;
 }
 
-/** One play in games/<season>/<game_id>.json (column order = GamePlays.plays_columns). */
+/** What happened on a play (pipeline playbyplay.KINDS). */
+export type PlayKind =
+	| 'complete'
+	| 'incomplete'
+	| 'interception'
+	| 'sack'
+	| 'run'
+	| 'scramble'
+	| 'kneel'
+	| 'spike'
+	| 'fg_made'
+	| 'fg_missed'
+	| 'fg_blocked'
+	| 'xp_good'
+	| 'xp_failed'
+	| 'xp_blocked'
+	| '2pt_good'
+	| '2pt_failed'
+	| 'punt'
+	| 'punt_blocked'
+	| 'kickoff'
+	| 'onside'
+	| 'penalty'
+	| 'end';
+
+/** A flag on a play: team, type, yards, player, and "declined" / "offsetting" when not enforced. */
+export type PlayPenalty = [
+	team: string | null,
+	type: string,
+	yards: number | null,
+	player: string | null,
+	status: 'declined' | 'offsetting' | null
+];
+
+/**
+ * One play in games/<season>/<game_id>.json (column order = GamePlays.plays_columns). The
+ * first 14 columns are always there; the structured ones after `drive` (format v3) are
+ * missing from older files and trailing nulls are dropped, so read them by name
+ * (`decodePlays` in playText.ts).
+ */
 export type PlayRow = [
 	qtr: number,
 	time: string | null,
@@ -482,9 +590,29 @@ export type PlayRow = [
 	home_wp_after: number | null,
 	home_score: number | null,
 	away_score: number | null,
-	/** Letters: T touchdown, I interception, F fumble lost, S sack, P penalty, X explosive, 4 fourth-down try. */
+	/** Letters: T touchdown, I interception, F fumble lost, S sack, P penalty, X explosive, 4 fourth-down try, 1 first down. */
 	flags: string,
-	drive: number | null
+	drive: number | null,
+	/** Change in home win probability on the play. */
+	home_wpa?: number | null,
+	yds?: number | null,
+	/** Where the ball ended up, same scale as yl: 100 = offense's TD, 0 = safety or defensive TD. */
+	yl_end?: number | null,
+	kind?: PlayKind | null,
+	/** Passer, rusher, kicker or punter. */
+	a?: string | null,
+	/** Receiver (targeted or caught) or returner. */
+	b?: string | null,
+	/** Pass "deep left", run "left tackle", kick "touchback" / "fair catch" / "downed" / "out of bounds". */
+	detail?: string | null,
+	air?: number | null,
+	kick?: number | null,
+	ret?: number | null,
+	/** Defender who made the play: interceptor, sacker(s), fumble recoverer, kick blocker. */
+	d?: string | null,
+	pen?: PlayPenalty | null,
+	/** Who fumbled, when the fumble was lost. */
+	fum?: string | null
 ];
 
 export interface Drive {
@@ -868,4 +996,55 @@ export interface Lab3 {
 		factors: { feature: string; label: string; points: number }[];
 		injuries: Lab2Upcoming['injuries'];
 	}[];
+}
+
+// ---------- news.json / /api/news (pipeline news.py) ----------
+
+export interface NewsAthlete {
+	/** gsis id, or null when the ESPN athlete has no gsis match. */
+	id: string | null;
+	name: string;
+}
+
+export type InjuryStatus = 'Out' | 'Doubtful' | 'Questionable';
+/** Against the team's previous report: new status, worse, better, same, or status dropped. */
+export type InjuryChange = 'new' | 'worse' | 'better' | 'same' | 'cleared';
+
+export interface NewsItem {
+	id: string;
+	kind: 'news' | 'injury';
+	headline: string;
+	description: string;
+	/** ISO time. Injury items: estimated release of that week's game statuses. */
+	published: string;
+	url: string | null;
+	image: string | null;
+	teams: string[];
+	/** gsis ids of the players tagged (mapped athletes only). */
+	players: string[];
+	athletes: NewsAthlete[];
+	source: string;
+	/** ESPN: 'Video' | 'Recap'. */
+	label?: string;
+	/** ESPN+ article. */
+	premium?: boolean;
+	byline?: string;
+	// Injury items only.
+	status?: InjuryStatus;
+	change?: InjuryChange;
+	position?: string;
+	week?: number;
+	/** Final game statuses not out yet: practice participation only. */
+	preliminary?: boolean;
+}
+
+export interface NewsFeed {
+	generated_at: string;
+	/** When the ESPN headlines were fetched (null: never reached ESPN). */
+	news_fetched_at: string | null;
+	/** Served live by `ags up` (/api/news) rather than from the last build. */
+	live: boolean;
+	error: string | null;
+	injury_report: { season: number; week: number } | null;
+	items: NewsItem[];
 }

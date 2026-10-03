@@ -7,7 +7,8 @@
 	import PlotFigure from '$lib/components/Plot.svelte';
 	import { fantasyIds, fantasySeason, scoredSeason, scoringLabel } from '$lib/fantasy/data.svelte';
 	import { fantasy } from '$lib/fantasy/league.svelte';
-	import { breakdown } from '$lib/fantasy/scoring';
+	import { IDP } from '$lib/fantasy/analysis';
+	import { breakdown, scoreLine } from '$lib/fantasy/scoring';
 	import type { StatLine } from '$lib/fantasy/statline';
 	import { num, pct, signed } from '$lib/format';
 	import { gridY, isNarrow, Plot, plotStyle } from '$lib/plot';
@@ -21,6 +22,18 @@
 	const me = $derived(result?.players.find((p) => p.id === id) ?? null);
 	const owner = $derived(ids.value ? fantasy.ownership(ids.value).get(id) : undefined);
 	const rep = $derived(me ? (result?.replacement[me.pos] ?? null) : null);
+	// Defensive players under a scoring without IDP rules (the presets, most leagues): say so
+	// instead of charting a season of zeros (a two-way player's offense still scores).
+	const idpUnscored = $derived(
+		!!me &&
+			IDP.includes(me.pos) &&
+			me.points === 0 &&
+			scoreLine(
+				{ tkl_solo: 1, tkl_ast: 1, sack: 1, def_int: 1, def_pd: 1 },
+				me.pos,
+				fantasy.scoring
+			) === 0
+	);
 
 	type Game = {
 		gid: string;
@@ -152,6 +165,11 @@
 		<div class="placeholder" aria-hidden="true"></div>
 	{:else if !me}
 		<p class="muted">No regular-season fantasy points in {season}.</p>
+	{:else if idpUnscored}
+		<p class="muted">
+			{scoringLabel()} scoring doesn't count defensive players (IDP).
+			<a href="{base}/fantasy/">Connect a league</a> that starts IDP to see his points.
+		</p>
 	{:else}
 		<div class="stats">
 			<div><span class="k">Points</span><b>{num(me.points, 1)}</b></div>

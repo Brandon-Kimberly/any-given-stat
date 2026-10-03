@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { base } from '$app/paths';
-	import { replaceState } from '$app/navigation';
+	import { afterNavigate } from '$app/navigation';
+	import { setParam } from '$lib/url';
 	import { page } from '$app/state';
 	import Controls from '$lib/components/Controls.svelte';
 	import LoadError from '$lib/components/LoadError.svelte';
@@ -61,15 +62,19 @@
 			? `Week ${status.last_week}`
 			: (weeks.at(-1) ?? '')
 	);
+	// The URL's week on arrival (and on back/forward); a click sets `picked` and rewrites the
+	// address bar in place, since page.url doesn't follow shallow updates (see $lib/url).
 	const urlWeek = $derived(page.url.searchParams.get('week'));
+	let picked = $state<string | null>(null);
+	afterNavigate(() => (picked = null));
 	const week = $derived.by(() => {
-		const w = urlWeek === 'post' ? 'Playoffs' : urlWeek ? `Week ${urlWeek}` : null;
-		return w && weeks.includes(w) ? w : defaultWeek;
+		const fromUrl = urlWeek === 'post' ? 'Playoffs' : urlWeek ? `Week ${urlWeek}` : null;
+		for (const w of [picked, fromUrl]) if (w && weeks.includes(w)) return w;
+		return defaultWeek;
 	});
 	function pickWeek(w: string) {
-		const url = new URL(page.url);
-		url.searchParams.set('week', w === 'Playoffs' ? 'post' : w.replace('Week ', ''));
-		replaceState(url, page.state);
+		picked = w;
+		setParam('week', w === 'Playoffs' ? 'post' : w.replace('Week ', ''));
 	}
 	const shown = $derived(rows.filter((r) => r.label === week));
 	const best = $derived([...rows].sort((a, b) => b.excite - a.excite).slice(0, 8));

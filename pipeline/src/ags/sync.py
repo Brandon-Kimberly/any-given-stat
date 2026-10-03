@@ -38,6 +38,7 @@ from pathlib import Path
 
 from .cli import parse_seasons
 from .config import (
+    DEPTH_URL,
     INJURIES_URL,
     OUT_DIR,
     PBP_URL,
@@ -206,6 +207,7 @@ def tracked_sources(season: int) -> list[tuple[str, str]]:
         ("games.csv", SCHEDULE_URL),
         (f"injuries_{season}.parquet", INJURIES_URL.format(season=season)),
         (f"snap_counts_{season}.parquet", SNAPS_URL.format(season=season)),
+        (f"depth_charts_{season}.parquet", DEPTH_URL.format(season=season)),
         ("players.parquet", PLAYERS_URL),
     ]
 

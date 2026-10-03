@@ -8,6 +8,7 @@ import urllib.request
 from pathlib import Path
 
 from .config import (
+    DEPTH_URL,
     INJURIES_URL,
     PBP_URL,
     PLAYER_IDS_URL,
@@ -67,27 +68,31 @@ def fetch_players(*, force: bool = False, raw_dir: Path = RAW_DIR) -> Path | Non
 
 
 def fetch_logos(teams_file: Path | None, *, raw_dir: Path = RAW_DIR) -> Path | None:
-    """Team logo tiles (nflverse's squared logos, ~16 KB each) into data/raw/logos, once.
+    """Team logos into data/raw, once: the full logo (ESPN's 500 px transparent PNG) in
+    ``logos_full`` and nflverse's squared tile (a zoomed crop on the team color) in ``logos``.
 
-    Optional: badges stand in for any logo that can't be fetched.
+    The site prefers the full logo, since the squared tile cuts off the edges of most marks.
+    Optional: the tile, then a text badge, stand in for anything that can't be fetched.
     """
     if teams_file is None:
         return None
     import csv
 
-    dest = raw_dir / "logos"
+    sources = (("team_logo_espn", "logos_full"), ("team_logo_squared", "logos"))
     with teams_file.open(newline="", encoding="utf-8") as f:
         for row in csv.DictReader(f):
-            url = row.get("team_logo_squared") or ""
             team = row.get("team_abbr") or ""
-            out = dest / f"{team}.png"
-            if not url.startswith("https://") or not team.isalpha() or out.exists():
-                continue
-            try:
-                _download(url.replace("github.com/nflverse/nflverse-pbp/raw/", RAW_GITHUB), out)
-            except OSError as e:
-                print(f"warning: no logo for {team}: {e}", file=sys.stderr)
-    return dest if dest.exists() else None
+            for column, folder in sources:
+                url = row.get(column) or ""
+                out = raw_dir / folder / f"{team}.png"
+                if not url.startswith("https://") or not team.isalpha() or out.exists():
+                    continue
+                try:
+                    _download(url.replace("github.com/nflverse/nflverse-pbp/raw/", RAW_GITHUB), out)
+                except OSError as e:
+                    print(f"warning: no {folder} logo for {team}: {e}", file=sys.stderr)
+    dest = raw_dir / "logos"
+    return dest if dest.exists() or (raw_dir / "logos_full").exists() else None
 
 
 def fetch_player_ids(*, force: bool = False, raw_dir: Path = RAW_DIR) -> Path | None:
@@ -111,6 +116,16 @@ def fetch_context(
         injuries += [inj] if inj else []
         snaps += [snp] if snp else []
     return injuries, snaps
+
+
+def fetch_depth(season: int, *, force: bool = False, raw_dir: Path = RAW_DIR) -> Path | None:
+    """The season's depth charts (daily snapshots; refreshed with the latest season)."""
+    return fetch_optional(
+        DEPTH_URL.format(season=season),
+        f"depth_charts_{season}.parquet",
+        force=force,
+        raw_dir=raw_dir,
+    )
 
 
 def _download(url: str, dest: Path) -> None:

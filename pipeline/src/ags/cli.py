@@ -36,6 +36,7 @@ def run_build(seasons: list[int], refresh: bool = True, explorer: bool = True) -
     from .db import connect
     from .fetch import (
         fetch_context,
+        fetch_depth,
         fetch_logos,
         fetch_player_ids,
         fetch_players,
@@ -56,6 +57,7 @@ def run_build(seasons: list[int], refresh: bool = True, explorer: bool = True) -
         player_ids_file=fetch_player_ids(force=refresh),
         injury_files=injuries,
         snap_files=snaps,
+        depth_chart=(seasons[-1], fetch_depth(seasons[-1], force=refresh)),
     )
     build_all(con, explorer=explorer)
 

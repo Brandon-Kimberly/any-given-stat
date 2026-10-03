@@ -43,6 +43,17 @@ export const navGroups: NavGroup[] = [
 		]
 	},
 	{
+		// One page: a plain header link.
+		label: 'News',
+		items: [
+			{
+				href: '/news/',
+				label: 'News',
+				blurb: 'Headlines and this week’s injury report, by team or your roster'
+			}
+		]
+	},
+	{
 		label: 'Games',
 		items: [
 			{ href: '/games/', label: 'Scores & game charts', blurb: 'Win probability for every game' },

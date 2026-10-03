@@ -1,0 +1,791 @@
+{
+ "general": {
+  "header": "NFL News",
+  "link": {
+   "language": "en",
+   "rel": [
+    "index",
+    "desktop",
+    "league"
+   ],
+   "href": "https://www.espn.com/nfl/",
+   "text": "All NFL News",
+   "shortText": "All News",
+   "isExternal": false,
+   "isPremium": false
+  },
+  "articles": [
+   {
+    "id": 46500001,
+    "nowId": "1-46500001",
+    "contentKey": "46500001-1-21-1",
+    "dataSourceIdentifier": "a1b2c3",
+    "type": "HeadlineNews",
+    "headline": "Seahawks QB Sam Darnold practices fully, set to start Sunday",
+    "description": "Seattle Seahawks quarterback Sam Darnold was a full participant in practice on Friday and carries no injury designation into Sunday's game.",
+    "lastModified": "2026-10-03T00:05:11Z",
+    "published": "2026-10-02T23:58:40Z",
+    "images": [
+     {
+      "type": "header",
+      "name": "Photo",
+      "caption": "Caption text.",
+      "alt": "",
+      "height": 729,
+      "width": 1296,
+      "url": "https://a.espncdn.com/photo/2026/1002/r46500001_1296x729_16-9.jpg"
+     }
+    ],
+    "categories": [
+     {
+      "id": 568,
+      "type": "league",
+      "uid": "s:20~l:28",
+      "leagueId": 28,
+      "description": "NFL",
+      "league": {
+       "id": 28,
+       "description": "NFL",
+       "abbreviation": "NFL",
+       "links": {}
+      }
+     },
+     {
+      "id": 9026,
+      "type": "team",
+      "uid": "s:20~l:28~t:26",
+      "teamId": 26,
+      "team": {
+       "id": 26,
+       "description": "Seattle Seahawks",
+       "links": {
+        "web": {
+         "teams": {
+          "href": "https://www.espn.com/nfl/team/_/id/26"
+         }
+        }
+       }
+      },
+      "description": "Seattle Seahawks"
+     },
+     {
+      "id": 5000547,
+      "type": "athlete",
+      "uid": "s:20~l:28~a:3912547",
+      "athleteId": 3912547,
+      "athlete": {
+       "id": 3912547,
+       "description": "Sam Darnold",
+       "links": {
+        "web": {
+         "athletes": {
+          "href": "https://www.espn.com/nfl/player/_/id/3912547"
+         }
+        }
+       }
+      },
+      "description": "Sam Darnold"
+     },
+     {
+      "id": 1001,
+      "type": "topic",
+      "description": "fantasy football",
+      "topicId": 1001
+     }
+    ],
+    "premium": false,
+    "links": {
+     "web": {
+      "href": "https://www.espn.com/nfl/story/_/id/46500001/seahawks-qb-sam-darnold-practices-fully"
+     },
+     "mobile": {
+      "href": "https://m.espn.com/nfl/story?storyId=46500001"
+     },
+     "api": {
+      "news": {
+       "href": "https://content.core.api.espn.com/v1/sports/news/46500001"
+      },
+      "self": {
+       "href": "https://content.core.api.espn.com/v1/sports/news/46500001"
+      }
+     },
+     "app": {
+      "sportscenter": {
+       "href": "sportscenter://x-callback-url/showStory?uid=46500001"
+      }
+     }
+    },
+    "byline": "ESPN News Services"
+   },
+   {
+    "id": 46500002,
+    "nowId": "1-46500002",
+    "type": "Story",
+    "headline": "Fantasy football Week 4 rankings: Running backs",
+    "description": "  Our analysts rank every running back for Week 4,\n with notes on injuries, workloads and matchups across the league. More detail follows here. More detail follows here. More detail follows here. More detail follows here. More detail follows here. More detail follows here. More detail follows here. More detail follows here. More detail follows here. More detail follows here. More detail follows here. More detail follows here. ",
+    "lastModified": "2026-10-02T18:40:00Z",
+    "published": "2026-10-02T18:30:00Z",
+    "images": [
+     {
+      "type": "inline",
+      "name": "Photo",
+      "caption": "Caption text.",
+      "alt": "",
+      "height": 324,
+      "width": 576,
+      "url": "https://a.espncdn.com/photo/2026/1002/r46500002_576x324_16-9.jpg"
+     },
+     {
+      "type": "header",
+      "name": "Photo",
+      "caption": "Caption text.",
+      "alt": "",
+      "height": 729,
+      "width": 1296,
+      "url": "https://a.espncdn.com/photo/2026/1002/r46500003_1296x729_16-9.jpg"
+     }
+    ],
+    "categories": [
+     {
+      "id": 568,
+      "type": "league",
+      "uid": "s:20~l:28",
+      "leagueId": 28,
+      "description": "NFL",
+      "league": {
+       "id": 28,
+       "description": "NFL",
+       "abbreviation": "NFL",
+       "links": {}
+      }
+     },
+     {
+      "id": 5000515,
+      "type": "athlete",
+      "uid": "s:20~l:28~a:4426515",
+      "athleteId": 4426515,
+      "athlete": {
+       "id": 4426515,
+       "description": "Puka Nacua",
+       "links": {
+        "web": {
+         "athletes": {
+          "href": "https://www.espn.com/nfl/player/_/id/4426515"
+         }
+        }
+       }
+      },
+      "description": "Puka Nacua"
+     },
+     {
+      "id": 9014,
+      "type": "team",
+      "uid": "s:20~l:28~t:14",
+      "teamId": 14,
+      "team": {
+       "id": 14,
+       "description": "Los Angeles Rams",
+       "links": {
+        "web": {
+         "teams": {
+          "href": "https://www.espn.com/nfl/team/_/id/14"
+         }
+        }
+       }
+      },
+      "description": "Los Angeles Rams"
+     },
+     {
+      "id": 5000921,
+      "type": "athlete",
+      "uid": "s:20~l:28~a:4262921",
+      "athleteId": 4262921,
+      "athlete": {
+       "id": 4262921,
+       "description": "Justin Jefferson",
+       "links": {
+        "web": {
+         "athletes": {
+          "href": "https://www.espn.com/nfl/player/_/id/4262921"
+         }
+        }
+       }
+      },
+      "description": "Justin Jefferson"
+     },
+     {
+      "id": 9016,
+      "type": "team",
+      "uid": "s:20~l:28~t:16",
+      "teamId": 16,
+      "team": {
+       "id": 16,
+       "description": "Minnesota Vikings",
+       "links": {
+        "web": {
+         "teams": {
+          "href": "https://www.espn.com/nfl/team/_/id/16"
+         }
+        }
+       }
+      },
+      "description": "Minnesota Vikings"
+     },
+     {
+      "id": 1001,
+      "type": "topic",
+      "description": "fantasy football",
+      "topicId": 1001
+     }
+    ],
+    "premium": true,
+    "links": {
+     "web": {
+      "href": "https://www.espn.com/nfl/story/_/id/46500002/fantasy-football-week-4-rankings-running-backs"
+     },
+     "mobile": {
+      "href": "https://m.espn.com/nfl/story?storyId=46500002"
+     },
+     "api": {
+      "news": {
+       "href": "https://content.core.api.espn.com/v1/sports/news/46500002"
+      },
+      "self": {
+       "href": "https://content.core.api.espn.com/v1/sports/news/46500002"
+      }
+     },
+     "app": {
+      "sportscenter": {
+       "href": "sportscenter://x-callback-url/showStory?uid=46500002"
+      }
+     }
+    },
+    "byline": "Fantasy Staff"
+   },
+   {
+    "id": 46500004,
+    "nowId": "1-46500004",
+    "type": "Media",
+    "headline": "Why the Commanders' offense is clicking",
+    "description": "A look at how Washington has moved the ball through three weeks.",
+    "lastModified": "2026-10-02T15:12:00Z",
+    "published": "2026-10-02T15:10:00Z",
+    "images": [
+     {
+      "type": "header",
+      "name": "Photo",
+      "caption": "Caption text.",
+      "alt": "",
+      "height": 729,
+      "width": 1296,
+      "url": "https://a.espncdn.com/photo/2026/1002/r46500004_1296x729_16-9.jpg"
+     }
+    ],
+    "categories": [
+     {
+      "id": 568,
+      "type": "league",
+      "uid": "s:20~l:28",
+      "leagueId": 28,
+      "description": "NFL",
+      "league": {
+       "id": 28,
+       "description": "NFL",
+       "abbreviation": "NFL",
+       "links": {}
+      }
+     },
+     {
+      "id": 9028,
+      "type": "team",
+      "uid": "s:20~l:28~t:28",
+      "teamId": 28,
+      "team": {
+       "id": 28,
+       "description": "Washington Commanders",
+       "links": {
+        "web": {
+         "teams": {
+          "href": "https://www.espn.com/nfl/team/_/id/28"
+         }
+        }
+       }
+      },
+      "description": "Washington Commanders"
+     },
+     {
+      "id": 5000348,
+      "type": "athlete",
+      "uid": "s:20~l:28~a:4426348",
+      "athleteId": 4426348,
+      "athlete": {
+       "id": 4426348,
+       "description": "Jayden Daniels",
+       "links": {
+        "web": {
+         "athletes": {
+          "href": "https://www.espn.com/nfl/player/_/id/4426348"
+         }
+        }
+       }
+      },
+      "description": "Jayden Daniels"
+     }
+    ],
+    "premium": false,
+    "links": {
+     "web": {
+      "href": "https://www.espn.com/nfl/video/clip/_/id/46500004/why-commanders-offense-clicking"
+     },
+     "mobile": {
+      "href": "https://m.espn.com/nfl/video/clip?storyId=46500004"
+     },
+     "api": {
+      "news": {
+       "href": "https://content.core.api.espn.com/v1/sports/news/46500004"
+      },
+      "self": {
+       "href": "https://content.core.api.espn.com/v1/sports/news/46500004"
+      }
+     },
+     "app": {
+      "sportscenter": {
+       "href": "sportscenter://x-callback-url/showStory?uid=46500004"
+      }
+     }
+    }
+   },
+   {
+    "id": 46500005,
+    "type": "Recap",
+    "headline": "Packers hold off Lions in Thursday thriller",
+    "description": "Green Bay held on late.",
+    "published": "2026-10-02T03:30:00Z",
+    "images": [],
+    "categories": [
+     {
+      "id": 568,
+      "type": "league",
+      "uid": "s:20~l:28",
+      "leagueId": 28,
+      "description": "NFL",
+      "league": {
+       "id": 28,
+       "description": "NFL",
+       "abbreviation": "NFL",
+       "links": {}
+      }
+     },
+     {
+      "id": 9009,
+      "type": "team",
+      "uid": "s:20~l:28~t:9",
+      "teamId": 9,
+      "team": {
+       "id": 9,
+       "description": "Green Bay Packers",
+       "links": {
+        "web": {
+         "teams": {
+          "href": "https://www.espn.com/nfl/team/_/id/9"
+         }
+        }
+       }
+      },
+      "description": "Green Bay Packers"
+     },
+     {
+      "id": 9008,
+      "type": "team",
+      "uid": "s:20~l:28~t:8",
+      "teamId": 8,
+      "team": {
+       "id": 8,
+       "description": "Detroit Lions",
+       "links": {
+        "web": {
+         "teams": {
+          "href": "https://www.espn.com/nfl/team/_/id/8"
+         }
+        }
+       }
+      },
+      "description": "Detroit Lions"
+     },
+     {
+      "type": "team",
+      "team": {
+       "abbreviation": "WSH"
+      }
+     }
+    ],
+    "links": {
+     "web": {
+      "href": "https://www.espn.com/nfl/recap/_/id/46500005/packers-lions-recap"
+     },
+     "mobile": {
+      "href": "https://m.espn.com/nfl/recap?storyId=46500005"
+     },
+     "api": {
+      "news": {
+       "href": "https://content.core.api.espn.com/v1/sports/news/46500005"
+      },
+      "self": {
+       "href": "https://content.core.api.espn.com/v1/sports/news/46500005"
+      }
+     },
+     "app": {
+      "sportscenter": {
+       "href": "sportscenter://x-callback-url/showStory?uid=46500005"
+      }
+     }
+    }
+   },
+   {
+    "id": 46500006,
+    "type": "HeadlineNews",
+    "headline": "No link: dropped",
+    "published": "2026-10-02T03:00:00Z",
+    "categories": [
+     {
+      "id": 568,
+      "type": "league",
+      "uid": "s:20~l:28",
+      "leagueId": 28,
+      "description": "NFL",
+      "league": {
+       "id": 28,
+       "description": "NFL",
+       "abbreviation": "NFL",
+       "links": {}
+      }
+     }
+    ],
+    "links": {}
+   },
+   {
+    "id": 46500007,
+    "type": "HeadlineNews",
+    "headline": "",
+    "published": "2026-10-02T03:00:00Z",
+    "links": {
+     "web": {
+      "href": "https://www.espn.com/nfl/story/_/id/46500007/x"
+     },
+     "mobile": {
+      "href": "https://m.espn.com/nfl/story?storyId=46500007"
+     },
+     "api": {
+      "news": {
+       "href": "https://content.core.api.espn.com/v1/sports/news/46500007"
+      },
+      "self": {
+       "href": "https://content.core.api.espn.com/v1/sports/news/46500007"
+      }
+     },
+     "app": {
+      "sportscenter": {
+       "href": "sportscenter://x-callback-url/showStory?uid=46500007"
+      }
+     }
+    }
+   },
+   {
+    "id": 46500008,
+    "type": "HeadlineNews",
+    "headline": "Only lastModified, insecure image",
+    "description": "Has lastModified but no published.",
+    "lastModified": "2026-10-01T12:00:00Z",
+    "images": [
+     {
+      "url": "http://insecure.example/x.jpg",
+      "width": 10,
+      "height": 10
+     }
+    ],
+    "categories": [
+     {
+      "id": 568,
+      "type": "league",
+      "uid": "s:20~l:28",
+      "leagueId": 28,
+      "description": "NFL",
+      "league": {
+       "id": 28,
+       "description": "NFL",
+       "abbreviation": "NFL",
+       "links": {}
+      }
+     },
+     {
+      "id": 9034,
+      "type": "team",
+      "uid": "s:20~l:28~t:34",
+      "teamId": 34,
+      "team": {
+       "id": 34,
+       "description": "Houston Texans",
+       "links": {
+        "web": {
+         "teams": {
+          "href": "https://www.espn.com/nfl/team/_/id/34"
+         }
+        }
+       }
+      },
+      "description": "Houston Texans"
+     },
+     {
+      "id": 5000999,
+      "type": "athlete",
+      "uid": "s:20~l:28~a:99999999",
+      "athleteId": 99999999,
+      "athlete": {
+       "id": 99999999,
+       "description": "Unmapped Player",
+       "links": {
+        "web": {
+         "athletes": {
+          "href": "https://www.espn.com/nfl/player/_/id/99999999"
+         }
+        }
+       }
+      },
+      "description": "Unmapped Player"
+     }
+    ],
+    "links": {
+     "web": {
+      "href": "https://www.espn.com/nfl/story/_/id/46500008/only-last-modified"
+     },
+     "mobile": {
+      "href": "https://m.espn.com/nfl/story?storyId=46500008"
+     },
+     "api": {
+      "news": {
+       "href": "https://content.core.api.espn.com/v1/sports/news/46500008"
+      },
+      "self": {
+       "href": "https://content.core.api.espn.com/v1/sports/news/46500008"
+      }
+     },
+     "app": {
+      "sportscenter": {
+       "href": "sportscenter://x-callback-url/showStory?uid=46500008"
+      }
+     }
+    }
+   }
+  ]
+ },
+ "team_26": {
+  "header": "Seattle Seahawks News",
+  "link": {
+   "language": "en",
+   "rel": [
+    "index",
+    "desktop",
+    "league"
+   ],
+   "href": "https://www.espn.com/nfl/",
+   "text": "All NFL News",
+   "shortText": "All News",
+   "isExternal": false,
+   "isPremium": false
+  },
+  "articles": [
+   {
+    "id": 46500001,
+    "nowId": "1-46500001",
+    "contentKey": "46500001-1-21-1",
+    "dataSourceIdentifier": "a1b2c3",
+    "type": "HeadlineNews",
+    "headline": "Seahawks QB Sam Darnold practices fully, set to start Sunday",
+    "description": "Seattle Seahawks quarterback Sam Darnold was a full participant in practice on Friday and carries no injury designation into Sunday's game.",
+    "lastModified": "2026-10-03T00:05:11Z",
+    "published": "2026-10-02T23:58:40Z",
+    "images": [
+     {
+      "type": "header",
+      "name": "Photo",
+      "caption": "Caption text.",
+      "alt": "",
+      "height": 729,
+      "width": 1296,
+      "url": "https://a.espncdn.com/photo/2026/1002/r46500001_1296x729_16-9.jpg"
+     }
+    ],
+    "categories": [
+     {
+      "id": 568,
+      "type": "league",
+      "uid": "s:20~l:28",
+      "leagueId": 28,
+      "description": "NFL",
+      "league": {
+       "id": 28,
+       "description": "NFL",
+       "abbreviation": "NFL",
+       "links": {}
+      }
+     },
+     {
+      "id": 9026,
+      "type": "team",
+      "uid": "s:20~l:28~t:26",
+      "teamId": 26,
+      "team": {
+       "id": 26,
+       "description": "Seattle Seahawks",
+       "links": {
+        "web": {
+         "teams": {
+          "href": "https://www.espn.com/nfl/team/_/id/26"
+         }
+        }
+       }
+      },
+      "description": "Seattle Seahawks"
+     },
+     {
+      "id": 5000547,
+      "type": "athlete",
+      "uid": "s:20~l:28~a:3912547",
+      "athleteId": 3912547,
+      "athlete": {
+       "id": 3912547,
+       "description": "Sam Darnold",
+       "links": {
+        "web": {
+         "athletes": {
+          "href": "https://www.espn.com/nfl/player/_/id/3912547"
+         }
+        }
+       }
+      },
+      "description": "Sam Darnold"
+     },
+     {
+      "id": 1001,
+      "type": "topic",
+      "description": "fantasy football",
+      "topicId": 1001
+     }
+    ],
+    "premium": false,
+    "links": {
+     "web": {
+      "href": "https://www.espn.com/nfl/story/_/id/46500001/seahawks-qb-sam-darnold-practices-fully"
+     },
+     "mobile": {
+      "href": "https://m.espn.com/nfl/story?storyId=46500001"
+     },
+     "api": {
+      "news": {
+       "href": "https://content.core.api.espn.com/v1/sports/news/46500001"
+      },
+      "self": {
+       "href": "https://content.core.api.espn.com/v1/sports/news/46500001"
+      }
+     },
+     "app": {
+      "sportscenter": {
+       "href": "sportscenter://x-callback-url/showStory?uid=46500001"
+      }
+     }
+    },
+    "byline": "ESPN News Services"
+   },
+   {
+    "id": 46500009,
+    "type": "Story",
+    "headline": "Seahawks' defense looks to slow Cardinals",
+    "description": "Seattle's defense has allowed the fewest yards per play in the league.",
+    "published": "2026-10-01T20:00:00Z",
+    "images": [
+     {
+      "type": "header",
+      "name": "Photo",
+      "caption": "Caption text.",
+      "alt": "",
+      "height": 729,
+      "width": 1296,
+      "url": "https://a.espncdn.com/photo/2026/1002/r46500009_1296x729_16-9.jpg"
+     }
+    ],
+    "categories": [
+     {
+      "id": 568,
+      "type": "league",
+      "uid": "s:20~l:28",
+      "leagueId": 28,
+      "description": "NFL",
+      "league": {
+       "id": 28,
+       "description": "NFL",
+       "abbreviation": "NFL",
+       "links": {}
+      }
+     },
+     {
+      "id": 9026,
+      "type": "team",
+      "uid": "s:20~l:28~t:26",
+      "teamId": 26,
+      "team": {
+       "id": 26,
+       "description": "Seattle Seahawks",
+       "links": {
+        "web": {
+         "teams": {
+          "href": "https://www.espn.com/nfl/team/_/id/26"
+         }
+        }
+       }
+      },
+      "description": "Seattle Seahawks"
+     },
+     {
+      "id": 9022,
+      "type": "team",
+      "uid": "s:20~l:28~t:22",
+      "teamId": 22,
+      "team": {
+       "id": 22,
+       "description": "Arizona Cardinals",
+       "links": {
+        "web": {
+         "teams": {
+          "href": "https://www.espn.com/nfl/team/_/id/22"
+         }
+        }
+       }
+      },
+      "description": "Arizona Cardinals"
+     }
+    ],
+    "links": {
+     "web": {
+      "href": "https://www.espn.com/nfl/story/_/id/46500009/seahawks-defense-cardinals"
+     },
+     "mobile": {
+      "href": "https://m.espn.com/nfl/story?storyId=46500009"
+     },
+     "api": {
+      "news": {
+       "href": "https://content.core.api.espn.com/v1/sports/news/46500009"
+      },
+      "self": {
+       "href": "https://content.core.api.espn.com/v1/sports/news/46500009"
+      }
+     },
+     "app": {
+      "sportscenter": {
+       "href": "sportscenter://x-callback-url/showStory?uid=46500009"
+      }
+     }
+    }
+   }
+  ]
+ }
+}

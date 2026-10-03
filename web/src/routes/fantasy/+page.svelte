@@ -5,6 +5,7 @@
 	import CountUp from '$lib/components/CountUp.svelte';
 	import DataTable, { type Column } from '$lib/components/DataTable.svelte';
 	import LeagueConnect from '$lib/components/LeagueConnect.svelte';
+	import NewsFeed from '$lib/components/NewsFeed.svelte';
 	import LoadError from '$lib/components/LoadError.svelte';
 	import PlotFigure from '$lib/components/Plot.svelte';
 	import SampleWarning from '$lib/components/SampleWarning.svelte';
@@ -28,6 +29,8 @@
 	import { fantasy } from '$lib/fantasy/league.svelte';
 	import type { FantasyPos } from '$lib/fantasy/statline';
 	import { num, pct, signed } from '$lib/format';
+	import { fantasyRelevant } from '$lib/news';
+	import { loadNews } from '$lib/news.svelte';
 	import { gridY, isNarrow, Plot, plotStyle } from '$lib/plot';
 	import { prefs } from '$lib/prefs.svelte';
 	import { resource } from '$lib/resource.svelte';
@@ -41,6 +44,11 @@
 	const lineup = $derived(currentLineup());
 	const owners = $derived(ids.value ? fantasy.ownership(ids.value) : null);
 	const label = $derived(scoringLabel());
+	// News for the visitor's roster (gsis ids of their team), else fantasy-relevant news.
+	const mySet = $derived(
+		owners ? new Set([...owners].filter(([, o]) => o.mine).map(([id]) => id)) : null
+	);
+	loadNews().catch(() => {}); // start the feed download alongside the season's stat lines
 
 	const positions = $derived<FantasyPos[]>(startsIdp(lineup) ? [...OFFENSE, ...IDP] : OFFENSE);
 	let position = $state<'All' | FantasyPos>('All');
@@ -321,6 +329,29 @@
 				{/each}
 			</ul>
 		</section>
+	{/if}
+
+	{#if mySet?.size}
+		<NewsFeed
+			players={mySet}
+			mine={mySet}
+			compact
+			limit={8}
+			title="Roster news"
+			sub="Headlines and injury report updates for the players on your team."
+			more="{base}/news/?view=mine"
+			empty="No news or injury updates for your players right now."
+		/>
+	{:else}
+		<NewsFeed
+			filter={fantasyRelevant}
+			compact
+			limit={8}
+			title="Fantasy news"
+			sub={fantasy.league
+				? 'Player headlines and skill-position injury updates. Pick your team above to see news for your roster.'
+				: 'Player headlines and skill-position injury updates. Connect your league to see news for your roster.'}
+		/>
 	{/if}
 
 	<section class="card">

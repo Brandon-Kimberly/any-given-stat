@@ -7,6 +7,7 @@
 	import { allPages } from '$lib/nav';
 	import { favorite } from '$lib/favorite.svelte';
 	import { kickoffLabel } from '$lib/kickoff';
+	import { headshotUrl, loadPlayerIndex } from '$lib/playerPages.svelte';
 	import { parseGlossary, rank } from '$lib/search';
 	import { teamMeta } from '$lib/teams.svelte';
 	import { readRecent } from '$lib/recent';
@@ -109,7 +110,20 @@
 	}
 
 	async function loadPlayers(): Promise<Entry[]> {
-		// Latest season each player appears in, from the three player datasets.
+		// Everyone with a player page (player_index.json): kickers, punters and defenders too.
+		const index = await loadPlayerIndex().catch(() => null);
+		if (index?.size && [...index.values()].some((r) => r[4]))
+			return [...index.values()].map(([id, name, pos, team, season, photo]) => ({
+				kind: 'Player',
+				label: name,
+				detail: `${pos ?? 'Player'} · ${team} · last seen ${season}`,
+				href: `/player/?id=${id}`,
+				key: '',
+				team,
+				photo: headshotUrl(photo),
+				season
+			}));
+		// Before a rebuild writes the index: the latest season in the three player datasets.
 		const [qbs, rec, rush, directory] = await Promise.all([
 			load('qbs').catch(() => []),
 			load('receivers').catch(() => []),

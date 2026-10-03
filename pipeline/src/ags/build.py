@@ -21,6 +21,7 @@ from . import (
     lab2,
     lab3,
     market,
+    news,
     people,
     playbyplay,
     players,
@@ -211,14 +212,17 @@ def build_all(con: duckdb.DuckDBPyConnection, out_dir: Path = OUT_DIR, explorer:
     team_meta = teams_meta(con)
     if not team_meta:
         print("teams_colors_logos.csv missing: teams_meta.json is empty", file=sys.stderr)
-    # Logo tiles fetched into data/raw/logos (fetch.fetch_logos) are served with the data.
-    logos = RAW_DIR / "logos"
+    # Logos fetched into data/raw (fetch.fetch_logos) are served with the data: the full logo
+    # when there is one (shown whole on a neutral tile), else nflverse's squared team-color tile.
     for t in team_meta:
-        src = logos / f"{t['team']}.png"
-        if src.exists():
-            (out_dir / "logos").mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(src, out_dir / "logos" / src.name)
-            t["logo"] = f"logos/{src.name}"
+        for folder, fit in (("logos_full", "contain"), ("logos", "cover")):
+            src = RAW_DIR / folder / f"{t['team']}.png"
+            if src.exists():
+                (out_dir / "logos").mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(src, out_dir / "logos" / src.name)
+                t["logo"] = f"logos/{src.name}"
+                t["logo_fit"] = fit
+                break
     write_json(out_dir / "teams_meta.json", team_meta)
     write_json(out_dir / "stability.json", datasets.stability(con, complete))
     write_json(out_dir / "concepts.json", datasets.concepts(con, reference))
@@ -236,11 +240,21 @@ def build_all(con: duckdb.DuckDBPyConnection, out_dir: Path = OUT_DIR, explorer:
         )
         game_summaries.extend(filter(None, map(records.game_summary, season_games)))
     write_json(out_dir / "games" / "index.json", games_index)
+    # The home hero's game: the latest season's most exciting game of its last full week.
+    latest_status = status[-1] if status else None
+    if latest_status:
+        week = (
+            latest_status["last_week"]
+            if not latest_status["complete"]
+            else max((g["week"] for g in season_games), default=0)
+        )
+        write_json(out_dir / "highlight.json", games.highlight(season_games, week))
 
     # --- per-game play-by-play, drives and box scores (playbyplay.py, statlines.py) ---
     # plus fantasy/<season>.json: the same stat lines, every game of the season in one file.
     with timed("play-by-play files"):
         latest = max(s["season"] for s in status)
+        player_lines: dict[int, dict] = {}  # season -> stat lines, for the player pages
         for s in status:
             season_dir = out_dir / "games" / str(s["season"])
             marker = season_dir / ".done"
@@ -248,9 +262,15 @@ def build_all(con: duckdb.DuckDBPyConnection, out_dir: Path = OUT_DIR, explorer:
             # Past seasons don't change: skip them when this version already wrote them.
             if s["season"] < latest and marker.exists() and fantasy_file.exists():
                 if marker.read_text().strip() == f"v{playbyplay.VERSION}":
+                    player_lines[s["season"]] = players.season_lines(
+                        con, s["season"], CACHE_DIR, playbyplay.VERSION
+                    )
                     continue
             ids = statlines.player_ids(con, s["season"])
             lines = statlines.season_lines(con, s["season"], statlines.directory(con, ids))
+            player_lines[s["season"]] = players.season_lines(
+                con, s["season"], CACHE_DIR, playbyplay.VERSION, lines
+            )
             write_json(fantasy_file, statlines.fantasy_season(s["season"], lines))
             box = statlines.game_boxes(lines)
             n = size = 0
@@ -266,6 +286,14 @@ def build_all(con: duckdb.DuckDBPyConnection, out_dir: Path = OUT_DIR, explorer:
             )
             if s["season"] < latest:
                 marker.write_text(f"v{playbyplay.VERSION}")
+
+    # --- every player with a stat line gets a page (players.py) ---
+    with timed("player pages"):
+        index, pages = players.directory_pages(con, player_lines, [*qbs, *receivers, *rushers])
+        write_json(out_dir / "player_index.json", index)
+        for pid, payload in pages.items():
+            write_json(out_dir / "players" / f"{pid}.json", payload, quiet=True)
+        print(f"wrote {out_dir / 'players'}/ ({len(pages)} profiles)", file=sys.stderr)
 
     with timed("fantasy ids"):
         every = set()
@@ -291,6 +319,13 @@ def build_all(con: duckdb.DuckDBPyConnection, out_dir: Path = OUT_DIR, explorer:
             print("no schedule: coaches.json / referees.json are empty", file=sys.stderr)
         write_json(out_dir / "coaches.json", people.coaches(con, fourth_payload["buckets"]))
         write_json(out_dir / "referees.json", people.referees(con))
+
+    # --- news (news.py): ESPN headlines + the latest injury report. ESPN being unreachable
+    # keeps the previous file's headlines; injury items always rebuild offline.
+    with timed("news"):
+        write_json(
+            out_dir / "news.json", news.build(con, news.read_previous(out_dir / "news.json"))
+        )
 
     explorer_files = []
     if explorer:

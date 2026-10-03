@@ -2,6 +2,8 @@
 	import { ratingsWeek } from '$lib/season';
 	import { base } from '$app/paths';
 	import FavoriteCard from '$lib/components/FavoriteCard.svelte';
+	import HomeHero, { type HeroStat } from '$lib/components/HomeHero.svelte';
+	import WeekBoard from '$lib/components/WeekBoard.svelte';
 	import PlotFigure from '$lib/components/Plot.svelte';
 	import SampleWarning from '$lib/components/SampleWarning.svelte';
 	import Ticker, { type TickerItem } from '$lib/components/Ticker.svelte';
@@ -66,18 +68,6 @@
 			.filter((g) => g.week === first.week && g.game_type === first.game_type)
 			.sort((a, b) => kick(a).localeCompare(kick(b)) || a.home.localeCompare(b.home));
 	});
-	const slots = $derived.by(() => {
-		const out: { label: string; games: ScheduleGame[] }[] = [];
-		for (const g of thisWeek) {
-			const label = played(g) ? 'Final' : kickoffLabel(g.gameday, g.gametime);
-			const last = out.at(-1);
-			if (last?.label === label) last.games.push(g);
-			else out.push({ label, games: [g] });
-		}
-		return out;
-	});
-	const disagree = (p: GamePrediction | undefined) =>
-		p && p.vegas != null ? Math.abs(p.model - p.vegas) : 0;
 
 	// Results: the last full week, upsets first.
 	const resultRows = $derived(
@@ -118,21 +108,6 @@
 	function favoredBy(p: GamePrediction): string {
 		const wp = p.blend_wp ?? p.home_wp;
 		return wp >= 0.5 ? `${p.home} ${num(wp * 100)}%` : `${p.away} ${num((1 - wp) * 100)}%`;
-	}
-	function qbNote(p: GamePrediction): string | null {
-		const sides = [
-			[p.home, p.home_qb_pts, p.home_qb],
-			[p.away, p.away_qb_pts, p.away_qb]
-		] as const;
-		const big = sides.filter(([, pts]) => Math.abs(pts) >= 1.5);
-		return big.length
-			? big
-					.map(
-						([t, pts, n]) =>
-							`${t} QB ${n ?? 'change'}: ${signed(pts)} pts vs the QBs behind its rating`
-					)
-					.join(' · ')
-			: null;
 	}
 
 	// Power ratings now and a week earlier.
@@ -294,69 +269,44 @@
 
 	// Your team's colors light the hero (darkened so white text stays readable).
 	const tint = $derived(heroColors(favorite.team));
-	// The hero's looping animations pause while it's scrolled out of view.
-	let heroEl = $state<HTMLElement>();
-	let heroHidden = $state(false);
-	$effect(() => {
-		if (!heroEl) return;
-		const io = new IntersectionObserver(([e]) => (heroHidden = !e.isIntersecting));
-		io.observe(heroEl);
-		return () => io.disconnect();
-	});
+	const highlight = resource('highlight');
+	const heroStats = $derived<HeroStat[]>([
+		now[0]
+			? {
+					label: 'Best team',
+					value: now[0].team,
+					figure: signed(now[0].points),
+					href: `/team/?t=${now[0].team}&${q}`
+				}
+			: { label: 'Best team', value: '–' },
+		favorites[0]
+			? {
+					label: 'Super Bowl favorite',
+					value: favorites[0].team,
+					figure: `${num(favorites[0].p_sb * 100)}%`,
+					href: `/odds/?${q}`
+				}
+			: { label: 'Super Bowl favorite', value: '–' },
+		thisWeek.length
+			? {
+					label: weekLabel(thisWeek[0]),
+					value: `${thisWeek.filter((g) => !played(g)).length} games`,
+					href: '/predictions/'
+				}
+			: { label: 'Next game', value: latest ? 'Offseason' : '–' }
+	]);
 </script>
 
 <svelte:head><title>Any Given Stat · NFL analytics</title></svelte:head>
 
-<section
-	bind:this={heroEl}
-	class="hero"
-	class:paused={heroHidden}
-	class:team-tint={!!tint}
-	style:--hero-from={tint?.from}
-	style:--hero-to={tint?.to}
->
-	<div class="aurora" aria-hidden="true"><span></span><span></span><span></span></div>
-	<div class="turf" aria-hidden="true"></div>
-	<div class="eyebrow" style="color: rgba(255,255,255,0.75)">
-		{season || ' '}
-		{#if latest}· {inProgress ? `through week ${latest.last_week}` : 'final'}{/if}
-	</div>
-	<h1>Know which numbers <span class="glow">matter.</span></h1>
-	<p class="lede">
-		Every NFL play since 2016: opponent-adjusted ratings, win probability, forecasts scored honestly
-		against Vegas, and which stats are signal.
-	</p>
-	<dl class="hero-stats">
-		<div>
-			<dt>Best team</dt>
-			<dd>
-				{#if now[0]}<a href="{base}/team/?t={now[0].team}&{q}">{now[0].team}</a>
-					<span class="num">{signed(now[0].points)}</span>{:else}&nbsp;{/if}
-			</dd>
-		</div>
-		<div>
-			<dt>Super Bowl favorite</dt>
-			<dd>
-				{#if favorites[0]}<a href="{base}/odds/?{q}">{favorites[0].team}</a>
-					<span class="num">{num(favorites[0].p_sb * 100)}%</span>{:else}&nbsp;{/if}
-			</dd>
-		</div>
-		<div>
-			<dt>{thisWeek[0] ? weekLabel(thisWeek[0]) : 'Next game'}</dt>
-			<dd>
-				{#if thisWeek.length}
-					<a href="{base}/predictions/">{thisWeek.filter((g) => !played(g)).length} games</a>
-				{:else if latest}Offseason{:else}&nbsp;{/if}
-			</dd>
-		</div>
-	</dl>
-	<svg class="ball" viewBox="0 0 160 100" aria-hidden="true">
-		<path class="trail" d="M-70 70h70M-90 52h82M-60 34h58" />
-		<path class="hide" d="M8 50C30 8 130 8 152 50 130 92 30 92 8 50Z" />
-		<path class="seam" d="M30 26c8 16 8 32 0 48M130 26c-8 16-8 32 0 48" />
-		<path class="lace" d="M55 50h50M62 43v14M72 43v14M82 43v14M92 43v14M100 44v12" />
-	</svg>
-</section>
+<HomeHero
+	eyebrow={season
+		? `${season} · ${inProgress ? `through week ${latest?.last_week}` : 'final'}`
+		: ' '}
+	highlight={highlight.value}
+	stats={heroStats}
+	{tint}
+/>
 
 <Ticker items={ticker} label="Latest scores and lines" />
 
@@ -382,53 +332,7 @@
 			<a href="{base}/predictions/">Forecast details →</a>
 		</div>
 		{#if thisWeek.length}
-			<p class="sub">
-				The boxed number is our <b>best estimate</b> of who wins: the Vegas line nudged toward our
-				model. <span class="badge-key">Δ</span> marks games where the model alone differs from Vegas by
-				3+ points.
-			</p>
-			<div class="slots">
-				{#each slots as s, i (s.label + i)}
-					<h3 class="slot">{s.label}</h3>
-					<ul class="games">
-						{#each s.games as g (g.game_id)}
-							{@const p = preds.get(g.game_id)}
-							{@const note = p ? qbNote(p) : null}
-							<li>
-								<a href="{base}/game/?id={g.game_id}">
-									<span class="matchup">
-										<TeamBadge team={g.away} />
-										{#if played(g)}<b class="score">{g.away_score}</b>{/if}
-										<span class="at">{g.neutral ? 'vs' : '@'}</span>
-										<TeamBadge team={g.home} />
-										{#if played(g)}<b class="score">{g.home_score}</b>{/if}
-									</span>
-									{#if !played(g)}
-										<span class="lines">
-											<span><span class="k">Vegas</span> {spread(g.vegas, g.home, g.away)}</span>
-											{#if p}<span
-													><span class="k">Model</span>
-													{spread(p.model, p.home, p.away)}{#if disagree(p) >= 3}
-														<span
-															class="badge-key"
-															title="Model differs from Vegas by {num(disagree(p), 1)} points"
-															>Δ {num(disagree(p), 1)}</span
-														>{/if}</span
-												>{/if}
-										</span>
-										{#if p?.blend_wp != null}<span class="best" title="Best estimate"
-												>{favoredBy(p)}</span
-											>{/if}
-									{:else}
-										<span class="best final">Final</span>
-									{/if}
-									{#if note}<span class="qb">{note}</span>{/if}
-								</a>
-							</li>
-						{/each}
-					</ul>
-				{/each}
-			</div>
+			<WeekBoard games={thisWeek} predictions={preds} />
 			{#if test}
 				<p class="foot-note">
 					On held-out test seasons the model misses by {num(test.model_mae, 1)} points a game and Vegas
@@ -458,15 +362,33 @@
 				<ul class="scores">
 					{#each resultRows as g (g.game_id)}
 						{@const homeWon = g.home_score! > g.away_score!}
+						{@const surprise = upset(g)}
+						{@const line = g.vegas == null ? null : Math.abs(g.vegas)}
 						<li>
-							<a href="{base}/game/?id={g.game_id}">
+							<a href="{base}/game/?id={g.game_id}" class:upset={surprise}>
 								<span class="side" class:won={!homeWon && g.home_score !== g.away_score}>
 									<TeamBadge team={g.away} /><b>{g.away_score}</b>
 								</span>
 								<span class="side" class:won={homeWon}>
 									<TeamBadge team={g.home} /><b>{g.home_score}</b>
 								</span>
-								{#if upset(g)}<span class="chip upset">Upset</span>{/if}
+								<span class="note">
+									{#if surprise}
+										<svg viewBox="0 0 16 16" aria-hidden="true"
+											><path d="M9.2 1 3 9.1h4.3L6.4 15l6.6-8.6H8.6z" /></svg
+										>
+										<span
+											title={line != null ? `Won as a ${num(line, 1)}-point underdog` : undefined}
+											><b>Upset</b>{#if line != null}
+												{` · +${num(line, 1)}`}<span class="sr-only">-point underdog</span
+												>{/if}</span
+										>
+									{:else if line != null && line > 0}
+										<span>Favorite by {num(line, 1)} won</span>
+									{:else}
+										<span>Pick'em</span>
+									{/if}
+								</span>
 							</a>
 						</li>
 					{/each}
@@ -681,232 +603,6 @@
 </div>
 
 <style>
-	/* ---------- Hero: a stadium under the lights ---------- */
-	.hero {
-		padding-bottom: clamp(1.25rem, 1rem + 2vw, 2.25rem);
-		background:
-			radial-gradient(120% 90% at 85% -10%, rgba(255, 255, 255, 0.16), transparent 55%),
-			linear-gradient(135deg, var(--hero-from), var(--hero-to));
-		box-shadow:
-			0 30px 60px -30px color-mix(in srgb, var(--hero-to) 70%, transparent),
-			var(--shadow-md);
-		transition: background 0.6s var(--ease);
-	}
-	.hero > :not(.aurora):not(.turf):not(.ball) {
-		position: relative;
-		z-index: 2;
-	}
-	.hero h1 {
-		font-size: clamp(2rem, 1.3rem + 3vw, 3.4rem);
-		font-stretch: 118%;
-		line-height: 1.02;
-		max-width: 16ch;
-		margin-bottom: 0.6rem;
-		text-shadow: 0 2px 30px rgba(0, 0, 0, 0.25);
-	}
-	.hero .lede {
-		max-width: 58ch;
-	}
-	/* Gradient text (light end stays ≥ 7:1 against the dark hero). */
-	.glow {
-		background: linear-gradient(100deg, #ffffff 10%, #a5f3fc 55%, #c4b5fd 95%);
-		-webkit-background-clip: text;
-		background-clip: text;
-		color: transparent;
-		background-size: 200% 100%;
-		animation: glow-pan 8s ease-in-out infinite alternate;
-	}
-	@keyframes glow-pan {
-		to {
-			background-position: 100% 0;
-		}
-	}
-	/* Aurora: three blurred lights drifting over the gradient. */
-	.aurora {
-		position: absolute;
-		inset: 0;
-		z-index: 0;
-		overflow: hidden;
-		pointer-events: none;
-	}
-	.aurora span {
-		position: absolute;
-		width: 46%;
-		aspect-ratio: 1;
-		border-radius: 50%;
-		filter: blur(60px);
-		opacity: 0.55;
-		mix-blend-mode: screen;
-	}
-	.aurora span:nth-child(1) {
-		left: -8%;
-		top: -30%;
-		background: radial-gradient(circle, #22d3ee, transparent 65%);
-		animation: drift-a 19s ease-in-out infinite alternate;
-	}
-	.aurora span:nth-child(2) {
-		right: -6%;
-		top: -20%;
-		background: radial-gradient(circle, #8b5cf6, transparent 65%);
-		animation: drift-b 23s ease-in-out infinite alternate;
-	}
-	.aurora span:nth-child(3) {
-		left: 30%;
-		bottom: -45%;
-		background: radial-gradient(circle, #3b82f6, transparent 65%);
-		animation: drift-c 27s ease-in-out infinite alternate;
-	}
-	.team-tint .aurora span {
-		opacity: 0.32;
-	}
-	@keyframes drift-a {
-		to {
-			transform: translate(35%, 25%) scale(1.2);
-		}
-	}
-	@keyframes drift-b {
-		to {
-			transform: translate(-30%, 35%) scale(0.9);
-		}
-	}
-	@keyframes drift-c {
-		to {
-			transform: translate(20%, -25%) scale(1.15);
-		}
-	}
-	/* The field: yard lines in perspective, receding to the horizon and rolling toward you. */
-	.turf {
-		position: absolute;
-		left: -30%;
-		right: -30%;
-		bottom: -2px;
-		height: 78%;
-		z-index: 1;
-		pointer-events: none;
-		background:
-			repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.34) 0 2px, transparent 2px 64px),
-			repeating-linear-gradient(
-				90deg,
-				transparent 0 calc(5% - 1px),
-				rgba(255, 255, 255, 0.13) calc(5% - 1px) 5%
-			);
-		transform: perspective(520px) rotateX(64deg);
-		transform-origin: 50% 100%;
-		mask-image: linear-gradient(to top, #000 0%, rgba(0, 0, 0, 0.55) 40%, transparent 75%);
-		-webkit-mask-image: linear-gradient(to top, #000 0%, rgba(0, 0, 0, 0.55) 40%, transparent 75%);
-		animation: roll 5s linear infinite;
-	}
-	@keyframes roll {
-		to {
-			background-position:
-				0 64px,
-				0 0;
-		}
-	}
-	.hero-stats {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.5rem 2.25rem;
-		margin: 1.1rem 0 0;
-	}
-	.hero-stats dt {
-		font-size: 0.72rem;
-		text-transform: uppercase;
-		letter-spacing: 0.08em;
-		color: rgba(255, 255, 255, 0.78);
-	}
-	.hero-stats dd {
-		margin: 0;
-		font: 800 clamp(1.25rem, 1.05rem + 1vw, 1.8rem) / 1.15 var(--display);
-		min-height: 1.15em;
-	}
-	.hero-stats a {
-		color: #fff;
-		text-decoration: none;
-		border-bottom: 2px solid rgba(255, 255, 255, 0.35);
-	}
-	.hero-stats a:hover {
-		border-bottom-color: #fff;
-	}
-	.hero-stats .num {
-		font-variant-numeric: tabular-nums;
-		font-weight: 700;
-		opacity: 0.92;
-	}
-	/* A football drifting across the field behind the copy. */
-	.ball {
-		position: absolute;
-		right: 7%;
-		top: 16%;
-		z-index: 1;
-		width: clamp(110px, 14vw, 180px);
-		overflow: visible;
-		transform: rotate(-28deg);
-		animation: spiral 7s ease-in-out infinite;
-		pointer-events: none;
-		filter: drop-shadow(0 22px 26px rgba(0, 0, 0, 0.3))
-			drop-shadow(0 0 30px rgba(165, 243, 252, 0.25));
-	}
-	.ball .trail {
-		fill: none;
-		stroke: rgba(255, 255, 255, 0.35);
-		stroke-width: 2.5;
-		stroke-linecap: round;
-		stroke-dasharray: 40 200;
-		animation: streak 1.8s linear infinite;
-	}
-	@keyframes streak {
-		to {
-			stroke-dashoffset: -240;
-		}
-	}
-	.ball .hide {
-		fill: rgba(255, 255, 255, 0.1);
-		stroke: rgba(255, 255, 255, 0.45);
-		stroke-width: 2.5;
-	}
-	.ball .seam {
-		fill: none;
-		stroke: rgba(255, 255, 255, 0.3);
-		stroke-width: 3;
-	}
-	.ball .lace {
-		fill: none;
-		stroke: rgba(255, 255, 255, 0.7);
-		stroke-width: 3;
-		stroke-linecap: round;
-	}
-	@keyframes spiral {
-		50% {
-			transform: translate(-18px, 10px) rotate(-20deg);
-		}
-	}
-	@media (max-width: 800px) {
-		.ball {
-			display: none;
-		}
-	}
-	@media (max-width: 560px) {
-		.hero .lede {
-			font-size: 0.95rem;
-		}
-		.hero-stats {
-			gap: 0.4rem 1.25rem;
-		}
-	}
-	.hero.paused :global(*),
-	.hero.paused::before {
-		animation-play-state: paused !important;
-	}
-	@media (prefers-reduced-motion: reduce) {
-		.aurora span,
-		.turf,
-		.glow,
-		.ball .trail {
-			animation: none;
-		}
-	}
-
 	/* ---------- Dashboard ---------- */
 	.dash {
 		display: grid;
@@ -915,6 +611,7 @@
 	}
 	.week {
 		grid-column: span 7;
+		align-self: start;
 	}
 	.rail {
 		grid-column: span 5;
@@ -965,127 +662,14 @@
 		margin: 0.6rem 0 0;
 	}
 
-	/* This week */
-	.slot {
-		margin: 0.7rem 0 0.3rem;
-		font: 700 0.72rem/1 var(--sans, inherit);
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		color: var(--text-secondary);
-	}
-	.slots > .slot:first-child {
-		margin-top: 0.2rem;
-	}
-	.games {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: grid;
-		gap: 0.3rem;
-	}
-	.games a {
-		display: grid;
-		grid-template-columns: auto 1fr auto;
-		grid-template-areas: 'm l b' 'q q q';
-		align-items: center;
-		gap: 0.15rem 0.9rem;
-		padding: 0.45rem 0.7rem;
-		border-radius: 10px;
-		border: 1px solid var(--border);
-		color: inherit;
-		text-decoration: none;
-		transition:
-			background 0.15s,
-			border-color 0.15s;
-	}
-	.games a:hover {
-		background: var(--surface-2);
-		border-color: var(--border-strong);
-	}
-	.matchup {
-		grid-area: m;
-		display: inline-flex;
-		align-items: center;
-		gap: 0.35rem;
-	}
-	.score {
-		font-variant-numeric: tabular-nums;
-		min-width: 1.4em;
-	}
-	.at {
-		color: var(--text-muted);
-		font-size: 0.8rem;
-	}
-	.lines {
-		grid-area: l;
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 0.2rem 0.9rem;
-		justify-content: flex-end;
-		font-size: 0.84rem;
-		font-variant-numeric: tabular-nums;
-		font-weight: 600;
-	}
-	.best {
-		grid-area: b;
-		justify-self: end;
-		font-size: 0.84rem;
-		font-weight: 700;
-		font-variant-numeric: tabular-nums;
-		min-width: 5.2rem;
-		text-align: center;
-		padding: 0.1rem 0.45rem;
-		border-radius: 6px;
-		background: var(--surface-2);
-		border: 1px solid var(--border);
-	}
-	.k {
-		font-weight: 500;
-		color: var(--text-muted);
-		margin-right: 0.2rem;
-	}
-	.badge-key {
-		display: inline-block;
-		padding: 0 0.35rem;
-		margin-left: 0.25rem;
-		border-radius: 5px;
-		border: 1px solid var(--fav);
-		font-size: 0.74rem;
-		font-weight: 700;
-		color: var(--text-primary);
-	}
-	.best.final {
-		font-weight: 500;
-		color: var(--text-secondary);
-		background: none;
-		border-color: transparent;
-	}
-	.qb {
-		grid-area: q;
-		font-size: 0.76rem;
-		color: var(--text-secondary);
-	}
-	@media (max-width: 520px) {
-		.games a {
-			grid-template-columns: 1fr auto;
-			grid-template-areas: 'm b' 'l l' 'q q';
-		}
-		.lines {
-			justify-content: flex-start;
-			font-size: 0.8rem;
-		}
-	}
-
 	/* Results */
 	.scores {
 		list-style: none;
 		margin: 0;
 		padding: 0;
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr));
-		gap: 0.8rem 0.5rem;
-		padding-top: 0.3rem;
+		grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr));
+		gap: 0.5rem;
 	}
 	.scores a {
 		position: relative;
@@ -1116,15 +700,34 @@
 		content: ' ◂';
 		font-size: 0.7em;
 	}
-	.chip.upset {
-		position: absolute;
-		top: -0.55rem;
-		left: 0.6rem;
-		padding: 0 0.4rem;
-		font-size: 0.66rem;
-		line-height: 1.5;
-		border: 1px solid var(--fav);
-		background: var(--surface);
+	/* The card's footer says how the result relates to the line; an upset gets a gold edge and
+	   a bolt, built into the card rather than stuck on it. */
+	.note {
+		display: flex;
+		align-items: center;
+		gap: 0.3rem;
+		margin-top: 0.2rem;
+		padding-top: 0.3rem;
+		border-top: 1px solid var(--grid);
+		font-size: 0.72rem;
+		color: var(--text-muted);
+	}
+	.scores a.upset {
+		border-color: color-mix(in srgb, var(--fav) 55%, var(--border));
+		box-shadow: inset 3px 0 0 var(--fav);
+	}
+	.upset .note {
+		color: var(--text-secondary);
+	}
+	.upset .note b {
+		color: var(--text-primary);
+		letter-spacing: 0.02em;
+	}
+	.note svg {
+		width: 0.85rem;
+		height: 0.85rem;
+		flex: none;
+		fill: var(--fav);
 	}
 
 	/* Standings */

@@ -2,7 +2,8 @@
 	import '@fontsource-variable/inter/opsz.css';
 	import '@fontsource-variable/archivo/wdth.css';
 	import '../app.css';
-	import { afterNavigate, onNavigate, replaceState } from '$app/navigation';
+	import { afterNavigate, onNavigate } from '$app/navigation';
+	import { currentUrl, replaceUrl } from '$lib/url';
 	import { base } from '$app/paths';
 	import { navigating, page } from '$app/state';
 	import CommandPalette from '$lib/components/CommandPalette.svelte';
@@ -77,13 +78,14 @@
 	];
 	function syncUrl() {
 		if (!ready || prefs.season == null) return;
-		const path = page.url.pathname.slice(base.length) || '/';
-		const next = SEASONLESS.includes(path) ? new URL(page.url) : prefsUrl(page.url);
+		const now = currentUrl();
+		const path = now.pathname.slice(base.length) || '/';
+		const next = SEASONLESS.includes(path) ? now : prefsUrl(now);
 		if (SEASONLESS.includes(path) && path !== '/game/') {
 			next.searchParams.delete('season');
 			next.searchParams.delete('scope');
 		}
-		if (next.href !== page.url.href) replaceState(next, page.state);
+		replaceUrl(next);
 	}
 	$effect(() => {
 		void prefs.season;
@@ -137,30 +139,57 @@
 	{#if navigating.to}<div class="nav-progress" aria-hidden="true"></div>{/if}
 	<div class="bar">
 		<a class="brand" href="{base}/" aria-label="Any Given Stat home">
-			<svg viewBox="0 0 32 32" aria-hidden="true"
-				><rect width="32" height="32" rx="8" fill="url(#g)" /><defs
-					><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"
-						><stop offset="0" stop-color="#2a78d6" /><stop
-							offset="0.55"
-							stop-color="#1c4f9c"
-						/><stop offset="1" stop-color="#3b2a8f" /></linearGradient
-					></defs
-				><g class="ball"
-					><ellipse
-						cx="16"
-						cy="16"
-						rx="10.5"
-						ry="6.5"
-						fill="none"
-						stroke="#fff"
-						stroke-width="2.2"
-						transform="rotate(-35 16 16)"
-					/><path
-						d="M12.5 19.5l7-7M13.6 15.4l3 3M15.6 13.4l3 3"
-						stroke="#fff"
-						stroke-width="1.8"
-						stroke-linecap="round"
-					/></g
+			<!-- The mark (also static/favicon.svg): a football whose laces are a rising stat line. -->
+			<svg viewBox="0 0 64 64" aria-hidden="true"
+				><defs>
+					<linearGradient id="hdrBg" x1="0" y1="0" x2="1" y2="1">
+						<stop offset="0" stop-color="#1b4fa3" />
+						<stop offset="0.5" stop-color="#11306a" />
+						<stop offset="1" stop-color="#1c1846" />
+					</linearGradient>
+					<radialGradient id="hdrLight" cx="0.28" cy="0.18" r="0.8">
+						<stop offset="0" stop-color="#7dd3fc" stop-opacity="0.45" />
+						<stop offset="0.6" stop-color="#7dd3fc" stop-opacity="0" />
+					</radialGradient>
+					<linearGradient id="hdrTrend" x1="0" y1="0" x2="1" y2="0">
+						<stop offset="0" stop-color="#38bdf8" />
+						<stop offset="1" stop-color="#cffafe" />
+					</linearGradient>
+				</defs>
+				<rect width="64" height="64" rx="15" fill="url(#hdrBg)" />
+				<rect width="64" height="64" rx="15" fill="url(#hdrLight)" />
+				<rect
+					x="1"
+					y="1"
+					width="62"
+					height="62"
+					rx="14"
+					fill="none"
+					stroke="#fff"
+					stroke-opacity="0.14"
+					stroke-width="2"
+				/>
+				<g class="ball"
+					><g transform="rotate(-35 32 32)">
+						<path
+							d="M7 32C16 15 48 15 57 32 48 49 16 49 7 32Z"
+							fill="#fff"
+							fill-opacity="0.06"
+							stroke="#fff"
+							stroke-width="3.8"
+							stroke-linejoin="round"
+						/>
+						<path
+							d="M16 36l6.5-3.5 5 2.5 5.5-5.5 4.5 2 4.5-3.5"
+							fill="none"
+							stroke="url(#hdrTrend)"
+							stroke-width="3.6"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+						<circle cx="42" cy="28" r="5" fill="#67e8f9" fill-opacity="0.35" />
+						<circle cx="42" cy="28" r="2.8" fill="#fff" />
+					</g></g
 				></svg
 			>
 			<span>Any Given <b>Stat</b></span>
@@ -449,7 +478,7 @@
 		transition: transform 0.3s var(--ease);
 	}
 	.brand .ball {
-		transform-origin: 16px 16px;
+		transform-origin: 32px 32px;
 		transition: transform 0.6s cubic-bezier(0.3, 1.4, 0.5, 1);
 	}
 	@media (prefers-reduced-motion: no-preference) {

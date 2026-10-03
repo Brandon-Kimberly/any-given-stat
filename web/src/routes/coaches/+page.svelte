@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { afterNavigate, replaceState } from '$app/navigation';
+	import { afterNavigate } from '$app/navigation';
+	import { setParam } from '$lib/url';
 	import { base } from '$app/paths';
 	import { page } from '$app/state';
 	import Controls from '$lib/components/Controls.svelte';
@@ -24,14 +25,7 @@
 	// deep-link (/coaches/?q=Dan%20Campbell). The filter box and the URL stay in sync.
 	let q = $state(page.url.searchParams.get('q') ?? '');
 	afterNavigate(() => (q = page.url.searchParams.get('q') ?? ''));
-	$effect(() => {
-		const want = q.trim();
-		const url = new URL(page.url);
-		if ((url.searchParams.get('q') ?? '') === want) return;
-		if (want) url.searchParams.set('q', want);
-		else url.searchParams.delete('q');
-		replaceState(url, page.state);
-	});
+	$effect(() => setParam('q', q.trim()));
 	const matches = (name: string) => {
 		const t = q.trim().toLowerCase();
 		return !!t && name.toLowerCase().includes(t);

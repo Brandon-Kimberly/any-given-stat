@@ -18,6 +18,13 @@ TEAMS_URL = f"{RELEASES}/teams/teams_colors_logos.csv"
 PLAYERS_URL = f"{RELEASES}/players/players.parquet"
 INJURIES_URL = f"{RELEASES}/injuries/injuries_{{season}}.parquet"
 SNAPS_URL = f"{RELEASES}/snap_counts/snap_counts_{{season}}.parquet"
+# Daily depth-chart snapshots: who starts at QB in games not played yet.
+DEPTH_URL = f"{RELEASES}/depth_charts/depth_charts_{{season}}.parquet"
+# ESPN's public news API (news.py): league-wide headlines, and one team's (ESPN team id).
+NEWS_URL = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/news?limit=50"
+NEWS_TEAM_URL = (
+    "https://site.api.espn.com/apis/site/v2/sports/football/nfl/news?limit=8&team={team}"
+)
 # Cross-platform player ids (Sleeper, ESPN, ... -> gsis) for connecting fantasy leagues.
 PLAYER_IDS_URL = (
     "https://raw.githubusercontent.com/dynastyprocess/data/master/files/db_playerids.csv"
