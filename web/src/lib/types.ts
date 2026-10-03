@@ -1,4 +1,5 @@
 // Shapes of the JSON files written by pipeline/src/ags/build.py.
+import type { FantasyPos, StatLine } from './fantasy/statline';
 
 export type Scope = 'all' | 'no_garbage';
 
@@ -469,6 +470,43 @@ export interface GamePlays {
 	flags: Record<string, string>;
 	drives: Drive[];
 	plays: PlayRow[];
+	/** Full box score (statlines.py); missing in files built before it existed. */
+	box?: GameBox | null;
+}
+
+/** Team box score for one game (pipeline statlines.season_lines "teams"). */
+export interface TeamBox {
+	first_downs: number;
+	first_downs_pass: number;
+	first_downs_rush: number;
+	first_downs_pen: number;
+	/** [converted, attempts] */
+	third: [number, number];
+	fourth: [number, number];
+	plays: number;
+	yards: number;
+	/** Net of sack yardage. */
+	pass_yds: number;
+	rush_yds: number;
+	/** [sacks, yards lost] */
+	sacked: [number, number];
+	/** [count, yards] */
+	penalties: [number, number];
+	turnovers: number;
+	fumbles_lost: number;
+	ints: number;
+	top_sec: number;
+	/** [touchdowns, trips] */
+	red_zone: [number, number];
+	ret_yds: number;
+}
+
+export interface GameBox {
+	/** id -> [name, position]; team defenses use the team code as id and 'DEF'. */
+	players: Record<string, [string, FantasyPos]>;
+	/** [id, team, stats] */
+	lines: [string, string, StatLine][];
+	teams: Record<string, TeamBox>;
 }
 
 export interface PlayoffOddsRow {

@@ -420,7 +420,7 @@
 	}
 	@media (max-width: 720px) {
 		.drive {
-			grid-template-columns: 2.9rem 1fr 4.6rem;
+			grid-template-columns: 2.9rem minmax(0, 1fr) minmax(4.6rem, auto);
 			grid-template-areas: 'badge field result' 'when when stats';
 			row-gap: 0.1rem;
 		}

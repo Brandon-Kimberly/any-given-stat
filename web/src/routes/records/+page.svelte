@@ -1,5 +1,6 @@
 <script lang="ts">
 	import LoadError from '$lib/components/LoadError.svelte';
+	import FantasyRecords from '$lib/components/FantasyRecords.svelte';
 	import RecordList, { type RecordItem } from '$lib/components/RecordList.svelte';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import { epa, num, pct, signed } from '$lib/format';
@@ -192,6 +193,7 @@
 {:else}
 	<nav class="jump" aria-label="Sections">
 		{#each sections as s (s.id)}<a class="chip" href="#{s.id}">{s.label}</a>{/each}
+		<a class="chip" href="#fantasy">Fantasy</a>
 	</nav>
 	{#each sections as s (s.id)}
 		<h2 class="section" id={s.id}>{s.label}</h2>
@@ -204,6 +206,13 @@
 	<p class="muted small">
 		Season lists are regular season only; game lists include the playoffs. {r.wp_note}
 	</p>
+	<h2 class="section" id="fantasy">Fantasy</h2>
+	<FantasyRecords
+		seasons={Array.from(
+			{ length: r.seasons[r.seasons.length - 1] - r.seasons[0] + 1 },
+			(_, i) => r.seasons[0] + i
+		)}
+	/>
 {/if}
 
 <style>

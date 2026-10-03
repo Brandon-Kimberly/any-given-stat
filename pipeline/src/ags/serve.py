@@ -7,7 +7,8 @@
   adapter-static routing (``/odds/`` -> ``odds/index.html``, ``/odds`` -> redirect, unknown
   routes -> the ``404.html`` SPA fallback with status 200). ``/data/*`` is served straight from
   ``web/static/data`` so a sync shows up without rebuilding the web app. ``/api/*`` is the sync
-  API (``sync.py``).
+  API (``sync.py``), plus ``/api/espn/league``: a proxy for ESPN fantasy leagues, whose API
+  has no CORS headers (the browser can't call it directly).
 """
 
 from __future__ import annotations
@@ -16,12 +17,15 @@ import gzip
 import json
 import mimetypes
 import os
+import re
 import shutil
 import subprocess
 import sys
 import threading
 import time
+import urllib.error
 import urllib.parse
+import urllib.request
 import webbrowser
 from dataclasses import dataclass
 from http import HTTPStatus
@@ -29,7 +33,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from .cli import default_seasons, parse_seasons, run_build
-from .config import OUT_DIR, REPO_ROOT
+from .config import DATA_VERSION, OUT_DIR, REPO_ROOT
 from .sync import SyncManager
 
 WEB_DIR = REPO_ROOT / "web"
@@ -184,6 +188,96 @@ def host_is_local(value: str | None) -> bool:
     else:
         host = host.split(":", 1)[0]
     return host.lower() in LOCAL_HOSTS
+
+
+# ---------- ESPN fantasy proxy ----------
+
+ESPN_LEAGUE_URL = (
+    "https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/{season}"
+    "/segments/0/leagues/{league}?view=mSettings&view=mTeam&view=mRoster"
+)
+ESPN_TIMEOUT = 15
+ESPN_MAX_BYTES = 32 * 1024 * 1024
+# espn_s2 is URL-encoded base64 (sometimes pasted decoded); SWID is a {GUID}.
+COOKIE_VALUE = re.compile(r"[A-Za-z0-9%{}+/=._-]{1,4096}")
+
+
+class EspnError(Exception):
+    def __init__(self, status: int, message: str) -> None:
+        super().__init__(message)
+        self.status = int(status)
+
+
+def parse_espn_query(query: str) -> tuple[str, str]:
+    """``id=<digits>&season=<4 digits>`` -> (league id, season); ValueError otherwise."""
+    q = urllib.parse.parse_qs(query, keep_blank_values=True)
+    ids, seasons = q.get("id", []), q.get("season", [])
+    if len(ids) != 1 or not re.fullmatch(r"[0-9]{1,15}", ids[0]):
+        raise ValueError("id must be an ESPN league id (digits)")
+    if len(seasons) != 1 or not re.fullmatch(r"[0-9]{4}", seasons[0]):
+        raise ValueError("season must be a 4-digit year")
+    return ids[0], seasons[0]
+
+
+def espn_cookie_header(espn_s2: str | None, swid: str | None) -> str | None:
+    """``Cookie`` header for ESPN's private-league cookies; ValueError on unsafe characters."""
+    parts = []
+    for name, value in (("espn_s2", espn_s2), ("SWID", swid)):
+        value = (value or "").strip()
+        if not value:
+            continue
+        if not COOKIE_VALUE.fullmatch(value):
+            raise ValueError(f"{name} contains characters a cookie can't have")
+        parts.append(f"{name}={value}")
+    return "; ".join(parts) or None
+
+
+class _EspnRedirects(urllib.request.HTTPRedirectHandler):
+    """Follow redirects only within espn.com, so the cookies never go anywhere else."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        url = urllib.parse.urlsplit(newurl)
+        host = (url.hostname or "").lower()
+        if url.scheme != "https" or not (host == "espn.com" or host.endswith(".espn.com")):
+            raise EspnError(HTTPStatus.BAD_GATEWAY, "ESPN redirected somewhere unexpected")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_espn_opener = urllib.request.build_opener(_EspnRedirects)
+
+
+def espn_urlopen(req: urllib.request.Request, timeout: float):
+    """Seam for tests: they replace this to avoid the network."""
+    return _espn_opener.open(req, timeout=timeout)
+
+
+def fetch_espn_league(league: str, season: str, cookie: str | None) -> object:
+    """ESPN's league JSON (settings, teams, rosters). Raises EspnError with the status to send:
+    ESPN's own 401/403/404, else 502."""
+    req = urllib.request.Request(
+        ESPN_LEAGUE_URL.format(season=season, league=league),
+        headers={"Accept": "application/json", "User-Agent": "any-given-stat"},
+    )
+    if cookie:
+        req.add_header("Cookie", cookie)
+    try:
+        with espn_urlopen(req, ESPN_TIMEOUT) as r:
+            body = r.read(ESPN_MAX_BYTES + 1)
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 403):
+            raise EspnError(e.code, "this league is private: espn_s2 and SWID are needed") from None
+        if e.code == 404:
+            raise EspnError(404, "no ESPN league with that id and season") from None
+        raise EspnError(HTTPStatus.BAD_GATEWAY, f"ESPN answered HTTP {e.code}") from None
+    except (urllib.error.URLError, OSError) as e:
+        reason = getattr(e, "reason", None) or type(e).__name__
+        raise EspnError(HTTPStatus.BAD_GATEWAY, f"couldn't reach ESPN ({reason})") from None
+    if len(body) > ESPN_MAX_BYTES:
+        raise EspnError(HTTPStatus.BAD_GATEWAY, "ESPN's response was too large")
+    try:
+        return json.loads(body)
+    except ValueError:
+        raise EspnError(HTTPStatus.BAD_GATEWAY, "ESPN sent something other than JSON") from None
 
 
 # ---------- HTTP ----------
@@ -346,6 +440,9 @@ class SiteHandler(BaseHTTPRequestHandler):
         if post and origin is not None and not host_is_local(origin):
             self._json({"error": "cross-origin request refused"}, HTTPStatus.FORBIDDEN)
             return
+        if path == "/api/espn/league":
+            self._espn_league(post)
+            return
         m = self.manager
         if m is None:
             self._json({"available": False}, HTTPStatus.NOT_FOUND)
@@ -369,6 +466,31 @@ class SiteHandler(BaseHTTPRequestHandler):
                 self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
         except ValueError as e:
             self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
+
+    def _espn_league(self, post: bool) -> None:
+        # GET only; also refused from other sites' pages (the proxy sends the user's cookies).
+        if post or self.command != "GET":
+            self._json({"error": "method not allowed"}, HTTPStatus.METHOD_NOT_ALLOWED)
+            return
+        origin = self.headers.get("Origin")
+        if origin is not None and not host_is_local(origin):
+            self._json({"error": "cross-origin request refused"}, HTTPStatus.FORBIDDEN)
+            return
+        try:
+            league, season = parse_espn_query(urllib.parse.urlsplit(self.path).query)
+            cookie = espn_cookie_header(
+                self.headers.get("X-ESPN-S2"), self.headers.get("X-ESPN-SWID")
+            )
+        except ValueError as e:
+            self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
+            return
+        try:
+            data = fetch_espn_league(league, season, cookie)
+        except EspnError as e:
+            # `source` tells the page this came from ESPN (vs. no proxy at all).
+            self._json({"error": str(e), "source": "espn", "status": e.status}, e.status)
+            return
+        self._json(data)
 
 
 class LocalServer(ThreadingHTTPServer):
@@ -456,6 +578,18 @@ def _run(cmd: list[str], cwd: Path, env: dict[str, str]) -> None:
 # ---------- Entry point ----------
 
 
+def data_status(data_dir: Path = DATA_DIR) -> str:
+    """'missing' (no build yet), 'outdated' (built by an older DATA_VERSION) or 'ok'."""
+    meta = data_dir / "meta.json"
+    if not meta.exists():
+        return "missing"
+    try:
+        version = json.loads(meta.read_text(encoding="utf-8")).get("data_version", 1)
+    except (OSError, ValueError):
+        return "outdated"
+    return "ok" if version >= DATA_VERSION else "outdated"
+
+
 def up(
     port: int = 4173,
     open_browser: bool = True,
@@ -465,9 +599,13 @@ def up(
     spec = seasons or default_seasons()
     manager = SyncManager(spec)
 
-    if not (DATA_DIR / "meta.json").exists():
-        print("No site data yet: downloading nflverse play-by-play and building the datasets.")
-        print("The first run takes a while (about 200 MB, cached in data/raw).", flush=True)
+    status = data_status()
+    if status != "ok":
+        if status == "missing":
+            print("No site data yet: downloading nflverse play-by-play and building the datasets.")
+            print("The first run takes a while (about 200 MB, cached in data/raw).", flush=True)
+        else:
+            print("The site data is from an older version: rebuilding it (downloads are cached).")
         start = time.perf_counter()
         run_build(parse_seasons(spec))
         print(f"Data built in {time.perf_counter() - start:.0f}s.", flush=True)

@@ -1,0 +1,86 @@
+{
+	"id": 336358,
+	"seasonId": 2025,
+	"settings": {
+		"name": "Office League",
+		"size": 3,
+		"scoringSettings": {
+			"scoringItems": [
+				{ "statId": 8, "points": 1 },
+				{ "statId": 4, "points": 4 },
+				{ "statId": 20, "points": -2 },
+				{ "statId": 15, "points": 2 },
+				{ "statId": 24, "points": 0.1 },
+				{ "statId": 25, "points": 6 },
+				{ "statId": 42, "points": 0.1 },
+				{ "statId": 43, "points": 6 },
+				{ "statId": 53, "points": 1, "pointsOverrides": { "6": 1.5 } },
+				{ "statId": 72, "points": -2 },
+				{ "statId": 74, "points": 5 },
+				{ "statId": 77, "points": 4 },
+				{ "statId": 80, "points": 3 },
+				{ "statId": 85, "points": -1 },
+				{ "statId": 86, "points": 1 },
+				{ "statId": 89, "points": 5 },
+				{ "statId": 90, "points": 4 },
+				{ "statId": 91, "points": 3 },
+				{ "statId": 92, "points": 1 },
+				{ "statId": 121, "points": 0 },
+				{ "statId": 122, "points": 0 },
+				{ "statId": 123, "points": -1 },
+				{ "statId": 124, "points": -3 },
+				{ "statId": 125, "points": -5 },
+				{ "statId": 93, "points": 6 },
+				{ "statId": 95, "points": 2 },
+				{ "statId": 96, "points": 2 },
+				{ "statId": 97, "points": 2 },
+				{ "statId": 98, "points": 2 },
+				{ "statId": 99, "points": 1 },
+				{ "statId": 101, "points": 6 },
+				{ "statId": 102, "points": 6 },
+				{ "statId": 103, "points": 6 },
+				{ "statId": 104, "points": 6 },
+				{ "statId": 147, "points": 1 },
+				{ "statId": 155, "points": 0 }
+			]
+		},
+		"rosterSettings": {
+			"lineupSlotCounts": {
+				"0": 1,
+				"2": 2,
+				"4": 2,
+				"6": 1,
+				"7": 0,
+				"16": 1,
+				"17": 1,
+				"20": 7,
+				"21": 1,
+				"23": 1
+			}
+		}
+	},
+	"teams": [
+		{
+			"id": 1,
+			"abbrev": "TACO",
+			"name": "Taco Corp",
+			"owners": ["{AAAA-1111}"],
+			"roster": { "entries": [{ "playerId": 3918298 }, { "playerId": -16008 }] }
+		},
+		{
+			"id": 2,
+			"abbrev": "BEAR",
+			"location": "Bear",
+			"nickname": "Necessities",
+			"owners": ["{BBBB-2222}"],
+			"roster": {
+				"entries": [{ "playerId": 4241389 }, { "playerId": -16014 }, { "playerId": -16028 }]
+			}
+		},
+		{ "id": 3, "abbrev": "EMPT", "owners": [], "roster": { "entries": [] } }
+	],
+	"members": [
+		{ "id": "{AAAA-1111}", "displayName": "taco_tuesday", "firstName": "Tia", "lastName": "Cole" },
+		{ "id": "{BBBB-2222}", "firstName": "Ben", "lastName": "Ruiz" }
+	]
+}

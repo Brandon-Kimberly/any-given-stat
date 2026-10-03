@@ -99,6 +99,7 @@ def connect(
     schedule_file: Path | None = None,
     teams_file: Path | None = None,
     players_file: Path | None = None,
+    player_ids_file: Path | None = None,
     injury_files: Sequence[Path] = (),
     snap_files: Sequence[Path] = (),
 ) -> duckdb.DuckDBPyConnection:
@@ -134,6 +135,12 @@ def connect(
         con.execute(
             f"create view players as select * from read_parquet('{players_file.as_posix()}')"
         )
+    if player_ids_file is not None:
+        con.execute(f"""
+            create view player_ids as
+            select * from read_csv('{player_ids_file.as_posix()}', header = true,
+                                   all_varchar = true, nullstr = 'NA')
+        """)
     alias = " ".join(f"when '{a}' then '{b}'" for a, b in TEAM_ALIASES.items())
     if injury_files:
         files = ", ".join(f"'{p.as_posix()}'" for p in injury_files)

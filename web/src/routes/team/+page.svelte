@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { base } from '$app/paths';
 	import CountUp from '$lib/components/CountUp.svelte';
+	import TeamFantasy from '$lib/components/TeamFantasy.svelte';
 	import { page } from '$app/state';
 	import { favorite } from '$lib/favorite.svelte';
 	import Controls from '$lib/components/Controls.svelte';
@@ -643,6 +644,8 @@
 		</div>
 	</div>
 
+	<TeamFantasy {team} season={prefs.season ?? 0} />
+
 	<div class="card">
 		<h2>Game log</h2>
 		<p class="sub">Click a game for its win-probability chart.</p>
@@ -737,6 +740,14 @@
 	@media (max-width: 560px) {
 		.facts {
 			min-height: 3em;
+		}
+		/* The name block takes the row, so the button always sits on its own line: the hero's
+		   height doesn't change when the record and rank arrive. */
+		.row > div {
+			flex: 1 1 calc(100% - 5rem);
+		}
+		.fav-btn {
+			margin-left: 0;
 		}
 	}
 	.ident {

@@ -1,0 +1,5 @@
+[
+	{ "user_id": "u1", "display_name": "gridirongreg", "metadata": { "team_name": "Greg's Gang" } },
+	{ "user_id": "u2", "display_name": "fantasyfran", "metadata": {} },
+	{ "user_id": "u3", "display_name": "noname", "metadata": null }
+]
