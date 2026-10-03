@@ -12,6 +12,7 @@
 	import PlayerFantasy from '$lib/components/PlayerFantasy.svelte';
 	import PlotFigure from '$lib/components/Plot.svelte';
 	import SampleWarning from '$lib/components/SampleWarning.svelte';
+	import NewsFeed from '$lib/components/NewsFeed.svelte';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import TeamBadge from '$lib/components/TeamBadge.svelte';
 	import type { NumericStatKey, StatLine } from '$lib/fantasy/statline';
@@ -665,6 +666,7 @@
 		/>
 	</div>
 	{#if !embedded}
+		<NewsFeed players={[id]} compact limit={6} title="News" more={null} hideEmpty />
 		<p class="muted small">
 			Stats are credited from the play-by-play, so they can differ slightly from official totals.
 			The team badge is his team in {season}; {teamName(lastTeam)} is the most recent team in the data,

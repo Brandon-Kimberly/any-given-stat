@@ -4,6 +4,7 @@
 	import FavoriteCard from '$lib/components/FavoriteCard.svelte';
 	import HomeHero, { type HeroStat } from '$lib/components/HomeHero.svelte';
 	import WeekBoard from '$lib/components/WeekBoard.svelte';
+	import NewsFeed from '$lib/components/NewsFeed.svelte';
 	import PlotFigure from '$lib/components/Plot.svelte';
 	import SampleWarning from '$lib/components/SampleWarning.svelte';
 	import Ticker, { type TickerItem } from '$lib/components/Ticker.svelte';
@@ -528,6 +529,20 @@
 		{/if}
 	</section>
 
+	<!-- News -->
+	<div class="headlines">
+		<NewsFeed
+			limit={6}
+			compact
+			title="Latest news"
+			sub="Headlines, plus game-status changes for skill players."
+			filter={(i) =>
+				i.kind === 'news' ||
+				(['QB', 'RB', 'WR', 'TE'].includes(i.position ?? '') && !i.preliminary)}
+			more="/news/"
+		/>
+	</div>
+
 	<!-- Power ratings -->
 	<section class="card power" aria-labelledby="power-title">
 		<div class="card-head">
@@ -619,7 +634,8 @@
 		gap: 1rem;
 		align-content: start;
 	}
-	.standings {
+	.standings,
+	.headlines {
 		grid-column: span 12;
 	}
 	.power {

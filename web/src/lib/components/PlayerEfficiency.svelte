@@ -11,6 +11,7 @@
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import TeamBadge from '$lib/components/TeamBadge.svelte';
 	import SampleWarning from '$lib/components/SampleWarning.svelte';
+	import NewsFeed from '$lib/components/NewsFeed.svelte';
 	import { epa, num, pct, signed } from '$lib/format';
 	import { gridY, isNarrow, Plot, plotStyle, signedTick, thinTicks } from '$lib/plot';
 	import { prefs, savePrefs } from '$lib/prefs.svelte';
@@ -622,6 +623,7 @@
 		</div>
 	{/if}
 	{@render children?.()}
+	<NewsFeed players={[id]} compact limit={6} title="News" more={null} hideEmpty />
 	<p class="muted small">
 		The team badge is his team in {season}; {teamName(lastTeam)} is the most recent team in the data,
 		not necessarily his current one.

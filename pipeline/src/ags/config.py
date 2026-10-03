@@ -34,7 +34,9 @@ PLAYER_IDS_URL = (
 # 2: box scores in per-game files, fantasy/<season>.json, fantasy_ids.json.
 # 3: team logo tiles (/data/logos) and player headshots in players.json.
 # 4: schedule/<season>.json, upcoming.json; predictions gain gametime, blend_wp, next_games.
-DATA_VERSION = 4
+# 5: news.json, highlight.json, full logos (teams_meta.logo_fit), projected QB starters,
+#    all-position player pages, structured play-by-play.
+DATA_VERSION = 5
 
 # CPOE / xYAC / xpass exist from 2006 on; 2016+ keeps downloads (~20MB/season) reasonable.
 DEFAULT_FIRST_SEASON = 2016

@@ -74,7 +74,8 @@
 		'/explore/',
 		'/records/',
 		'/referees/',
-		'/game/'
+		'/game/',
+		'/news/'
 	];
 	function syncUrl() {
 		if (!ready || prefs.season == null) return;

@@ -1,6 +1,9 @@
+import { browser } from '$app/environment';
+import { loadNews } from '$lib/news.svelte';
 import { prefetch, prefetchSeason } from '$lib/prefetch';
 
 export const load = ({ url }: { url: URL }) => {
+	if (browser) loadNews().catch(() => {});
 	prefetchSeason(
 		url,
 		'team_weeks',

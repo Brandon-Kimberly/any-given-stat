@@ -22,6 +22,7 @@
 		sub = null,
 		more,
 		empty = null,
+		hideEmpty = false,
 		id = undefined
 	}: {
 		team?: string | null;
@@ -40,6 +41,10 @@
 		more?: string | null;
 		/** Text when nothing matches. */
 		empty?: string | null;
+		/** Render nothing when the feed has loaded and nothing matches (or it failed): for pages
+		 * where most subjects have no news, e.g. players. Place it where its arrival can't shift
+		 * content above the fold. */
+		hideEmpty?: boolean;
 		/** Section id (for in-page links). */
 		id?: string;
 	} = $props();
@@ -71,48 +76,50 @@
 	);
 </script>
 
-<section class="card news-feed" aria-labelledby={headId} {id}>
-	<div class="card-head">
-		<h2 id={headId}>{title}</h2>
-		{#if moreHref}<a href={moreHref}>More news →</a>{/if}
-	</div>
-	<p class="sub">
-		{#if sub}{sub}{/if}
-		{#if feed.value}
-			<span class="stamp"
-				>{updatedLabel(feed.value, now)}{#if report}{' · '}Week {report.week} injury report{/if}{#if feed.value.live}{' · '}live{/if}</span
-			>
-		{:else if !feed.error}
-			<span class="stamp">&nbsp;</span>
-		{/if}
-	</p>
-	{#if feed.error}
-		<p class="muted state">News isn’t available yet: it appears after the next data build.</p>
-	{:else if !feed.value}
-		<div class="list" aria-busy="true" aria-label="Loading news">
-			{#each Array(Math.min(limit, 4)) as _, i (i)}
-				<div class="ph">
-					<div class="skeleton" style="height: 12px; width: 35%"></div>
-					<div class="skeleton" style="height: 16px; width: {88 - i * 9}%"></div>
-					<div class="skeleton" style="height: 16px; width: 22%"></div>
-				</div>
-			{/each}
+{#if !hideEmpty || (feed.value && items.length)}
+	<section class="card news-feed" aria-labelledby={headId} {id}>
+		<div class="card-head">
+			<h2 id={headId}>{title}</h2>
+			{#if moreHref}<a href={moreHref}>More news →</a>{/if}
 		</div>
-	{:else if !items.length}
-		<p class="muted state">{emptyText}</p>
-	{:else}
-		<ul class="list" class:compact>
-			{#each items as item (item.id)}
-				<li><NewsCard {item} {compact} {mine} {now} hideTeam={team} /></li>
-			{/each}
-		</ul>
-	{/if}
-	{#if feed.value && !feed.value.news_fetched_at && kind !== 'injury'}
-		<p class="note muted">
-			ESPN headlines weren’t reachable at the last data build; injury reports are always included.
+		<p class="sub">
+			{#if sub}{sub}{/if}
+			{#if feed.value}
+				<span class="stamp"
+					>{updatedLabel(feed.value, now)}{#if report}{' · '}Week {report.week} injury report{/if}{#if feed.value.live}{' · '}live{/if}</span
+				>
+			{:else if !feed.error}
+				<span class="stamp">&nbsp;</span>
+			{/if}
 		</p>
-	{/if}
-</section>
+		{#if feed.error}
+			<p class="muted state">News isn’t available yet: it appears after the next data build.</p>
+		{:else if !feed.value}
+			<div class="list" aria-busy="true" aria-label="Loading news">
+				{#each Array(Math.min(limit, 4)) as _, i (i)}
+					<div class="ph">
+						<div class="skeleton" style="height: 12px; width: 35%"></div>
+						<div class="skeleton" style="height: 16px; width: {88 - i * 9}%"></div>
+						<div class="skeleton" style="height: 16px; width: 22%"></div>
+					</div>
+				{/each}
+			</div>
+		{:else if !items.length}
+			<p class="muted state">{emptyText}</p>
+		{:else}
+			<ul class="list" class:compact>
+				{#each items as item (item.id)}
+					<li><NewsCard {item} {compact} {mine} {now} hideTeam={team} /></li>
+				{/each}
+			</ul>
+		{/if}
+		{#if feed.value && !feed.value.news_fetched_at && kind !== 'injury'}
+			<p class="note muted">
+				ESPN headlines weren’t reachable at the last data build; injury reports are always included.
+			</p>
+		{/if}
+	</section>
+{/if}
 
 <style>
 	.news-feed {
