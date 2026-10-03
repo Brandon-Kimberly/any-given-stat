@@ -21,13 +21,18 @@
 		{ key: 'q', label: 'Quarterbacks', href: '/qbs/' },
 		{ key: 'w', label: 'Receivers', href: '/receivers/' },
 		{ key: 'u', label: 'Rushers', href: '/rushers/' },
+		{ key: 'a', label: 'Fantasy', href: '/fantasy/' },
 		{ key: 'g', label: 'Games', href: '/games/' },
 		{ key: 'p', label: 'Predictions', href: '/predictions/' },
 		{ key: 'c', label: 'Compare', href: '/compare/' },
 		{ key: 'f', label: 'Fourth downs', href: '/fourth/' },
 		{ key: 'l', label: 'Luck', href: '/luck/' },
 		{ key: 'b', label: 'Record book', href: '/records/' },
+		{ key: 'k', label: 'Coaches', href: '/coaches/' },
+		{ key: 'e', label: 'Referees', href: '/referees/' },
 		{ key: 'n', label: 'How football works', href: '/learn/' },
+		{ key: 'v', label: 'Signal vs noise', href: '/stability/' },
+		{ key: 'd', label: 'Glossary', href: '/glossary/' },
 		{ key: 'x', label: 'SQL explorer', href: '/explore/' }
 	];
 	const byKey = new Map(jumps.map((j) => [j.key, j]));
@@ -104,7 +109,9 @@
 					<h3>Anywhere</h3>
 					<dl>
 						<dt><kbd>/</kbd> or <kbd>{isMac ? '⌘' : 'Ctrl'}</kbd> <kbd>K</kbd></dt>
-						<dd>Search teams, players, pages</dd>
+						<dd>Search pages, teams, players, games, coaches, glossary</dd>
+						<dt><kbd>↑</kbd> <kbd>↓</kbd> <kbd>↵</kbd></dt>
+						<dd>Move and open in search results</dd>
 						<dt><kbd>[</kbd> <kbd>]</kbd></dt>
 						<dd>Previous / next season</dd>
 						<dt><kbd>t</kbd></dt>
@@ -115,6 +122,8 @@
 						<dd>My team{favorite.team ? ` (${favorite.team})` : ' (star one first)'}</dd>
 						<dt><kbd>?</kbd></dt>
 						<dd>This list</dd>
+						<dt><kbd>Esc</kbd></dt>
+						<dd>Close search, menus and this list</dd>
 					</dl>
 				</section>
 				<section>

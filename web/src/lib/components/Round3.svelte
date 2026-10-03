@@ -1,13 +1,13 @@
 <script lang="ts">
 	// Round 3: the forecast judged on accuracy (RMSE of the margin, log loss of win
-	// probability), not on betting. Frozen choice, reused test, sealed live test.
+	// probability), not on betting. Frozen choice, reused test, sealed live test. The
+	// predictions page shows it in parts: the scorecard and the weights under "Accuracy", how
+	// it was chosen under "Experiments".
 	import { num, signed } from '$lib/format';
-	import { gridY, Plot, plotStyle, thinTicks } from '$lib/plot';
 	import type { ForecastMetrics, Lab3, PairedDiff } from '$lib/types';
 	import DataTable, { type Column } from './DataTable.svelte';
-	import PlotFigure from './Plot.svelte';
 
-	let { lab }: { lab: Lab3 } = $props();
+	let { lab, part }: { lab: Lab3; part: 'scorecard' | 'weights' | 'candidates' } = $props();
 	const p = $derived(lab.protocol);
 
 	const MODELS = [
@@ -37,42 +37,6 @@
 		return `${who} misses less (t = ${signed(t, 1)}: ${strength})`;
 	}
 	const test = $derived(lab.comparison.test);
-
-	function seasonChart(width: number) {
-		const rows = lab.by_season
-			.flatMap((s) => [
-				{ season: s.season, rmse: s.round3, who: 'Round 3' },
-				{ season: s.season, rmse: s.vegas, who: 'Vegas closing line' },
-				{ season: s.season, rmse: s.round1, who: 'Round 1' }
-			])
-			.filter((r) => r.rmse != null);
-		const seasons = lab.by_season.map((s) => s.season);
-		return Plot.plot({
-			width,
-			height: 280,
-			style: plotStyle,
-			x: { label: null, tickFormat: 'd', ticks: thinTicks(seasons, width, 40) },
-			y: { label: '↓ Typical miss, RMSE (points; lower is better)', zero: false },
-			color: {
-				domain: ['Round 3', 'Vegas closing line', 'Round 1'],
-				range: ['var(--series-1)', 'var(--series-2)', 'var(--series-3)'],
-				legend: true
-			},
-			marks: [
-				gridY(),
-				Plot.line(rows, { x: 'season', y: 'rmse', stroke: 'who', strokeWidth: 2 }),
-				Plot.dot(rows, { x: 'season', y: 'rmse', fill: 'who', r: 3.5 }),
-				Plot.tip(
-					rows,
-					Plot.pointer({
-						x: 'season',
-						y: 'rmse',
-						title: (d: (typeof rows)[number]) => `${d.season} ${d.who}: ${num(d.rmse, 2)} pts`
-					})
-				)
-			]
-		});
-	}
 
 	type SelRow = Lab3['selection'][number] & { chosen: boolean };
 	const selRows = $derived<SelRow[]>(
@@ -110,80 +74,67 @@
 	];
 </script>
 
-<section class="card" id="round3">
-	<div class="eyebrow">Round 3 · the forecast this page shows</div>
-	<h2>Built for accuracy, not betting</h2>
-	<p class="sub">
-		Rounds 1 and 2 asked whether we can beat the line. Round 3 asks how close a forecast can get to
-		the actual result. It is scored on margin error (RMSE: the typical miss in points, with big
-		misses counting extra) and win-probability error (log loss; lower is better). {lab.selection
-			.length}
-		candidates were fit on {p.fit_seasons.join('–')}; the one with the lowest validation error was
-		<a href="https://github.com/Brandon-Kimberly/any-given-stat/commit/9589541">frozen</a>
-		on {p.freeze_date}: <b>{lab.chosen.variant}</b>. Points ratings are a second team rating built
-		from final scores. They catch what EPA misses: special teams and the full value of turnovers.
-		“Reused test” seasons were already seen by earlier rounds; games after the freeze are the clean
-		test.
-	</p>
-
-	<div class="scroll">
-		<table class="score">
-			<thead>
-				<tr>
-					<th rowspan="2" scope="col">Forecast</th>
-					{#each SPLITS as s (s.key)}<th colspan="2" scope="colgroup">{s.label}</th>{/each}
-				</tr>
-				<tr>
-					{#each SPLITS as s (s.key)}<th scope="col">RMSE</th><th scope="col">Log loss</th>{/each}
-				</tr>
-			</thead>
-			<tbody>
-				{#each MODELS as m (m.key)}
-					<tr class:chosen={m.key === 'round3'}>
-						<th scope="row">{m.label}</th>
-						{#each SPLITS as s (s.key)}
-							{@const v = lab.comparison[s.key][m.key]}
-							<td class:best={v.rmse != null && v.rmse === best(s.key, 'rmse')}
-								>{cell(v, 'rmse')}</td
-							>
-							<td class:best={v.log_loss != null && v.log_loss === best(s.key, 'log_loss')}
-								>{cell(v, 'log_loss')}</td
-							>
-						{/each}
-					</tr>
-				{/each}
-			</tbody>
-			<tfoot>
-				<tr>
-					<th scope="row">Games</th>
-					{#each SPLITS as s (s.key)}<td colspan="2">{lab.comparison[s.key].round3.games}</td
-						>{/each}
-				</tr>
-			</tfoot>
-		</table>
-	</div>
-	<ul class="verdicts">
-		<li>
-			Round 3 vs round 1, reused test: {verdict(test.round3_vs_round1, 'round 3', 'round 1')}.
-		</li>
-		<li>Round 3 vs Vegas, reused test: {verdict(test.round3_vs_vegas, 'round 3', 'Vegas')}.</li>
-		<li>
-			Blend vs Vegas, reused test: {verdict(test.blend_vs_vegas, 'the blend', 'Vegas')}. The blend
-			moves the line {Math.round(lab.blend_k * 100)}% of the way toward the model, the weight that
-			fit best on {p.fit_seasons.join('–')}.
-		</li>
-	</ul>
-</section>
-
-<div class="grid-2">
-	<section class="card">
-		<h2>Accuracy by season</h2>
+{#if part === 'scorecard'}
+	<section class="card" id="round3">
+		<div class="eyebrow">Round 3 · the forecast this page shows</div>
+		<h2>How close it gets, split by split</h2>
 		<p class="sub">
-			Each season is predicted using only earlier games. {p.fit_seasons.join('–')} also set the coefficients,
-			so those years flatter the model.
+			Scored on margin error (RMSE: the typical miss in points, with big misses counting extra) and
+			win-probability error (log loss); lower is better on both, and the best in each column is
+			bold. “Reused test” seasons were already seen by earlier rounds; games after the
+			{p.freeze_date} freeze are the clean test.
 		</p>
-		<PlotFigure label="Forecast error by season: round 3, Vegas and round 1" render={seasonChart} />
+		<!-- Scrolls sideways on phones, so keyboard users need to reach it. -->
+		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+		<div class="scroll" tabindex="0" role="region" aria-label="Forecast scorecard by split">
+			<table class="score">
+				<thead>
+					<tr>
+						<th rowspan="2" scope="col">Forecast</th>
+						{#each SPLITS as s (s.key)}<th colspan="2" scope="colgroup">{s.label}</th>{/each}
+					</tr>
+					<tr>
+						{#each SPLITS as s (s.key)}<th scope="col">RMSE</th><th scope="col">Log loss</th>{/each}
+					</tr>
+				</thead>
+				<tbody>
+					{#each MODELS as m (m.key)}
+						<tr class:chosen={m.key === 'round3'}>
+							<th scope="row">{m.label}</th>
+							{#each SPLITS as s (s.key)}
+								{@const v = lab.comparison[s.key][m.key]}
+								<td class:best={v.rmse != null && v.rmse === best(s.key, 'rmse')}
+									>{cell(v, 'rmse')}</td
+								>
+								<td class:best={v.log_loss != null && v.log_loss === best(s.key, 'log_loss')}
+									>{cell(v, 'log_loss')}</td
+								>
+							{/each}
+						</tr>
+					{/each}
+				</tbody>
+				<tfoot>
+					<tr>
+						<th scope="row">Games</th>
+						{#each SPLITS as s (s.key)}<td colspan="2">{lab.comparison[s.key].round3.games}</td
+							>{/each}
+					</tr>
+				</tfoot>
+			</table>
+		</div>
+		<ul class="verdicts">
+			<li>
+				Round 3 vs round 1, reused test: {verdict(test.round3_vs_round1, 'round 3', 'round 1')}.
+			</li>
+			<li>Round 3 vs Vegas, reused test: {verdict(test.round3_vs_vegas, 'round 3', 'Vegas')}.</li>
+			<li>
+				Blend vs Vegas, reused test: {verdict(test.blend_vs_vegas, 'the blend', 'Vegas')}. The blend
+				(the “best estimate”) moves the line {Math.round(lab.blend_k * 100)}% of the way toward the
+				model, the weight that fit best on {p.fit_seasons.join('–')}.
+			</li>
+		</ul>
 	</section>
+{:else if part === 'weights'}
 	<section class="card">
 		<h2>What the forecast weighs</h2>
 		<p class="sub">
@@ -209,24 +160,41 @@
 			</tbody>
 		</table>
 	</section>
-</div>
-
-<section class="card">
-	<h2>The {selRows.length} round-3 candidates on validation</h2>
-	<p class="sub">Lowest validation RMSE was chosen (ties go to fewer inputs).</p>
-	<DataTable
-		rows={selRows}
-		columns={selCols}
-		sortKey="val_rmse"
-		sortDesc={false}
-		highlight={(r) => r.chosen}
-		filename="round3-selection"
-	/>
-</section>
+{:else}
+	<section class="card">
+		<h2>Built for accuracy, not betting</h2>
+		<p class="sub">
+			Rounds 1 and 2 asked whether we can beat the line. Round 3 asks how close a forecast can get
+			to the actual result. {lab.selection.length} candidates were fit on {p.fit_seasons.join('–')};
+			the one with the lowest validation RMSE was
+			<a href="https://github.com/Brandon-Kimberly/any-given-stat/commit/9589541">frozen</a>
+			on {p.freeze_date}: <b>{lab.chosen.variant}</b> (ties go to fewer inputs). Points ratings are a
+			second team rating built from final scores. They catch what EPA misses: special teams and the full
+			value of turnovers.
+		</p>
+		{#if !lab.selection_agrees}
+			<div class="callout" role="note">
+				Re-running the selection on today's data picks a different candidate (data revisions). The
+				frozen choice is still the one shown.
+			</div>
+		{/if}
+		<DataTable
+			rows={selRows}
+			columns={selCols}
+			sortKey="val_rmse"
+			sortDesc={false}
+			highlight={(r) => r.chosen}
+			filename="round3-selection"
+		/>
+	</section>
+{/if}
 
 <style>
 	.scroll {
 		overflow-x: auto;
+	}
+	.callout {
+		margin-bottom: 0.75rem;
 	}
 	.score {
 		width: 100%;
@@ -277,6 +245,7 @@
 	}
 	.coef {
 		width: 100%;
+		max-width: 640px;
 		border-collapse: collapse;
 		font-size: 0.85rem;
 	}

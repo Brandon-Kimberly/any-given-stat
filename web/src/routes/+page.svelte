@@ -383,9 +383,9 @@
 		</div>
 		{#if thisWeek.length}
 			<p class="sub">
-				The boxed number is our <b>best estimate</b> of who wins: the model blended with the Vegas
-				line, the most accurate forecast we have. <span class="badge-key">Δ</span> marks games where the
-				model alone differs from Vegas by 3+ points.
+				The boxed number is our <b>best estimate</b> of who wins: the Vegas line nudged toward our
+				model. <span class="badge-key">Δ</span> marks games where the model alone differs from Vegas by
+				3+ points.
 			</p>
 			<div class="slots">
 				{#each slots as s, i (s.label + i)}
@@ -431,8 +431,8 @@
 			</div>
 			{#if test}
 				<p class="foot-note">
-					On held-out test seasons the model misses by {num(test.model_mae, 1)} points a game; Vegas by
-					{num(test.vegas_mae, 1)}. The blend is what we trust.
+					On held-out test seasons the model misses by {num(test.model_mae, 1)} points a game and Vegas
+					by {num(test.vegas_mae, 1)}; the blend ties Vegas. Nothing here beats the line.
 				</p>
 			{/if}
 		{:else if schedule.value && latest}

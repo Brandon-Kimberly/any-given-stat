@@ -63,10 +63,26 @@
 	});
 	const latest = $derived(meta?.seasons.at(-1));
 
-	// Keep ?season=&scope= in the address bar so any view can be shared as a link.
+	// Keep ?season=&scope= in the address bar so any view can be shared as a link, except on
+	// pages that have no season (a ?season there would promise a filter that doesn't exist).
+	const SEASONLESS = [
+		'/',
+		'/learn/',
+		'/glossary/',
+		'/stability/',
+		'/explore/',
+		'/records/',
+		'/referees/',
+		'/game/'
+	];
 	function syncUrl() {
 		if (!ready || prefs.season == null) return;
-		const next = prefsUrl(page.url);
+		const path = page.url.pathname.slice(base.length) || '/';
+		const next = SEASONLESS.includes(path) ? new URL(page.url) : prefsUrl(page.url);
+		if (SEASONLESS.includes(path) && path !== '/game/') {
+			next.searchParams.delete('season');
+			next.searchParams.delete('scope');
+		}
 		if (next.href !== page.url.href) replaceState(next, page.state);
 	}
 	$effect(() => {
@@ -153,29 +169,39 @@
 		<nav class="menus" aria-label="Main">
 			{#each navGroups as g (g.label)}
 				<div class="menu">
-					<button
-						class="menu-btn"
-						class:current={activeGroup === g.label}
-						aria-expanded={openGroup === g.label}
-						aria-haspopup="true"
-						onclick={() => (openGroup = openGroup === g.label ? null : g.label)}
-						>{g.label}<svg viewBox="0 0 12 12" aria-hidden="true"
-							><path d="M3 4.5 6 7.5 9 4.5" /></svg
-						></button
-					>
-					{#if openGroup === g.label}
-						<div class="panel" role="menu">
-							{#each g.items as item (item.href)}
-								<a
-									role="menuitem"
-									href="{base}{item.href}"
-									aria-current={path.startsWith(item.href) ? 'page' : undefined}
-								>
-									<span class="item-label">{item.label}</span>
-									<span class="item-blurb">{item.blurb}</span>
-								</a>
-							{/each}
-						</div>
+					{#if g.items.length === 1}
+						<a
+							class="menu-btn"
+							class:current={activeGroup === g.label}
+							href="{base}{g.items[0].href}"
+							title={g.items[0].blurb}
+							aria-current={path.startsWith(g.items[0].href) ? 'page' : undefined}>{g.label}</a
+						>
+					{:else}
+						<button
+							class="menu-btn"
+							class:current={activeGroup === g.label}
+							aria-expanded={openGroup === g.label}
+							aria-haspopup="true"
+							onclick={() => (openGroup = openGroup === g.label ? null : g.label)}
+							>{g.label}<svg viewBox="0 0 12 12" aria-hidden="true"
+								><path d="M3 4.5 6 7.5 9 4.5" /></svg
+							></button
+						>
+						{#if openGroup === g.label}
+							<div class="panel" role="menu">
+								{#each g.items as item (item.href)}
+									<a
+										role="menuitem"
+										href="{base}{item.href}"
+										aria-current={path.startsWith(item.href) ? 'page' : undefined}
+									>
+										<span class="item-label">{item.label}</span>
+										<span class="item-blurb">{item.blurb}</span>
+									</a>
+								{/each}
+							</div>
+						{/if}
 					{/if}
 				</div>
 			{/each}
@@ -323,7 +349,7 @@
 				>
 				<span class="muted">Updated {ago(meta.generated_at)}</span>
 			{/if}
-			<a href="{base}/glossary/">Glossary</a>
+			<a href="{base}/">Home</a>
 			<a href="https://github.com/Brandon-Kimberly/any-given-stat">Source</a>
 		</div>
 	</div>
@@ -448,6 +474,7 @@
 	}
 	.menu-btn {
 		display: inline-flex;
+		text-decoration: none;
 		align-items: center;
 		gap: 0.3rem;
 		border: 0;
